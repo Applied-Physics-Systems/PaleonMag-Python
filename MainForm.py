@@ -7,20 +7,35 @@ Created on Oct 4, 2024
 
 Libraries used in this project
     pip install wxPython
+    pip install pyserial
 
 '''
 import wx
 from Forms.frmDCMotors import frmDCMotors
+from Forms.frmTip import frmTip
+import multiprocessing
 
-VersionNumber = 'Version 0.00.02'
+VersionNumber = 'Version 0.00.03'
 
 ID_DC_MOTORS = 0
 
+'''
+    Background task processing
+'''
+def workerFunction(queue, taskID):
+    print('Test multiprocessing ' + str(taskID))
+
+'''
+    Main form for PaleonMag software
+'''
 class MainForm(wx.Frame):
     '''
     classdocs
     '''
-
+    processQueue = None
+    process = None
+    taskQueue = []
+    backgroundRunningFlag = False
 
     def __init__(self, *args, **kw):
         '''
@@ -30,6 +45,19 @@ class MainForm(wx.Frame):
         
         self.InitUI()
 
+        # Add timer
+        self.timer = wx.Timer(self)
+        self.timer.Stop()
+        self.Bind(wx.EVT_TIMER, self.OnTimer, self.timer)
+
+        tipBox = frmTip(parent=self)
+        tipBox.Show()
+
+    '''--------------------------------------------------------------------------------------------
+                        
+                        GUI Functions
+                        
+    --------------------------------------------------------------------------------------------'''
     '''
     '''
     def createHelpMenu(self):
@@ -172,6 +200,65 @@ class MainForm(wx.Frame):
         self.SetTitle('Paleonmagnetic Magnetometer Controller Systems - ' + VersionNumber)
         self.Centre() 
         self.Show(True)
+
+    '''--------------------------------------------------------------------------------------------
+                        
+                        Background tasks
+                        
+    --------------------------------------------------------------------------------------------'''
+    '''
+    '''
+    def HomeToTop(self):
+        print('TODO: Home To Top')
+
+    '''
+    '''
+    def HomeToCenter(self):
+        print('TODO: Home To Center')
+
+    '''--------------------------------------------------------------------------------------------
+                        
+                        Multiprocessing Functions
+                        
+    --------------------------------------------------------------------------------------------'''        
+    '''
+        Start a new process which can run concurrently on another CPU core to avoid GUI hangup
+    '''
+    def startProcess(self, taskID):
+        self.processQueue = multiprocessing.Queue()
+        self.process = multiprocessing.Process(target=workerFunction, args=(self.processQueue, taskID))
+        self.process.start()
+        self.timer.Start(int(1000*0.5))      # Checking every half second
+                
+    '''
+        Check for task completion
+    '''
+    def checkProcess(self):
+        if (self.process != None):
+            if not self.process.is_alive():
+                if (len(self.taskQueue) > 0):
+                    self.backgroundRunningFlag = True
+                    processFunction = self.taskQueue.pop(0)
+                    self.startProcess(processFunction)
+                else:
+                    self.backgroundRunningFlag = False
+                    self.timer.Stop()
+                
+    '''
+    '''
+    def pushTaskToQueue(self, taskFunction):
+        self.taskQueue.append(taskFunction)
+        if not self.backgroundRunningFlag:
+            if (len(self.taskQueue) > 0):
+                self.backgroundRunningFlag = True
+                processFunction = self.taskQueue.pop(0)
+                self.startProcess(processFunction)
+
+    '''--------------------------------------------------------------------------------------------
+                        
+                        Event Handler Functions
+                        
+    --------------------------------------------------------------------------------------------'''
         
     '''
         Handle selected menu Item
@@ -185,6 +272,13 @@ class MainForm(wx.Frame):
         elif (menuID == ID_DC_MOTORS):
             dcMotor = frmDCMotors(parent=None, id=-1)
             dcMotor.Show()
+        
+    '''
+        Timer event handler
+    '''
+    def OnTimer(self, event):
+        if self.backgroundRunningFlag:
+            self.checkProcess()
         
 #===================================================================================================
 # Main Module
