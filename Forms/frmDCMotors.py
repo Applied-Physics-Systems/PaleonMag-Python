@@ -9,13 +9,14 @@ class frmDCMotors(wx.Frame):
     '''
     classdocs
     '''
+    parent = None
 
-
-    def __init__(self, *args, **kw):
+    def __init__(self, parent):
         '''
         Constructor
         '''
-        super(frmDCMotors, self).__init__(*args, **kw)
+        super(frmDCMotors, self).__init__(parent)
+        self.parent = parent
         
         self.InitUI()
 
@@ -137,18 +138,29 @@ class frmDCMotors(wx.Frame):
         txtBoxOri += 5*txtBoxYOffset + 20
         self.resetBtn = wx.Button(panel, label='Reset', pos=(btnXOri, txtBoxOri), size=(smallBtnLength, btnHeight))
         self.stopBtn = wx.Button(panel, label='Stop', pos=(btnXOri + btnXOffset, txtBoxOri), size=(smallBtnLength, btnHeight))
-        self.haltBtn = wx.Button(panel, label='HALT!', pos=(btnXOri + 2*btnXOffset, txtBoxOri), size=(smallBtnLength, btnHeight))
-        self.haltBtn.SetBackgroundColour('Red')
+        haltBtn = wx.Button(panel, label='HALT!', pos=(btnXOri + 2*btnXOffset, txtBoxOri), size=(smallBtnLength, btnHeight))
+        haltBtn.Bind(wx.EVT_BUTTON, self.onHalt)
+        haltBtn.SetBackgroundColour('Red')
         
         self.SetSize((800, 500))
         self.SetTitle('Motor Control')
         self.Centre()
         self.Show(True)
 
+    '''--------------------------------------------------------------------------------------------
+                        
+                        Event Handler Functions
+                        
+    --------------------------------------------------------------------------------------------'''
     '''
     '''
     def onRadioBox(self, event):
-        print(self.rbox.GetStringSelection() + ' is clicked from Radio Box') 
+        print(self.rbox.GetStringSelection() + ' is clicked from Radio Box')
+        
+    '''
+    '''
+    def onHalt(self, event):
+        self.parent.processQueue.put('Program_Halted')
 
 #===================================================================================================
 # Main Module

@@ -18,6 +18,7 @@ class frmTip(wx.Frame):
 5. IRM pulse box (if you are going to do rockmag)
 6. ARM bias box (if you are going to do rockmag)"""
     parent = None
+    devices = None
 
     def __init__(self, parent):
         '''
@@ -50,11 +51,9 @@ class frmTip(wx.Frame):
         Close Tip Dialog box
     '''
     def onOK(self, event):
-        self.parent.pushTaskToQueue(0)
-        self.parent.pushTaskToQueue(1)
-        self.parent.pushTaskToQueue(2)
-        self.parent.pushTaskToQueue(3)
-        self.parent.pushTaskToQueue(4)
+        self.parent.pushTaskToQueue(self.devices.HOME_TO_TOP)
+        self.parent.pushTaskToQueue(self.devices.HOME_TO_CENTER)
+        
         self.Close()
         
         

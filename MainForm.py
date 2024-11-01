@@ -11,19 +11,39 @@ Libraries used in this project
 
 '''
 import wx
+import multiprocessing
+import configparser
+
 from Forms.frmDCMotors import frmDCMotors
 from Forms.frmTip import frmTip
-import multiprocessing
+from Hardware.DevicesControl import DevicesControl
+from Process.ProcessData import ProcessData
 
-VersionNumber = 'Version 0.00.03'
+VersionNumber = 'Version 0.00.04'
 
-ID_DC_MOTORS = 0
+ID_DC_MOTORS        = 0
+ID_FILE_REGISTRY    = 1
+ID_MAG_CONTROL      = 2
+ID_LOG_OUT          = 3
+ID_NOCOMM_OFF       = 4
+ID_QUIT_EXIT        = 5
+
+devControl = DevicesControl()
 
 '''
     Background task processing
 '''
 def workerFunction(queue, taskID):
-    print('Test multiprocessing ' + str(taskID))
+    processData = queue.get()
+    devControl.setDevicesConfig(processData.config)
+    devControl.retrieveProcessData(processData)
+    
+    devControl.runTask(queue, taskID)
+    
+    processData = devControl.saveProcessData(processData)
+    devControl.closeDevices()
+    queue.put('Task Completed')    
+    queue.put(processData)
 
 '''
     Main form for PaleonMag software
@@ -36,14 +56,24 @@ class MainForm(wx.Frame):
     process = None
     taskQueue = []
     backgroundRunningFlag = False
-
+    messageStr = ''
+    NOCOMM_Flag = False
+    processQueue = None
+    
     def __init__(self, *args, **kw):
         '''
         Constructor
         '''
         super(MainForm, self).__init__(*args, **kw)
+        self.devControl = DevicesControl()
+        self.processData = ProcessData()
+        
+        self.openINIFile()
         
         self.InitUI()
+        self.messageBox.SetValue(self.messageStr)
+
+        self.checkDevicesComm()
 
         # Add timer
         self.timer = wx.Timer(self)
@@ -51,6 +81,7 @@ class MainForm(wx.Frame):
         self.Bind(wx.EVT_TIMER, self.OnTimer, self.timer)
 
         tipBox = frmTip(parent=self)
+        tipBox.devices = self.devControl
         tipBox.Show()
 
     '''--------------------------------------------------------------------------------------------
@@ -185,16 +216,16 @@ class MainForm(wx.Frame):
         
         # Add Toolbar below the Menu
         toolbar = self.CreateToolBar(style=wx.TB_HORIZONTAL)
-        toolbar.AddTool(wx.ID_ANY, 'File Registry', wx.Bitmap('.\\Resources\\GrayButton_FileRegistry.png')) 
-        toolbar.AddTool(wx.ID_ANY, 'Magnetometer Control', wx.Bitmap('.\\Resources\\GrayButton_MagControl.png'))
-        toolbar.AddTool(wx.ID_ANY, 'Log Out', wx.Bitmap('.\\Resources\\YellowButton_LogOut.png'))
-        toolbar.AddTool(wx.ID_ANY, 'Turn Off NOCOMM Mode', wx.Bitmap('.\\Resources\\GrayButton_TurnOff.png'))
-        toolbar.AddTool(wx.ID_ANY, 'Quit & EXIT', wx.Bitmap('.\\Resources\\RedButton_Exit.png'))
+        toolbar.AddTool(ID_FILE_REGISTRY, 'File Registry', wx.Bitmap('.\\Resources\\GrayButton_FileRegistry.png')) 
+        toolbar.AddTool(ID_MAG_CONTROL, 'Magnetometer Control', wx.Bitmap('.\\Resources\\GrayButton_MagControl.png'))
+        toolbar.AddTool(ID_LOG_OUT, 'Log Out', wx.Bitmap('.\\Resources\\YellowButton_LogOut.png'))
+        toolbar.AddTool(ID_NOCOMM_OFF, 'Turn Off NOCOMM Mode', wx.Bitmap('.\\Resources\\GrayButton_TurnOff.png'))
+        toolbar.AddTool(ID_QUIT_EXIT, 'Quit & EXIT', wx.Bitmap('.\\Resources\\RedButton_Exit.png'))
         toolbar.Realize()
-                
-        self.text = wx.TextCtrl(self, -1, style = wx.EXPAND|wx.TE_MULTILINE)
-        self.text.SetBackgroundColour('Cyan')         
         self.Bind(wx.EVT_MENU, self.menuhandler)
+                
+        self.messageBox = wx.TextCtrl(self, -1, style = wx.EXPAND|wx.TE_MULTILINE)
+        self.messageBox.SetBackgroundColour('Cyan')         
                 
         self.SetSize((1500, 1000)) 
         self.SetTitle('Paleonmagnetic Magnetometer Controller Systems - ' + VersionNumber)
@@ -203,63 +234,137 @@ class MainForm(wx.Frame):
 
     '''--------------------------------------------------------------------------------------------
                         
-                        Background tasks
+                        Utilities Functions
                         
-    --------------------------------------------------------------------------------------------'''
+    --------------------------------------------------------------------------------------------''' 
     '''
+        Open Dialog box for INI file
     '''
-    def HomeToTop(self):
-        print('TODO: Home To Top')
+    def openINIFile(self):
+        dlg = wx.FileDialog(self, "Open", "", "",
+                            "All files (*.*)|*.*",
+                            wx.FD_OPEN | wx.FD_FILE_MUST_EXIST)
+        
+        if dlg.ShowModal() == wx.ID_OK:
+            self.defaultFilePath = dlg.GetPath()        
+            config = configparser.ConfigParser()
+            config.read(self.defaultFilePath)
+            self.processData.config = config 
+            self.messageStr = self.devControl.setDevicesConfig(config)
+            self.devControl.closeDevices()
+
+    '''
+        Check if all device are connected OK
+    '''
+    def checkDevicesComm(self):
+        if not self.devControl.devicesAllGoodFlag:
+            wx.MessageBox('Invalid Port Number', caption='PaleonMag')
+            
+            noCommStr = 'Would you like to switch on NOCOMM mode?\n\n'
+            noCommStr += 'This will prevent the PaleonMag program from trying to connect with any peripheral devices,'
+            noCommStr += ' and can be turn off by clicking on the "Turn off NOCOMM mode" button in the Main program window'
+            dlg = wx.MessageBox(noCommStr, style=wx.YES_NO|wx.CENTER, caption='PaleonMag')
+            if (dlg == wx.YES):
+                self.NOCOMM_Flag = True
 
     '''
     '''
-    def HomeToCenter(self):
-        print('TODO: Home To Center')
+    def appendMessageBox(self, message):
+        messageStr = self.messageBox.GetValue()
+        messageStr += message
+        self.messageBox.SetValue(messageStr)
 
     '''--------------------------------------------------------------------------------------------
                         
                         Multiprocessing Functions
                         
-    --------------------------------------------------------------------------------------------'''        
+    --------------------------------------------------------------------------------------------''' 
+    '''
+        Before running process in a different thread, do the neccessaries in GUI thread 
+    '''
+    def startProcess(self):
+        runFlag = True
+        
+        self.backgroundRunningFlag = True
+        processFunction = self.taskQueue.pop(0)
+        if (processFunction == self.devControl.HOME_TO_TOP):
+            self.appendMessageBox('Run HomeToTop\n')
+            
+        elif (processFunction == self.devControl.HOME_TO_CENTER):
+            noCommStr = 'The XY Stage needs to be homed to the center, now\n\n'
+            noCommStr += 'The code will home the Up/Down glass tube to the top limit switch'
+            noCommStr += '  before moving the XY stage. HOWEVER, if there are cables or other'
+            noCommStr += ' impediments in the way, the XY Stage should not be homed.\n\n'
+            noCommStr += 'Do you want the XY stage to be homed to the center position, now?'
+            dlg = wx.MessageBox(noCommStr, style=wx.YES_NO|wx.CENTER, caption='Warning: XY State Homing!')
+            if (dlg == wx.YES):
+                self.appendMessageBox('Run HomeToCenter\n')
+            else:
+                runFlag = False
+        
+        if runFlag:
+            self.runProcess(processFunction)
+        
     '''
         Start a new process which can run concurrently on another CPU core to avoid GUI hangup
     '''
-    def startProcess(self, taskID):
+    def runProcess(self, taskID):
         self.processQueue = multiprocessing.Queue()
         self.process = multiprocessing.Process(target=workerFunction, args=(self.processQueue, taskID))
         self.process.start()
-        self.timer.Start(int(1000*0.5))      # Checking every half second
+        self.processQueue.put(self.processData)
+        
+        self.timer.Start(int(200))      # Checking every 200ms
                 
     '''
         Check for task completion
     '''
     def checkProcess(self):
         if (self.process != None):
-            if not self.process.is_alive():
-                if (len(self.taskQueue) > 0):
-                    self.backgroundRunningFlag = True
-                    processFunction = self.taskQueue.pop(0)
-                    self.startProcess(processFunction)
-                else:
-                    self.backgroundRunningFlag = False
-                    self.timer.Stop()
-                
+            try:
+                endMessage = self.processQueue.get(timeout=0.01)
+                if ('Task Completed' in endMessage):
+                    self.processData = self.processQueue.get()
+                    self.process.join()
+                    # Start new process
+                    if (len(self.taskQueue) > 0):
+                        self.startProcess()
+                            
+                    else:
+                        self.backgroundRunningFlag = False
+                        self.appendMessageBox('Tasks Completed')
+                        self.timer.Stop()
+                        
+                elif ('Error:' in endMessage):
+                    self.taskQueue = []
+                    messageList = endMessage.split(':')
+                    if (len(messageList) > 1):                          
+                        self.messageBox.SetBackgroundColour('LightRed')           
+                        wx.MessageBox(messageList[1], caption='PaleonMag')
+                        self.messageBox.SetBackgroundColour('Cyan')
+                    
+                return
+                    
+            except:
+                return
+            
     '''
+        
     '''
     def pushTaskToQueue(self, taskFunction):
-        self.taskQueue.append(taskFunction)
-        if not self.backgroundRunningFlag:
-            if (len(self.taskQueue) > 0):
-                self.backgroundRunningFlag = True
-                processFunction = self.taskQueue.pop(0)
-                self.startProcess(processFunction)
+        if not self.NOCOMM_Flag:
+            self.taskQueue.append(taskFunction)
+            # if no background process running, start one
+            if not self.backgroundRunningFlag:
+                if (len(self.taskQueue) > 0):
+                    self.startProcess()
 
     '''--------------------------------------------------------------------------------------------
                         
                         Event Handler Functions
                         
     --------------------------------------------------------------------------------------------'''
-        
+                
     '''
         Handle selected menu Item
     '''
@@ -267,12 +372,22 @@ class MainForm(wx.Frame):
         menuID = event.GetId()
                  
         if (menuID == wx.ID_NEW): 
-            self.text.AppendText("TODO"+"\n")
+            self.messageBox.AppendText("TODO"+"\n")
             
         elif (menuID == ID_DC_MOTORS):
-            dcMotor = frmDCMotors(parent=None, id=-1)
+            dcMotor = frmDCMotors(parent=self)
             dcMotor.Show()
-        
+            
+        elif (menuID == ID_NOCOMM_OFF):
+            self.NOCOMM_Flag = False
+            message = self.messageBox.GetValue()
+            message += self.devControl.openDevices()
+            self.messageBox.SetValue(message)
+            
+        elif (menuID == ID_QUIT_EXIT):
+            self.Close(force=False)
+                        
+            
     '''
         Timer event handler
     '''
