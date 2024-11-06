@@ -18,15 +18,63 @@ class MotorControl(SerialPortDevice):
         '''
         self.label = Label
         self.PortOpen = False 
-        
-        # parameters from INI file
-        self.UpDownTorqueFactor = 40
-        self.UpDownMaxTorque = 32000
-        self.LiftAcceleration = 90000
-        self.UseXYTableAPS = False
-        
+                
         self.MotorAddress = '16'
         SerialPortDevice.__init__(self, baudRate, 'MotorControl', pathName, comPort)
+
+    '''
+        Read an integer value from INI file
+    '''
+    def getConfig_Int(self, config, section, label, default):
+        try:
+            value = int(config[section][label])
+            return value
+        
+        except:
+            return default         
+
+    '''
+       Read boolean value from INI file
+    '''
+    def getConfig_Bool(self, config, section, label, default):
+        try:
+            value = False
+            if ('True'.lower() == config[section][label].lower()):
+                value = True
+            return value 
+        
+        except:
+            return default         
+        
+        
+    '''
+        Set Motor Config
+    '''
+    def setMotorConfig(self, config):
+        self.DCMotorHomeToTop_StopOnTrue = self.getConfig_Bool(config, 'SteppingMotor', 'DCMotorHomeToTop_StopOnTrue', True)
+        self.UpDownTorqueFactor = self.getConfig_Int(config, 'SteppingMotor', 'UpDownTorqueFactor', 40) 
+        self.UpDownMaxTorque = self.getConfig_Int(config, 'SteppingMotor', 'UpDownMaxTorque', 32000)   
+        self.UpDownMotor1cm = self.getConfig_Int(config, 'SteppingMotor', 'UpDownMotor1cm', 10)    
+        self.SampleBottom = self.getConfig_Int(config, 'SteppingMotor', 'SampleBottom', -2385)   
+        self.SampleTop = self.getConfig_Int(config, 'SteppingMotor', 'SampleTop', -1979)
+        self.LiftSpeedSlow = self.getConfig_Int(config, 'SteppingMotor', 'LiftSpeedSlow', 4000000)    
+        self.LiftSpeedNormal = self.getConfig_Int(config, 'SteppingMotor', 'LiftSpeedNormal', 25000000)    
+        self.LiftSpeedFast = self.getConfig_Int(config, 'SteppingMotor', 'LiftSpeedFast', 50000000)
+        self.LiftAcceleration = self.getConfig_Int(config, 'SteppingMotor', 'LiftAcceleration', 90000)
+        self.MeasPos = self.getConfig_Int(config, 'SteppingMotor', 'MeasPos', -30607)
+        self.ChangerSpeed = self.getConfig_Int(config, 'SteppingMotor', 'ChangerSpeed', 31000)   
+
+        self.UseXYTableAPS = self.getConfig_Bool(config, 'XYTable', 'UseXYTableAPS', False)
+       
+        if (self.label == 'UpDown'):
+            self.MotorID = config['MotorPrograms']['MotorIDUpDown']
+        elif (self.label == 'ChangeX'):
+            self.MotorID = config['MotorPrograms']['MotorIDChanger']
+        elif (self.label == 'ChangeY'):
+            self.MotorID = config['MotorPrograms']['MotorIDChangerY']
+        elif (self.label == 'Turning'):
+            self.MotorIDTurning = config['MotorPrograms']['MotorIDTurning']
+        
        
     '''--------------------------------------------------------------------------------------------
                         
@@ -37,7 +85,7 @@ class MotorControl(SerialPortDevice):
         Initialize Motor
     '''
     def motorCommConnect(self):
-        self.sendString('@255 173 416\r')
+        self.sendString('@255 173 416\r\n')
         
         if 'UpDown' in self.label:
             self.setTorque(self.UpDownTorqueFactor, self.UpDownTorqueFactor, self.UpDownTorqueFactor, self.UpDownTorqueFactor)
@@ -60,7 +108,7 @@ class MotorControl(SerialPortDevice):
         cmdStr += format(CM, '04') + ' '
         cmdStr += format(OH, '04') + ' '
         cmdStr += format(OM, '04')
-        self.sendString(cmdStr + '\r')
+        self.sendString(cmdStr + '\r\n')
         
         respStr = self.readLine()
         
@@ -73,9 +121,9 @@ class MotorControl(SerialPortDevice):
         if not self.PortOpen:
             self.motorCommConnect()
          
-        self.sendString('@' + self.MotorAddress + ' ' + cmdStr + '\r')
+        self.sendString('@' + self.MotorAddress + ' ' + cmdStr + '\r\n')
         
-        time.sleep(0.05)        # Sleep for 100 ms
+        time.sleep(0.01)        # Sleep for 100 ms
 
         respStr = self.readLine()
         
@@ -109,8 +157,31 @@ class MotorControl(SerialPortDevice):
     '''
     def motorStop(self):
         self.sendMotorCommand('3 0')
-        return        
-
+        return
+    
+    '''
+        The Restart command is provided to cause the device to do a soft reset of the processor and logic circuits.
+    '''
+    def motorReset(self):
+        self.sendMotorCommand('4')
+        return
+    
+    '''
+        This command zeros both the Target register and the Position register.
+        This removes any Position Error that may exist. This is useful for homing
+        routines to denote the current location as Zero so that all other
+        locations can be defined as an offset from Zero.
+    '''
+    def zeroTargetPos(self, attempt_number = 1):
+        respStr = self.sendMotorCommand('145')
+        
+        if (not ('*' in respStr) and (attempt_number < 5)):
+            time.sleep(0.25)
+            self.zeroTargetPos(attempt_number+1) 
+        
+        self.readPosition()        
+        return             
+    
     '''
     '''
     def waitForMotorStop(self):
@@ -167,19 +238,9 @@ class MotorControl(SerialPortDevice):
             position = upperWord + lowerWord
             
         return position
-        
+           
     '''
-        This command zeros both the Target register and the Position register.
-        This removes any Position Error that may exist. This is useful for homing
-        routines to denote the current location as Zero so that all other
-        locations can be defined as an offset from Zero.
-    '''
-    def zeroTargetPos(self):
-        self.sendMotorCommand('145')        
-        return 
-            
-   
-    '''
+        Move motor at absolute value
     '''
     def moveMotor(self, moveMotorPos, moveMotorVelocity, waitingForStop=True, stopEnable=0, stopCondition=0):
         self.pollMotor()
@@ -201,4 +262,23 @@ class MotorControl(SerialPortDevice):
             
         return
     
+    '''
+        Move motor relativiy from the current position
+    '''
+    def moveMotorRelative(self, moveMotorPos, moveMotorVelocity, waitingForStop=True, stopEnable=0, stopCondition=0):
+        self.pollMotor()
+        self.clearPollStatus()
+
+        # Set MRV(Move Relative, Velocity Base) command
+        cmdStr = "135 " + str(moveMotorPos) 
+        cmdStr += " 3000 "  
+        cmdStr += str(moveMotorVelocity)
+        cmdStr += " " + str(stopEnable) 
+        cmdStr += " " + str(stopCondition)
+        respStr = self.sendMotorCommand(cmdStr)
+        
+        if waitingForStop:
+            self.waitForMotorStop()
+        
+        return respStr
     

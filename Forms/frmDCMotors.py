@@ -145,6 +145,7 @@ class frmDCMotors(wx.Frame):
         self.SetSize((800, 500))
         self.SetTitle('Motor Control')
         self.Centre()
+        self.SetWindowStyle(wx.STAY_ON_TOP)
         self.Show(True)
 
     '''--------------------------------------------------------------------------------------------

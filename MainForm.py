@@ -16,6 +16,8 @@ import configparser
 
 from Forms.frmDCMotors import frmDCMotors
 from Forms.frmTip import frmTip
+from Forms.frmFlashingStatus import frmFlashingStatus
+
 from Hardware.DevicesControl import DevicesControl
 from Process.ProcessData import ProcessData
 
@@ -27,6 +29,8 @@ ID_MAG_CONTROL      = 2
 ID_LOG_OUT          = 3
 ID_NOCOMM_OFF       = 4
 ID_QUIT_EXIT        = 5
+
+FLASH_DISPLAY_OFF_TIME = 10
 
 devControl = DevicesControl()
 
@@ -59,6 +63,8 @@ class MainForm(wx.Frame):
     messageStr = ''
     NOCOMM_Flag = False
     processQueue = None
+    flashingCount = FLASH_DISPLAY_OFF_TIME
+    flashingMessage = ''
     
     def __init__(self, *args, **kw):
         '''
@@ -285,12 +291,13 @@ class MainForm(wx.Frame):
     def startProcess(self):
         runFlag = True
         
-        self.backgroundRunningFlag = True
         processFunction = self.taskQueue.pop(0)
         if (processFunction == self.devControl.HOME_TO_TOP):
             self.appendMessageBox('Run HomeToTop\n')
+            self.flashingMessage = 'Please Wait, Homing To The Top'
             
         elif (processFunction == self.devControl.HOME_TO_CENTER):
+            self.flashingMessage = 'Please Wait, Homing XY Table'
             noCommStr = 'The XY Stage needs to be homed to the center, now\n\n'
             noCommStr += 'The code will home the Up/Down glass tube to the top limit switch'
             noCommStr += '  before moving the XY stage. HOWEVER, if there are cables or other'
@@ -303,6 +310,7 @@ class MainForm(wx.Frame):
                 runFlag = False
         
         if runFlag:
+            self.backgroundRunningFlag = True
             self.runProcess(processFunction)
         
     '''
@@ -324,6 +332,7 @@ class MainForm(wx.Frame):
             try:
                 endMessage = self.processQueue.get(timeout=0.01)
                 if ('Task Completed' in endMessage):
+                    self.backgroundRunningFlag = False
                     self.processData = self.processQueue.get()
                     self.process.join()
                     # Start new process
@@ -331,7 +340,6 @@ class MainForm(wx.Frame):
                         self.startProcess()
                             
                     else:
-                        self.backgroundRunningFlag = False
                         self.appendMessageBox('Tasks Completed')
                         self.timer.Stop()
                         
@@ -339,13 +347,22 @@ class MainForm(wx.Frame):
                     self.taskQueue = []
                     messageList = endMessage.split(':')
                     if (len(messageList) > 1):                          
-                        self.messageBox.SetBackgroundColour('LightRed')           
+                        self.messageBox.SetBackgroundColour('Red')           
                         wx.MessageBox(messageList[1], caption='PaleonMag')
                         self.messageBox.SetBackgroundColour('Cyan')
                     
                 return
                     
             except:
+                if (self.backgroundRunningFlag):
+                    self.flashingCount += 1
+                    if (self.flashingCount > FLASH_DISPLAY_OFF_TIME): 
+                        flashingPanel = frmFlashingStatus(self, self.flashingMessage)
+                        flashingPanel.Show()
+                        self.flashingCount = 0
+                else:
+                    self.flashingCount = 0
+                    
                 return
             
     '''
@@ -385,6 +402,7 @@ class MainForm(wx.Frame):
             self.messageBox.SetValue(message)
             
         elif (menuID == ID_QUIT_EXIT):
+            self.processQueue.put('Program_Halted')
             self.Close(force=False)
                         
             
