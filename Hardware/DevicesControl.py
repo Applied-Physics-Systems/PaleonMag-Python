@@ -7,13 +7,18 @@ import os
 import time
 
 from Hardware.Device.MotorControl import MotorControl
+from Hardware.Device.IrmArmControl import IrmArmControl
 
 class DevicesControl():
     '''
     classdocs
     '''
-    HOME_TO_TOP     = 0x0001
-    HOME_TO_CENTER  = 0x0002
+    MOTOR_HOME_TO_TOP       = 0x0001
+    MOTOR_HOME_TO_CENTER    = 0x0002
+    
+    IRM_SET_BIAS_FIELD      = 0x1001
+    IRM_FIRE                = 0x1002
+    
     MotorPositionMoveToLoadCorner = 900000
     MotorPositionMoveToCenter = -900000
     MoveXYMotorsToLimitSwitch_TimeoutSeconds = 120
@@ -23,11 +28,14 @@ class DevicesControl():
     frmSettingsChkOverrideHomeToTop_ForMoveMotorAbsoluteXY = True
     
     lastCmdMove = 1
+    queue = None
     
     upDown = None
     changerX = None
     changerY = None
     turning = None
+    vacuum = None
+    apsIRM = None
     deviceList = []
     
     devicesAllGoodFlag = False
@@ -49,16 +57,19 @@ class DevicesControl():
         message = self.openDevices(config)
         
         if (self.devicesAllGoodFlag):
-            self.upDown.setMotorConfig(config)
-            self.changerX.setMotorConfig(config)
-            self.changerY.setMotorConfig(config)
-            self.turning.setMotorConfig(config)
+            self.upDown.setDeviceConfig(config)
+            self.changerX.setDeviceConfig(config)
+            self.changerY.setDeviceConfig(config)
+            self.turning.setDeviceConfig(config)
+            self.vacuum.setDeviceConfig(config)
+            self.apsIRM.setDeviceConfig(config)
         
         return message
 
     '''
+        Open UART serial communication port for motor
     '''
-    def openDevice(self, device, comPort, label):        
+    def openMotorComm(self, device, comPort, label):        
         message = ''
         if (device != None):
             if (device.openDevice()):
@@ -76,6 +87,28 @@ class DevicesControl():
 
         
         return device, message + '\n'
+
+    '''
+        Open UART serial communication port for motor
+    '''
+    def openIrmArmComm(self, device, comPort, label):        
+        message = ''
+        if (device != None):
+            if (device.openDevice()):
+                message += device.label + ' opened' 
+            else:
+                message += device.label + ' fail to open'
+                self.devicesAllGoodFlag = False
+        else:
+            try:            
+                message += label + ': ' + comPort  
+                device = IrmArmControl(9600, self.currentPath, comPort, label)
+            except:
+                message += ' Failed to open'
+                self.devicesAllGoodFlag = False
+
+        
+        return device, message + '\n'
         
     '''
     '''
@@ -85,28 +118,40 @@ class DevicesControl():
         message = '\n'
         self.deviceList = []
         comPort = 'COM' + config['COMPorts']['COMPortUpDown']        
-        self.upDown, respStr = self.openDevice(self.upDown, comPort, 'UpDown')
+        self.upDown, respStr = self.openMotorComm(self.upDown, comPort, 'UpDown')
         message += respStr
         if (self.upDown != None):
             self.deviceList.append(self.upDown)
         
         comPort = 'COM' + config['COMPorts']['COMPortChanger']
-        self.changerX, respStr = self.openDevice(self.changerX, comPort, 'ChangerX')
+        self.changerX, respStr = self.openMotorComm(self.changerX, comPort, 'ChangerX')
         message += respStr
         if (self.changerX != None):
             self.deviceList.append(self.changerX)
 
         comPort = 'COM' + config['COMPorts']['COMPortChangerY']
-        self.changerY, respStr = self.openDevice(self.changerY, comPort, 'ChangerY')
+        self.changerY, respStr = self.openMotorComm(self.changerY, comPort, 'ChangerY')
         message += respStr
         if (self.changerY != None):
             self.deviceList.append(self.changerY)
 
         comPort = 'COM' + config['COMPorts']['COMPortTurning']
-        self.turning, respStr = self.openDevice(self.turning, comPort, 'Turning')
+        self.turning, respStr = self.openMotorComm(self.turning, comPort, 'Turning')
         message += respStr    
         if (self.turning != None):
             self.deviceList.append(self.turning)
+
+        comPort = 'COM' + config['COMPorts']['COMPortVacuum']
+        self.vacuum, respStr = self.openMotorComm(self.vacuum, comPort, 'Vacuum')
+        message += respStr    
+        if (self.vacuum != None):
+            self.deviceList.append(self.vacuum)
+
+        comPort = 'COM' + config['COMPorts']['COMPortApsIrm']
+        self.apsIRM, respStr = self.openIrmArmComm(self.apsIRM, comPort, 'IrmArm')
+        message += respStr    
+        if (self.apsIRM != None):
+            self.deviceList.append(self.apsIRM)
         
         return message 
 
@@ -114,7 +159,7 @@ class DevicesControl():
     '''
     def closeDevice(self, device):
         if (device != None):
-            if (device.serialDevice.isOpen()):
+            if (device.isOpen()):
                 device.closeDevice()
                 
     '''
@@ -128,12 +173,12 @@ class DevicesControl():
         If Program_Halt request is sent, exit.
         Otherwise, continue
     '''
-    def checkProgramHaltRequest(self, queue):
+    def checkProgramHaltRequest(self):
         try:
             if self.programHaltedFlag:
                 return True
             else:
-                message = queue.get(timeout=0.1)
+                message = self.queue.get(timeout=0.1)
                 if 'Program_Halted' in message:
                     self.programHaltedFlag = True
                     return True
@@ -181,8 +226,8 @@ class DevicesControl():
     '''
         Move the UpDown motor
     '''
-    def upDownMove(self, queue, position, speed, waitingForStop=True):
-        if self.checkProgramHaltRequest(queue):
+    def upDownMove(self, position, speed, waitingForStop=True):
+        if self.checkProgramHaltRequest():
             return
         
         if not (self.programPausedFlag or self.programHaltedFlag):
@@ -223,7 +268,7 @@ class DevicesControl():
     '''
         Move the X and Y Motor
     '''
-    def moveMotorXY(self, queue, motorid, moveMotorPos, moveMotorVelocity, waitingForStop=True, stopEnable=0, stopCondition=0):
+    def moveMotorXY(self, motorid, moveMotorPos, moveMotorVelocity, waitingForStop=True, stopEnable=0, stopCondition=0):
         # If Settings form and XY Motors tab are active, and Override Home to Top is clicked,
         # then only need to check position of up/down tube (greater than or equal to sample bottom)
         if (self.frmSettingsVisible and  
@@ -232,7 +277,7 @@ class DevicesControl():
             
             up_down_position = self.upDown.readPosition()
             if (abs(up_down_position) > (abs(self.changerX.SampleBottom) + 50)):
-                self.upDownMove(queue, self.upDown.SampleTop, 0)
+                self.upDownMove(self.upDown.SampleTop, 0)
                 
             upDownPosition = self.upDown.readPosition()
             if (abs(upDownPosition) >= (abs(self.upDown.SampleBottom) + 50)):
@@ -246,7 +291,7 @@ class DevicesControl():
                 stop_state = True
                 
             # Home Up/Down motor to top
-            self.HomeToTop(queue)
+            self.HomeToTop()
             
             if (self.upDown.checkInternalStatus(4) != stop_state):
                 self.programHaltedFlag = True
@@ -276,9 +321,9 @@ class DevicesControl():
     '''
         Move UpDown Motor to the top
     '''
-    def HomeToTop(self, queue):        
+    def HomeToTop(self):        
         # No homing to top if the program has been halted
-        if self.checkProgramHaltRequest(queue):
+        if self.checkProgramHaltRequest():
             return
         
         stop_state = False
@@ -309,7 +354,7 @@ class DevicesControl():
 
         # Check if the limit switch get hit, set error if not                    
         if not (self.upDown.checkInternalStatus(4) == stop_state):
-            queue.put('Error: Homed to top but did not hit switch!')
+            raise ValueError('Error: Homed to top but did not hit switch!')
             
         upDownPos = self.upDown.readPosition()
         self.upDown.zeroTargetPos()
@@ -319,15 +364,14 @@ class DevicesControl():
     '''
         Move the XY table to the center
     '''
-    def HomeToCenter(self, queue):
+    def HomeToCenter(self):
         stop_state = False
         if self.upDown.DCMotorHomeToTop_StopOnTrue:
             stop_state = True
         
         # No homing to center if the Up/Down Motor is not homed
         if (self.upDown.checkInternalStatus(4) != stop_state):
-            queue.put('Error: Could not home to center!  Home to top not complete!')
-            return
+            raise ValueError('Error: Could not home to center!  Home to top not complete!')
         
         self.changerX.motorReset()
         self.changerY.motorReset()
@@ -338,16 +382,16 @@ class DevicesControl():
         
         # Move motor a relative number of motor units, 
         # and stop if signal from the load corner limit switch is logic low
-        self.moveMotorXY(queue, self.changerX, self.MotorPositionMoveToLoadCorner, self.changerX.ChangerSpeed, False, -1, 0)
+        self.moveMotorXY(self.changerX, self.MotorPositionMoveToLoadCorner, self.changerX.ChangerSpeed, False, -1, 0)
         time.sleep(0.1)
         
-        self.moveMotorXY(queue, self.changerY, self.MotorPositionMoveToLoadCorner, self.changerY.ChangerSpeed, False, -2, 0)
+        self.moveMotorXY(self.changerY, self.MotorPositionMoveToLoadCorner, self.changerY.ChangerSpeed, False, -2, 0)
         
         # Wait for limit switches or timeout
         xStatus = self.changerX.checkInternalStatus(4)
         yStatus = self.changerY.checkInternalStatus(5) 
         while ((xStatus or yStatus) and
-               (not self.checkProgramHaltRequest(queue)) and
+               (not self.checkProgramHaltRequest()) and
                (not self.hasMoveToXYLimit_Timedout(startTime))):
             time.sleep(0.1)
             xStatus = self.changerX.checkInternalStatus(4)
@@ -363,8 +407,7 @@ class DevicesControl():
             else:
                 errorMessage = 'Error: Homed XY Stage to center but did not hit load corner limit switch(es)!'
                 
-            queue.put(errorMessage)
-            return
+            raise ValueError(errorMessage)
         
         # Reset both X and Y motor controllers
         # This will reset both motor positions to 0 motor encoder counts, but this is okay
@@ -379,15 +422,15 @@ class DevicesControl():
         
         # Now Move to center limit switches
         # Move motor a relative number of motor units, and stop if signal from the center limit switch is logic low
-        self.moveMotorXY(queue, self.changerX, self.MotorPositionMoveToCenter, self.changerX.ChangerSpeed, False, -2, 0)
+        self.moveMotorXY(self.changerX, self.MotorPositionMoveToCenter, self.changerX.ChangerSpeed, False, -2, 0)
         time.sleep(0.1)
-        self.moveMotorXY(queue, self.changerY, self.MotorPositionMoveToCenter, self.changerY.ChangerSpeed, False, -3, 0)
+        self.moveMotorXY(self.changerY, self.MotorPositionMoveToCenter, self.changerY.ChangerSpeed, False, -3, 0)
 
         # Wait for limit switches or timeout
         xStatus = self.changerX.checkInternalStatus(5)
         yStatus = self.changerY.checkInternalStatus(6) 
         while ((xStatus and yStatus) and
-               (not self.checkProgramHaltRequest(queue)) and
+               (not self.checkProgramHaltRequest()) and
                (not self.hasMoveToXYLimit_Timedout(startTime))):
             time.sleep(0.1)
             xStatus = self.changerX.checkInternalStatus(5)
@@ -402,8 +445,7 @@ class DevicesControl():
             else:
                 errorMessage = 'Error: Homed XY Stage to center but did not hit positive limit switch(es)!'
             
-            queue.put(errorMessage)
-            return
+            raise ValueError(errorMessage)
         
         else:
             self.changerX.zeroTargetPos()
@@ -413,25 +455,117 @@ class DevicesControl():
             
             xPos = self.changerX.readPosition()
             yPos = self.changerY.readPosition()
-            queue.put('Data: xPos: ' + str(xPos))
-            queue.put('Data: yPos: ' + str(yPos))
+            self.queue.put('Data: xPos: ' + str(xPos))
+            self.queue.put('Data: yPos: ' + str(yPos))
             
         return
+
+    '''--------------------------------------------------------------------------------------------
+                        
+                        Motor Control Functions
+                        
+    --------------------------------------------------------------------------------------------'''   
+    '''
+    '''
+    def FireAPS_AtCalibratedTarget(self, target):
+        if (target == 0):
+            # Discharging IRM device
+            self.apsIRM.SendZeroCommand_ToApsIRMDevice_AndWaitForReply()
+            time.sleep(1)
+            return
         
+        else:
+            self.apsIRM.SetApsIrmPolarity_FromTargetValue(target)
+            level_in_positive_gauss = int(abs(target))
+            self.apsIRM.SetApsIrmRange_FromGaussLevel(level_in_positive_gauss)
+            
+            # Check if level is in range
+            if (level_in_positive_gauss > self.apsIRM.PulseAxialMax):
+                warningMessage = 'Warning: Target IRM Peak Field (' + str(level_in_positive_gauss) + ' '
+                warningMessage += self.apsIRM.AFUnits + ') is above the currently set value for the Maximum IRM Peak Field ('
+                warningMessage += str(self.apsIRM.PulseAxialMax) + ' ' + self.apsIRM.AFUnits
+                self.queue.put(warningMessage)
+                return 
+            
+            elif (level_in_positive_gauss < self.apsIRM.PulseAxialMin):
+                warningMessage = 'Warning: Target IRM Peak Field (' + str(level_in_positive_gauss) + ' '
+                warningMessage += self.apsIRM.AFUnits + ') is below the currently set value for the Minimum IRM Peak Field ('
+                warningMessage += str(self.apsIRM.PulseAxialMax) + ' ' + self.apsIRM.AFUnits
+                self.queue.put(warningMessage)
+                return
+                
+            target_level = str(level_in_positive_gauss)
+            
+            # Catch Flow Pause or Flow Halt
+            if (self.checkProgramHaltRequest()):
+                return
+
+            # Set IRM Field Level
+            self.apsIRM.SetApsIrmLevel(target_level)
+
+            # Catch Flow Pause or Flow Halt
+            if (self.checkProgramHaltRequest()):
+                return
+
+            # Tell APS IRM to execute pulse
+            self.apsIRM.executeApsIrmPulse()
+            
+            # Wait for Done signal
+            while True:
+                my_local_response = self.apsIRM.GetApsIrmResponse(self.apsIRM.APS_GET_RESPONSE_SERIAL_COMM_TIMEOUT_IN_SECONDS)
+                if  self.apsIRM.APS_DONE_STRING in my_local_response:
+                    return
+                
+                # Catch Flow Pause or Flow Halt
+                if (self.checkProgramHaltRequest()):
+                    return
+                
+                # Send warning message
+                warningMessage = 'Warning: Over ' + str(self.apsIRM.APS_GET_RESPONSE_SERIAL_COMM_TIMEOUT_IN_SECONDS)
+                warningMessage += ' seconds have elapsed since the IRM Fire Command was sent '
+                warningMessage += 'for an IRM Pulse at ' + target_level + ' ' + self.apsIRM.AFUnits + ' and '
+                warningMessage += ' no ' + self.apsIRM.APS_DONE_STRING + ' response has been received from the APS IRM Device.'
+                self.queue.put(warningMessage)
+                
+            
+            
+    '''--------------------------------------------------------------------------------------------
+                        
+                        IRM/ARM Control Task Functions
+                        
+    --------------------------------------------------------------------------------------------'''
+    '''
+    '''
+    def FireIRM(self, voltage, CalibrationMode=False):
+        if 'ASC' in self.apsIRM.IRMSystem:
+            print('TODO: Implement FireASC_IrmAtPulseVolts voltage, CalibrationMode')
+        else:
+            self.FireAPS_AtCalibratedTarget(voltage)
         
+
+    '''--------------------------------------------------------------------------------------------
+                        
+                        Main Task Handler
+                        
+    --------------------------------------------------------------------------------------------'''
     '''
         
     '''
     def runTask(self, queue, taskID):
+        self.queue = queue
         try:
-            if (taskID == self.HOME_TO_TOP):
-                self.HomeToTop(queue)
+            if (taskID[0] == self.MOTOR_HOME_TO_TOP):
+                self.HomeToTop()
                     
-            elif (taskID == self.HOME_TO_CENTER):
-                self.HomeToCenter(queue)
+            elif (taskID[0] == self.MOTOR_HOME_TO_CENTER):
+                self.HomeToCenter()
+            
+            elif (taskID[0] == self.IRM_FIRE):
+                voltage = taskID[1][0] 
+                self.FireIRM(voltage)
             
         except ValueError as e:
-            queue.put('Error: ' + str(e))
+            self.queue.put('Error: ' + str(e))
         
         return
             

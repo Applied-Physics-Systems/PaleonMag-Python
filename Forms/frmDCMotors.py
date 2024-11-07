@@ -9,17 +9,25 @@ class frmDCMotors(wx.Frame):
     '''
     classdocs
     '''
+    tipMessage = """Make sure power is on to the following devices\n
+1. All three 2G SQUID boxes
+2. Motor driver box
+3. Bartington susceptibility bridge (set to CGS and 1.0)
+4. AF unit and cooling air, with the AF degausser on
+   computer control(if you are going to do AF or rockmag)
+5. IRM pulse box (if you are going to do rockmag)
+6. ARM bias box (if you are going to do rockmag)"""
     parent = None
 
     def __init__(self, parent):
         '''
         Constructor
         '''
-        super(frmDCMotors, self).__init__(parent)
-        self.parent = parent
+        super(frmDCMotors, self).__init__(parent, wx.NewIdRef())
+        self.parent = parent   
         
         self.InitUI()
-
+        
     '''
     '''
     def InitUI(self):
@@ -45,7 +53,8 @@ class frmDCMotors(wx.Frame):
         self.homeCenterBtn = wx.Button(panel, label='Home To Center', pos=(btnXOri, btnYOri+4*btnYOffset), size=(btnLength, btnHeight))
         self.zeroTPBtn = wx.Button(panel, label='Zero T/P', pos=(btnXOri, btnYOri+7*btnYOffset), size=(btnLength, btnHeight))
         self.pollMotorBtn = wx.Button(panel, label='Poll Motor', pos=(btnXOri, btnYOri+8*btnYOffset), size=(btnLength, btnHeight))
-        self.closeBtn = wx.Button(panel, label='Close', pos=(btnXOri, btnYOri+9*btnYOffset), size=(btnLength, btnHeight))
+        closeBtn = wx.Button(panel, label='Close', pos=(btnXOri, btnYOri+9*btnYOffset), size=(btnLength, btnHeight))
+        closeBtn.Bind(wx.EVT_BUTTON, self.onClose)
         
         # Second Column
         wx.StaticText(panel, label='Target Position', pos=(btnXOri+btnXOffset, txtBoxOri - txtOffset))
@@ -141,13 +150,15 @@ class frmDCMotors(wx.Frame):
         haltBtn = wx.Button(panel, label='HALT!', pos=(btnXOri + 2*btnXOffset, txtBoxOri), size=(smallBtnLength, btnHeight))
         haltBtn.Bind(wx.EVT_BUTTON, self.onHalt)
         haltBtn.SetBackgroundColour('Red')
+
+        # Add event handler on OnClose
+        self.Bind(wx.EVT_CLOSE, self.onClosed)
         
         self.SetSize((800, 500))
         self.SetTitle('Motor Control')
         self.Centre()
-        self.SetWindowStyle(wx.STAY_ON_TOP)
         self.Show(True)
-
+                          
     '''--------------------------------------------------------------------------------------------
                         
                         Event Handler Functions
@@ -162,14 +173,28 @@ class frmDCMotors(wx.Frame):
     '''
     def onHalt(self, event):
         self.parent.processQueue.put('Program_Halted')
+        
+    '''
+    '''
+    def onClose(self, event):
+        self.Close(force=False)
 
+    '''
+    '''
+    def onClosed(self, event):
+        if self.parent.panelList:
+            if 'MotorControl' in self.parent.panelList.keys():          
+                del self.parent.panelList['MotorControl']
+                
+        self.Destroy()
+        
 #===================================================================================================
 # Main Module
 #---------------------------------------------------------------------------------------------------
 if __name__=='__main__':
     try:    
         app = wx.App(False)
-        frame = frmDCMotors(parent=None, id=-1)
+        frame = frmDCMotors(parent=None)
         app.MainLoop()    
         
     except Exception as e:

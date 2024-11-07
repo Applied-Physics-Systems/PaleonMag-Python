@@ -13,7 +13,7 @@ class ProcessData():
     frmSettingsOptions2Visible = False
     frmSettingsChkOverrideHomeToTop_ForMoveMotorAbsoluteXY = False
     
-    PortOpen = [False, False, False, False]
+    PortOpen = [False, False, False, False, False, False]
 
     def __init__(self):
         '''

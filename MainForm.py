@@ -17,11 +17,13 @@ import configparser
 from Forms.frmDCMotors import frmDCMotors
 from Forms.frmTip import frmTip
 from Forms.frmFlashingStatus import frmFlashingStatus
+from Forms.frmMagnetometerControl import frmMagnetometerControl
+from Forms.frmSampleIndexRegistry import frmSampleIndexRegistry
 
 from Hardware.DevicesControl import DevicesControl
 from Process.ProcessData import ProcessData
 
-VersionNumber = 'Version 0.00.04'
+VersionNumber = 'Version 0.00.06'
 
 ID_DC_MOTORS        = 0
 ID_FILE_REGISTRY    = 1
@@ -38,16 +40,20 @@ devControl = DevicesControl()
     Background task processing
 '''
 def workerFunction(queue, taskID):
-    processData = queue.get()
-    devControl.setDevicesConfig(processData.config)
-    devControl.retrieveProcessData(processData)
-    
-    devControl.runTask(queue, taskID)
-    
-    processData = devControl.saveProcessData(processData)
-    devControl.closeDevices()
-    queue.put('Task Completed')    
-    queue.put(processData)
+    try:
+        processData = queue.get()
+        devControl.setDevicesConfig(processData.config)
+        devControl.retrieveProcessData(processData)
+        
+        devControl.runTask(queue, taskID)
+        
+        processData = devControl.saveProcessData(processData)
+        devControl.closeDevices()
+        queue.put('Task Completed')    
+        queue.put(processData)
+        
+    except Exception as e:
+        print(e)
 
 '''
     Main form for PaleonMag software
@@ -65,6 +71,7 @@ class MainForm(wx.Frame):
     processQueue = None
     flashingCount = FLASH_DISPLAY_OFF_TIME
     flashingMessage = ''
+    panelList = {}
     
     def __init__(self, *args, **kw):
         '''
@@ -87,7 +94,6 @@ class MainForm(wx.Frame):
         self.Bind(wx.EVT_TIMER, self.OnTimer, self.timer)
 
         tipBox = frmTip(parent=self)
-        tipBox.devices = self.devControl
         tipBox.Show()
 
     '''--------------------------------------------------------------------------------------------
@@ -233,10 +239,52 @@ class MainForm(wx.Frame):
         self.messageBox = wx.TextCtrl(self, -1, style = wx.EXPAND|wx.TE_MULTILINE)
         self.messageBox.SetBackgroundColour('Cyan')         
                 
+        # create status bar
+        self.statusBar = self.CreateStatusBar(style = wx.BORDER_NONE)
+        # set text to status bar
+        self.statusBar.SetStatusText("Status Bar")
+        
         self.SetSize((1500, 1000)) 
         self.SetTitle('Paleonmagnetic Magnetometer Controller Systems - ' + VersionNumber)
         self.Centre() 
         self.Show(True)
+        
+    '''--------------------------------------------------------------------------------------------
+                        
+                        Initialization Functions
+                        
+    --------------------------------------------------------------------------------------------''' 
+    '''
+    '''
+    def Magnetometer_Initialize(self):
+        magControl = frmMagnetometerControl(parent=self)
+        magControl.Show()
+        self.panelList['MagnetometerControl'] = magControl                    
+        
+        registryControl = frmSampleIndexRegistry(parent=self)
+        registryControl.Show()
+        self.panelList['RegistryControl'] = registryControl
+        
+        if not self.NOCOMM_Flag:
+            # Move vertical motor to top position
+            self.pushTaskToQueue([self.devControl.MOTOR_HOME_TO_TOP, [None]])
+            
+            # Move XY Table To Center Position
+            if (self.devControl.changerX.UseXYTableAPS):
+                self.pushTaskToQueue([self.devControl.MOTOR_HOME_TO_CENTER, [None]])
+                
+            # Initialize Vacuum.
+            if (self.devControl.vacuum.DoVacuumReset):
+                print('TODO: DoVacuumReset')
+                
+            # if EnableAxialIRM, then discharge
+            if self.devControl.apsIRM.EnableARM:
+                #self.pushTaskToQueue([self.devControl.IRM_SET_BIAS_FIELD, [0]])
+                print('TODO: Set bias field with DAQ board')
+                
+            if self.devControl.apsIRM.EnableAxialIRM:
+                self.pushTaskToQueue([self.devControl.IRM_FIRE, [0]])
+        
 
     '''--------------------------------------------------------------------------------------------
                         
@@ -258,6 +306,9 @@ class MainForm(wx.Frame):
             self.processData.config = config 
             self.messageStr = self.devControl.setDevicesConfig(config)
             self.devControl.closeDevices()
+            
+            # Set paramters from INI file
+            self.NOCOMM_Flag = self.devControl.changerX.NoCommMode 
 
     '''
         Check if all device are connected OK
@@ -292,11 +343,11 @@ class MainForm(wx.Frame):
         runFlag = True
         
         processFunction = self.taskQueue.pop(0)
-        if (processFunction == self.devControl.HOME_TO_TOP):
+        if (processFunction[0] == self.devControl.MOTOR_HOME_TO_TOP):
             self.appendMessageBox('Run HomeToTop\n')
             self.flashingMessage = 'Please Wait, Homing To The Top'
             
-        elif (processFunction == self.devControl.HOME_TO_CENTER):
+        elif (processFunction[0] == self.devControl.MOTOR_HOME_TO_CENTER):
             self.flashingMessage = 'Please Wait, Homing XY Table'
             noCommStr = 'The XY Stage needs to be homed to the center, now\n\n'
             noCommStr += 'The code will home the Up/Down glass tube to the top limit switch'
@@ -308,6 +359,10 @@ class MainForm(wx.Frame):
                 self.appendMessageBox('Run HomeToCenter\n')
             else:
                 runFlag = False
+
+        elif (processFunction[0] == self.devControl.IRM_FIRE):
+            self.appendMessageBox('Run Discharge IRM device\n')
+
         
         if runFlag:
             self.backgroundRunningFlag = True
@@ -350,7 +405,7 @@ class MainForm(wx.Frame):
                         self.messageBox.SetBackgroundColour('Red')           
                         wx.MessageBox(messageList[1], caption='PaleonMag')
                         self.messageBox.SetBackgroundColour('Cyan')
-                    
+                                        
                 return
                     
             except:
@@ -380,8 +435,7 @@ class MainForm(wx.Frame):
                         
                         Event Handler Functions
                         
-    --------------------------------------------------------------------------------------------'''
-                
+    --------------------------------------------------------------------------------------------'''                
     '''
         Handle selected menu Item
     '''
@@ -392,8 +446,10 @@ class MainForm(wx.Frame):
             self.messageBox.AppendText("TODO"+"\n")
             
         elif (menuID == ID_DC_MOTORS):
-            dcMotor = frmDCMotors(parent=self)
-            dcMotor.Show()
+            if not 'MotorControl' in self.panelList.keys():
+                dcMotorControl = frmDCMotors(parent=self)
+                dcMotorControl.Show()
+                self.panelList['MotorControl'] = dcMotorControl
             
         elif (menuID == ID_NOCOMM_OFF):
             self.NOCOMM_Flag = False
@@ -401,9 +457,27 @@ class MainForm(wx.Frame):
             message += self.devControl.openDevices()
             self.messageBox.SetValue(message)
             
+        elif (menuID == ID_MAG_CONTROL):
+            if not 'MagnetometerControl' in self.panelList.keys():
+                magControl = frmMagnetometerControl(parent=self)
+                magControl.Show()
+                self.panelList['MagnetometerControl'] = magControl                    
+
+        elif (menuID == ID_FILE_REGISTRY):
+            if not 'RegistryControl' in self.panelList.keys():
+                registryControl = frmSampleIndexRegistry(parent=self)
+                registryControl.Show()
+                self.panelList['RegistryControl'] = registryControl                    
+            
         elif (menuID == ID_QUIT_EXIT):
-            self.processQueue.put('Program_Halted')
+            if not self.NOCOMM_Flag:
+                self.processQueue.put('Program_Halted')
             self.Close(force=False)
+                
+        # Set focus on panels
+        if (menuID != ID_QUIT_EXIT):
+            for panel in self.panelList.values():
+                panel.SetFocus()
                         
             
     '''

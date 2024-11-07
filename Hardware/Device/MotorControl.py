@@ -10,72 +10,14 @@ class MotorControl(SerialPortDevice):
     '''
     classdocs
     '''
-    label = ''
 
     def __init__(self, baudRate, pathName, comPort, Label):
         '''
         Constructor
-        '''
-        self.label = Label
-        self.PortOpen = False 
-                
+        '''                
         self.MotorAddress = '16'
-        SerialPortDevice.__init__(self, baudRate, 'MotorControl', pathName, comPort)
-
-    '''
-        Read an integer value from INI file
-    '''
-    def getConfig_Int(self, config, section, label, default):
-        try:
-            value = int(config[section][label])
-            return value
-        
-        except:
-            return default         
-
-    '''
-       Read boolean value from INI file
-    '''
-    def getConfig_Bool(self, config, section, label, default):
-        try:
-            value = False
-            if ('True'.lower() == config[section][label].lower()):
-                value = True
-            return value 
-        
-        except:
-            return default         
-        
-        
-    '''
-        Set Motor Config
-    '''
-    def setMotorConfig(self, config):
-        self.DCMotorHomeToTop_StopOnTrue = self.getConfig_Bool(config, 'SteppingMotor', 'DCMotorHomeToTop_StopOnTrue', True)
-        self.UpDownTorqueFactor = self.getConfig_Int(config, 'SteppingMotor', 'UpDownTorqueFactor', 40) 
-        self.UpDownMaxTorque = self.getConfig_Int(config, 'SteppingMotor', 'UpDownMaxTorque', 32000)   
-        self.UpDownMotor1cm = self.getConfig_Int(config, 'SteppingMotor', 'UpDownMotor1cm', 10)    
-        self.SampleBottom = self.getConfig_Int(config, 'SteppingMotor', 'SampleBottom', -2385)   
-        self.SampleTop = self.getConfig_Int(config, 'SteppingMotor', 'SampleTop', -1979)
-        self.LiftSpeedSlow = self.getConfig_Int(config, 'SteppingMotor', 'LiftSpeedSlow', 4000000)    
-        self.LiftSpeedNormal = self.getConfig_Int(config, 'SteppingMotor', 'LiftSpeedNormal', 25000000)    
-        self.LiftSpeedFast = self.getConfig_Int(config, 'SteppingMotor', 'LiftSpeedFast', 50000000)
-        self.LiftAcceleration = self.getConfig_Int(config, 'SteppingMotor', 'LiftAcceleration', 90000)
-        self.MeasPos = self.getConfig_Int(config, 'SteppingMotor', 'MeasPos', -30607)
-        self.ChangerSpeed = self.getConfig_Int(config, 'SteppingMotor', 'ChangerSpeed', 31000)   
-
-        self.UseXYTableAPS = self.getConfig_Bool(config, 'XYTable', 'UseXYTableAPS', False)
-       
-        if (self.label == 'UpDown'):
-            self.MotorID = config['MotorPrograms']['MotorIDUpDown']
-        elif (self.label == 'ChangeX'):
-            self.MotorID = config['MotorPrograms']['MotorIDChanger']
-        elif (self.label == 'ChangeY'):
-            self.MotorID = config['MotorPrograms']['MotorIDChangerY']
-        elif (self.label == 'Turning'):
-            self.MotorIDTurning = config['MotorPrograms']['MotorIDTurning']
-        
-       
+        SerialPortDevice.__init__(self, baudRate, 'MotorControl', pathName, comPort, Label)
+               
     '''--------------------------------------------------------------------------------------------
                         
                         Elementary Motor Command Functions

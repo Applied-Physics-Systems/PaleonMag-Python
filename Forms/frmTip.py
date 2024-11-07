@@ -18,13 +18,12 @@ class frmTip(wx.Frame):
 5. IRM pulse box (if you are going to do rockmag)
 6. ARM bias box (if you are going to do rockmag)"""
     parent = None
-    devices = None
 
     def __init__(self, parent):
         '''
         Constructor
         '''
-        super(frmTip, self).__init__(parent)
+        super(frmTip, self).__init__(parent, wx.NewIdRef())
         self.parent = parent   
         
         self.InitUI()
@@ -46,14 +45,30 @@ class frmTip(wx.Frame):
         self.SetTitle('Reminder')
         self.Centre()
         self.Show(True)
-        
+                          
+    '''--------------------------------------------------------------------------------------------
+                        
+                        Event Handler Functions
+                        
+    --------------------------------------------------------------------------------------------'''                
     '''
         Close Tip Dialog box
     '''
     def onOK(self, event):
-        self.parent.pushTaskToQueue(self.devices.HOME_TO_TOP)
-        self.parent.pushTaskToQueue(self.devices.HOME_TO_CENTER)
+        self.parent.Magnetometer_Initialize()
         
         self.Close()
         
+        
+#===================================================================================================
+# Main Module
+#---------------------------------------------------------------------------------------------------
+if __name__=='__main__':
+    try:    
+        app = wx.App(False)
+        frame = frmTip(parent=None)
+        app.MainLoop()    
+        
+    except Exception as e:
+        print(e)
         
