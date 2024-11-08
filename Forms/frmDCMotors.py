@@ -28,6 +28,9 @@ class frmDCMotors(wx.Frame):
         
         self.InitUI()
         
+        # Check for enable Motors
+        self.checkMotorAvailable()
+        
     '''
     '''
     def InitUI(self):
@@ -47,10 +50,12 @@ class frmDCMotors(wx.Frame):
         
         # First Column
         self.movePosBtn = wx.Button(panel, label='Move To Position', pos=(btnXOri, btnYOri), size=(btnLength, btnHeight))
-        self.homeTopBtn = wx.Button(panel, label='Home to Top', pos=(btnXOri, btnYOri+btnYOffset), size=(btnLength, btnHeight))
+        homeTopBtn = wx.Button(panel, label='Home to Top', pos=(btnXOri, btnYOri+btnYOffset), size=(btnLength, btnHeight))
+        homeTopBtn.Bind(wx.EVT_BUTTON, self.onHomeToTop)
         self.pickupBtn = wx.Button(panel, label='Sample Pickup', pos=(btnXOri, btnYOri+2*btnYOffset), size=(btnLength, btnHeight))
         self.dropoffBtn = wx.Button(panel, label='Sample Dropoff', pos=(btnXOri, btnYOri+3*btnYOffset), size=(btnLength, btnHeight))
-        self.homeCenterBtn = wx.Button(panel, label='Home To Center', pos=(btnXOri, btnYOri+4*btnYOffset), size=(btnLength, btnHeight))
+        homeCenterBtn = wx.Button(panel, label='Home To Center', pos=(btnXOri, btnYOri+4*btnYOffset), size=(btnLength, btnHeight))
+        homeCenterBtn.Bind(wx.EVT_BUTTON, self.onHomeToCenter)
         self.zeroTPBtn = wx.Button(panel, label='Zero T/P', pos=(btnXOri, btnYOri+7*btnYOffset), size=(btnLength, btnHeight))
         self.pollMotorBtn = wx.Button(panel, label='Poll Motor', pos=(btnXOri, btnYOri+8*btnYOffset), size=(btnLength, btnHeight))
         closeBtn = wx.Button(panel, label='Close', pos=(btnXOri, btnYOri+9*btnYOffset), size=(btnLength, btnHeight))
@@ -159,11 +164,39 @@ class frmDCMotors(wx.Frame):
         self.Centre()
         self.Show(True)
                           
+    '''
+    '''
+    def checkMotorAvailable(self):
+        for motor in self.parent.devControl.deviceList:
+            if motor.active:
+                if 'ChangerX' in motor.label:
+                    self.changerXChkBox.SetValue(True)
+                elif 'ChangerY' in motor.label:
+                    self.changerYChkBox.SetValue(True)
+                elif 'Turning' in motor.label:
+                    self.turningChkBox.SetValue(True)
+                elif 'UpDown' in motor.label:
+                    self.upDownChkBox.SetValue(True)
+                    
     '''--------------------------------------------------------------------------------------------
                         
                         Event Handler Functions
                         
     --------------------------------------------------------------------------------------------'''
+    '''
+        Move vertical motor to top position
+    '''
+    def onHomeToTop(self, event):
+        self.parent.pushTaskToQueue([self.parent.devControl.MOTOR_HOME_TO_TOP, [None]])
+        return
+
+    '''
+    '''
+    def onHomeToCenter(self, event):
+        self.parent.pushTaskToQueue([self.parent.devControl.MOTOR_HOME_TO_TOP, [None]])
+        self.parent.pushTaskToQueue([self.parent.devControl.MOTOR_HOME_TO_CENTER, [None]])
+        return
+                
     '''
     '''
     def onRadioBox(self, event):

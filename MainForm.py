@@ -13,6 +13,7 @@ Libraries used in this project
 import wx
 import multiprocessing
 import configparser
+from datetime import datetime
 
 from Forms.frmDCMotors import frmDCMotors
 from Forms.frmTip import frmTip
@@ -23,7 +24,7 @@ from Forms.frmSampleIndexRegistry import frmSampleIndexRegistry
 from Hardware.DevicesControl import DevicesControl
 from Process.ProcessData import ProcessData
 
-VersionNumber = 'Version 0.00.06'
+VersionNumber = 'Version 0.00.07'
 
 ID_DC_MOTORS        = 0
 ID_FILE_REGISTRY    = 1
@@ -42,7 +43,11 @@ devControl = DevicesControl()
 def workerFunction(queue, taskID):
     try:
         processData = queue.get()
-        devControl.setDevicesConfig(processData.config)
+        if isinstance(processData, str):
+            queue.put('Task Completed')
+            queue.put(processData)
+            return            
+        devControl.setDevicesConfig(processData.config, queue)
         devControl.retrieveProcessData(processData)
         
         devControl.runTask(queue, taskID)
@@ -53,6 +58,7 @@ def workerFunction(queue, taskID):
         queue.put(processData)
         
     except Exception as e:
+        print(processData)
         print(e)
 
 '''
@@ -72,6 +78,7 @@ class MainForm(wx.Frame):
     flashingCount = FLASH_DISPLAY_OFF_TIME
     flashingMessage = ''
     panelList = {}
+    config = None
     
     def __init__(self, *args, **kw):
         '''
@@ -92,6 +99,7 @@ class MainForm(wx.Frame):
         self.timer = wx.Timer(self)
         self.timer.Stop()
         self.Bind(wx.EVT_TIMER, self.OnTimer, self.timer)
+        self.timer.Start(int(200))      # Checking every 200ms
 
         tipBox = frmTip(parent=self)
         tipBox.Show()
@@ -240,9 +248,14 @@ class MainForm(wx.Frame):
         self.messageBox.SetBackgroundColour('Cyan')         
                 
         # create status bar
-        self.statusBar = self.CreateStatusBar(style = wx.BORDER_NONE)
+        self.statusBar = self.CreateStatusBar(style = wx.BORDER_RAISED)
+        self.StatusBar.SetFieldsCount(4)
+        self.StatusBar.SetStatusWidths([-8, -8, -3, -1])
         # set text to status bar
-        self.statusBar.SetStatusText("Status Bar")
+        if self.NOCOMM_Flag:
+            self.statusBar.SetStatusText("NoCOMM mode on", 0)
+        else:
+            self.statusBar.SetStatusText("NoCOMM mode off", 0)
         
         self.SetSize((1500, 1000)) 
         self.SetTitle('Paleonmagnetic Magnetometer Controller Systems - ' + VersionNumber)
@@ -301,10 +314,10 @@ class MainForm(wx.Frame):
         
         if dlg.ShowModal() == wx.ID_OK:
             self.defaultFilePath = dlg.GetPath()        
-            config = configparser.ConfigParser()
-            config.read(self.defaultFilePath)
-            self.processData.config = config 
-            self.messageStr = self.devControl.setDevicesConfig(config)
+            self.config = configparser.ConfigParser()
+            self.config.read(self.defaultFilePath)
+            self.processData.config = self.config 
+            self.messageStr = self.devControl.setDevicesConfig(self.config)
             self.devControl.closeDevices()
             
             # Set paramters from INI file
@@ -372,12 +385,12 @@ class MainForm(wx.Frame):
         Start a new process which can run concurrently on another CPU core to avoid GUI hangup
     '''
     def runProcess(self, taskID):
+        self.timer.Stop()
         self.processQueue = multiprocessing.Queue()
         self.process = multiprocessing.Process(target=workerFunction, args=(self.processQueue, taskID))
         self.process.start()
-        self.processQueue.put(self.processData)
-        
-        self.timer.Start(int(200))      # Checking every 200ms
+        self.processQueue.put(self.processData)        
+        self.timer.Start(int(200))      # Checking every 200ms 
                 
     '''
         Check for task completion
@@ -395,7 +408,8 @@ class MainForm(wx.Frame):
                         self.startProcess()
                             
                     else:
-                        self.appendMessageBox('Tasks Completed')
+                        self.appendMessageBox('Tasks Completed\n')
+                        self.statusBar.SetStatusText('Tasks Completed', 1)
                         self.timer.Stop()
                         
                 elif ('Error:' in endMessage):
@@ -405,6 +419,16 @@ class MainForm(wx.Frame):
                         self.messageBox.SetBackgroundColour('Red')           
                         wx.MessageBox(messageList[1], caption='PaleonMag')
                         self.messageBox.SetBackgroundColour('Cyan')
+                
+                elif ('Warning:' in endMessage):
+                    messageList = endMessage.split(':')
+                    if (len(messageList) > 1):
+                        self.statusBar.SetStatusText(messageList[1], 1)     
+                        
+                elif ('Command Exchange:' in endMessage):
+                    messageList = endMessage.split(':')
+                    if (len(messageList) > 1):
+                        print(messageList[1])                      
                                         
                 return
                     
@@ -425,11 +449,14 @@ class MainForm(wx.Frame):
     '''
     def pushTaskToQueue(self, taskFunction):
         if not self.NOCOMM_Flag:
+            self.statusBar.SetStatusText("Task running ...", 1)
             self.taskQueue.append(taskFunction)
             # if no background process running, start one
             if not self.backgroundRunningFlag:
                 if (len(self.taskQueue) > 0):
                     self.startProcess()
+        else:
+            self.statusBar.SetStatusText("Error: Cannot execute due to NoCOMM on", 1)
 
     '''--------------------------------------------------------------------------------------------
                         
@@ -452,10 +479,12 @@ class MainForm(wx.Frame):
                 self.panelList['MotorControl'] = dcMotorControl
             
         elif (menuID == ID_NOCOMM_OFF):
-            self.NOCOMM_Flag = False
-            message = self.messageBox.GetValue()
-            message += self.devControl.openDevices()
-            self.messageBox.SetValue(message)
+            if self.NOCOMM_Flag:  
+                self.NOCOMM_Flag = False
+                self.statusBar.SetStatusText('NoCOMM mode off', 0)
+            else:
+                self.NOCOMM_Flag = True
+                self.statusBar.SetStatusText('NoCOMM mode on', 0)
             
         elif (menuID == ID_MAG_CONTROL):
             if not 'MagnetometerControl' in self.panelList.keys():
@@ -471,19 +500,24 @@ class MainForm(wx.Frame):
             
         elif (menuID == ID_QUIT_EXIT):
             if not self.NOCOMM_Flag:
-                self.processQueue.put('Program_Halted')
+                if (self.processQueue != None): 
+                    self.processQueue.put('Program_Halted')
             self.Close(force=False)
                 
         # Set focus on panels
         if (menuID != ID_QUIT_EXIT):
             for panel in self.panelList.values():
                 panel.SetFocus()
-                        
-            
+                                    
     '''
         Timer event handler
     '''
     def OnTimer(self, event):
+        now = datetime.now()
+        # Format the time as HH:MM
+        formatted_time = now.strftime("%H:%M %p")
+        self.statusBar.SetStatusText(formatted_time, 3)
+        
         if self.backgroundRunningFlag:
             self.checkProcess()
         

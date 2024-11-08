@@ -24,6 +24,7 @@ class SerialPortDevice():
     DeviceDictionary = None
     EOT_CHARACTER = '\x04'
     label = ''
+    active = False
     
     def __init__(self, baudRate, deviceName, pathName, comPort, Label):
         self.label = Label
@@ -72,6 +73,7 @@ class SerialPortDevice():
                 
                 if not self.serialDevice.isOpen():
                     self.serialDevice.open()
+                    self.active = True
                 print(self.serialDevice.portstr)
         except:
             errorMsg = 'Error: {0} is used by other software'.format(port) 

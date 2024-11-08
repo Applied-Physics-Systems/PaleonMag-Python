@@ -53,8 +53,9 @@ class DevicesControl():
     '''
         Set parameter from INI files for each motor
     '''
-    def setDevicesConfig(self, config):                        
-        message = self.openDevices(config)
+    def setDevicesConfig(self, config, queue=None):  
+        self.queue = queue                      
+        message = self.openDevices(config, queue)
         
         if (self.devicesAllGoodFlag):
             self.upDown.setDeviceConfig(config)
@@ -69,7 +70,7 @@ class DevicesControl():
     '''
         Open UART serial communication port for motor
     '''
-    def openMotorComm(self, device, comPort, label):        
+    def openMotorComm(self, device, comPort, label, queue):        
         message = ''
         if (device != None):
             if (device.openDevice()):
@@ -80,18 +81,17 @@ class DevicesControl():
         else:
             try:            
                 message += label + ': ' + comPort  
-                device = MotorControl(57600, self.currentPath, comPort, label)
+                device = MotorControl(57600, self.currentPath, comPort, label, queue)
             except:
                 message += ' Failed to open'
                 self.devicesAllGoodFlag = False
-
         
         return device, message + '\n'
 
     '''
         Open UART serial communication port for motor
     '''
-    def openIrmArmComm(self, device, comPort, label):        
+    def openIrmArmComm(self, device, comPort, label, queue):        
         message = ''
         if (device != None):
             if (device.openDevice()):
@@ -112,43 +112,43 @@ class DevicesControl():
         
     '''
     '''
-    def openDevices(self, config):
+    def openDevices(self, config, queue):
         self.devicesAllGoodFlag = True
                 
         message = '\n'
         self.deviceList = []
         comPort = 'COM' + config['COMPorts']['COMPortUpDown']        
-        self.upDown, respStr = self.openMotorComm(self.upDown, comPort, 'UpDown')
+        self.upDown, respStr = self.openMotorComm(self.upDown, comPort, 'UpDown', queue)
         message += respStr
         if (self.upDown != None):
             self.deviceList.append(self.upDown)
         
         comPort = 'COM' + config['COMPorts']['COMPortChanger']
-        self.changerX, respStr = self.openMotorComm(self.changerX, comPort, 'ChangerX')
+        self.changerX, respStr = self.openMotorComm(self.changerX, comPort, 'ChangerX', queue)
         message += respStr
         if (self.changerX != None):
             self.deviceList.append(self.changerX)
 
         comPort = 'COM' + config['COMPorts']['COMPortChangerY']
-        self.changerY, respStr = self.openMotorComm(self.changerY, comPort, 'ChangerY')
+        self.changerY, respStr = self.openMotorComm(self.changerY, comPort, 'ChangerY', queue)
         message += respStr
         if (self.changerY != None):
             self.deviceList.append(self.changerY)
 
         comPort = 'COM' + config['COMPorts']['COMPortTurning']
-        self.turning, respStr = self.openMotorComm(self.turning, comPort, 'Turning')
+        self.turning, respStr = self.openMotorComm(self.turning, comPort, 'Turning', queue)
         message += respStr    
         if (self.turning != None):
             self.deviceList.append(self.turning)
 
         comPort = 'COM' + config['COMPorts']['COMPortVacuum']
-        self.vacuum, respStr = self.openMotorComm(self.vacuum, comPort, 'Vacuum')
+        self.vacuum, respStr = self.openMotorComm(self.vacuum, comPort, 'Vacuum', queue)
         message += respStr    
         if (self.vacuum != None):
             self.deviceList.append(self.vacuum)
 
         comPort = 'COM' + config['COMPorts']['COMPortApsIrm']
-        self.apsIRM, respStr = self.openIrmArmComm(self.apsIRM, comPort, 'IrmArm')
+        self.apsIRM, respStr = self.openIrmArmComm(self.apsIRM, comPort, 'IrmArm', queue)
         message += respStr    
         if (self.apsIRM != None):
             self.deviceList.append(self.apsIRM)
@@ -525,9 +525,7 @@ class DevicesControl():
                 warningMessage += ' seconds have elapsed since the IRM Fire Command was sent '
                 warningMessage += 'for an IRM Pulse at ' + target_level + ' ' + self.apsIRM.AFUnits + ' and '
                 warningMessage += ' no ' + self.apsIRM.APS_DONE_STRING + ' response has been received from the APS IRM Device.'
-                self.queue.put(warningMessage)
-                
-            
+                self.queue.put(warningMessage)                            
             
     '''--------------------------------------------------------------------------------------------
                         

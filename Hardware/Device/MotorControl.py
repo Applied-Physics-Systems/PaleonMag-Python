@@ -10,12 +10,14 @@ class MotorControl(SerialPortDevice):
     '''
     classdocs
     '''
+    queue = None
 
-    def __init__(self, baudRate, pathName, comPort, Label):
+    def __init__(self, baudRate, pathName, comPort, Label, queue=None):
         '''
         Constructor
         '''                
         self.MotorAddress = '16'
+        self.queue = queue
         SerialPortDevice.__init__(self, baudRate, 'MotorControl', pathName, comPort, Label)
                
     '''--------------------------------------------------------------------------------------------
@@ -62,12 +64,17 @@ class MotorControl(SerialPortDevice):
     def sendMotorCommand(self, cmdStr):
         if not self.PortOpen:
             self.motorCommConnect()
-         
-        self.sendString('@' + self.MotorAddress + ' ' + cmdStr + '\r\n')
+        
+        cmdStr = '@' + self.MotorAddress + ' ' + cmdStr
+        self.sendString( cmdStr + '\r\n')
         
         time.sleep(0.01)        # Sleep for 100 ms
 
         respStr = self.readLine()
+        
+        # Send Command and its response to the GUI
+        if (self.queue != None):
+            self.queue.put('Command Exchange: ' + cmdStr + ';' + respStr)
         
         return respStr 
 
