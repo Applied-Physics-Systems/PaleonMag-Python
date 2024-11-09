@@ -25,15 +25,14 @@ class IrmArmControl(SerialPortDevice):
     '''
 
 
-    def __init__(self, baudRate, pathName, comPort, Label, queue = None):
+    def __init__(self, baudRate, pathName, comPort, Label, modConfig):
         '''
         Constructor
         '''
         self.label = Label
         self.PortOpen = False 
-        self.queue = queue
                 
-        SerialPortDevice.__init__(self, baudRate, 'IrmArmControl', pathName, comPort, Label)
+        SerialPortDevice.__init__(self, baudRate, 'IrmArmControl', pathName, comPort, Label, modConfig)
         
     '''--------------------------------------------------------------------------------------------
                         

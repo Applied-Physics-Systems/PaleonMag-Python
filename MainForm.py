@@ -22,9 +22,9 @@ from Forms.frmMagnetometerControl import frmMagnetometerControl
 from Forms.frmSampleIndexRegistry import frmSampleIndexRegistry
 
 from Hardware.DevicesControl import DevicesControl
-from Process.ProcessData import ProcessData
+from Process.ModConfig import ModConfig
 
-VersionNumber = 'Version 0.00.07'
+VersionNumber = 'Version 0.00.08'
 
 ID_DC_MOTORS        = 0
 ID_FILE_REGISTRY    = 1
@@ -46,8 +46,9 @@ def workerFunction(queue, taskID):
         if isinstance(processData, str):
             queue.put('Task Completed')
             queue.put(processData)
-            return            
-        devControl.setDevicesConfig(processData.config, queue)
+            return
+        modConfig = ModConfig(process=processData, queue=queue)
+        devControl.setDevicesConfig(modConfig)
         devControl.retrieveProcessData(processData)
         
         devControl.runTask(queue, taskID)
@@ -86,7 +87,6 @@ class MainForm(wx.Frame):
         '''
         super(MainForm, self).__init__(*args, **kw)
         self.devControl = DevicesControl()
-        self.processData = ProcessData()
         
         self.openINIFile()
         
@@ -283,19 +283,19 @@ class MainForm(wx.Frame):
             self.pushTaskToQueue([self.devControl.MOTOR_HOME_TO_TOP, [None]])
             
             # Move XY Table To Center Position
-            if (self.devControl.changerX.UseXYTableAPS):
+            if (self.modConfig.UseXYTableAPS):
                 self.pushTaskToQueue([self.devControl.MOTOR_HOME_TO_CENTER, [None]])
                 
             # Initialize Vacuum.
-            if (self.devControl.vacuum.DoVacuumReset):
+            if (self.modConfig.DoVacuumReset):
                 print('TODO: DoVacuumReset')
                 
             # if EnableAxialIRM, then discharge
-            if self.devControl.apsIRM.EnableARM:
+            if self.modConfig.EnableARM:
                 #self.pushTaskToQueue([self.devControl.IRM_SET_BIAS_FIELD, [0]])
                 print('TODO: Set bias field with DAQ board')
                 
-            if self.devControl.apsIRM.EnableAxialIRM:
+            if self.modConfig.EnableAxialIRM:
                 self.pushTaskToQueue([self.devControl.IRM_FIRE, [0]])
         
 
@@ -314,14 +314,14 @@ class MainForm(wx.Frame):
         
         if dlg.ShowModal() == wx.ID_OK:
             self.defaultFilePath = dlg.GetPath()        
-            self.config = configparser.ConfigParser()
-            self.config.read(self.defaultFilePath)
-            self.processData.config = self.config 
-            self.messageStr = self.devControl.setDevicesConfig(self.config)
+            config = configparser.ConfigParser()
+            config.read(self.defaultFilePath)
+            self.modConfig = ModConfig(config=config) 
+            self.messageStr = self.devControl.setDevicesConfig(self.modConfig)
             self.devControl.closeDevices()
             
             # Set paramters from INI file
-            self.NOCOMM_Flag = self.devControl.changerX.NoCommMode 
+            self.NOCOMM_Flag = self.modConfig.NoCommMode 
 
     '''
         Check if all device are connected OK
@@ -389,7 +389,7 @@ class MainForm(wx.Frame):
         self.processQueue = multiprocessing.Queue()
         self.process = multiprocessing.Process(target=workerFunction, args=(self.processQueue, taskID))
         self.process.start()
-        self.processQueue.put(self.processData)        
+        self.processQueue.put(self.modConfig.processData)        
         self.timer.Start(int(200))      # Checking every 200ms 
                 
     '''

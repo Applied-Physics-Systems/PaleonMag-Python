@@ -12,13 +12,12 @@ class MotorControl(SerialPortDevice):
     '''
     queue = None
 
-    def __init__(self, baudRate, pathName, comPort, Label, queue=None):
+    def __init__(self, baudRate, pathName, comPort, Label, modConfig):
         '''
         Constructor
         '''                
         self.MotorAddress = '16'
-        self.queue = queue
-        SerialPortDevice.__init__(self, baudRate, 'MotorControl', pathName, comPort, Label)
+        SerialPortDevice.__init__(self, baudRate, 'MotorControl', pathName, comPort, Label, modConfig)
                
     '''--------------------------------------------------------------------------------------------
                         
@@ -32,7 +31,10 @@ class MotorControl(SerialPortDevice):
         self.sendString('@255 173 416\r\n')
         
         if 'UpDown' in self.label:
-            self.setTorque(self.UpDownTorqueFactor, self.UpDownTorqueFactor, self.UpDownTorqueFactor, self.UpDownTorqueFactor)
+            self.setTorque(self.modConfig.UpDownTorqueFactor, 
+                           self.modConfig.UpDownTorqueFactor, 
+                           self.modConfig.UpDownTorqueFactor, 
+                           self.modConfig.UpDownTorqueFactor)
             
         self.PortOpen = True
         
@@ -41,7 +43,7 @@ class MotorControl(SerialPortDevice):
     '''
     '''    
     def setTorque(self, ClosedHold, ClosedMove, OpenHold, OpenMove):
-        PerTorque = 0.01 * self.UpDownMaxTorque     #Value for 1% torque
+        PerTorque = 0.01 * self.modConfig.UpDownMaxTorque     #Value for 1% torque
 
         CH = int(ClosedHold * PerTorque)
         CM = int(ClosedMove * PerTorque)
@@ -73,8 +75,8 @@ class MotorControl(SerialPortDevice):
         respStr = self.readLine()
         
         # Send Command and its response to the GUI
-        if (self.queue != None):
-            self.queue.put('Command Exchange: ' + cmdStr + ';' + respStr)
+        if (self.modConfig.queue != None):
+            self.modConfig.queue.put('Command Exchange: ' + self.label + ';' + cmdStr + ';' + respStr)
         
         return respStr 
 
@@ -197,8 +199,8 @@ class MotorControl(SerialPortDevice):
         
         # Set MAV(Move Absolute, Velocity Base) command
         cmdStr = "134 " + str(moveMotorPos) 
-        if (self.UseXYTableAPS and (self.label == 'UpDown')): 
-            cmdStr += " " + str(self.LiftAcceleration) + " "
+        if (self.modConfig.UseXYTableAPS and (self.label == 'UpDown')): 
+            cmdStr += " " + str(self.modConfig.LiftAcceleration) + " "
         else:
             cmdStr += " 96637 "  
         cmdStr += str(moveMotorVelocity)
