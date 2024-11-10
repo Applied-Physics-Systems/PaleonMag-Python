@@ -19,6 +19,7 @@ class DevicesControl():
     '''
     MOTOR_HOME_TO_TOP       = 0x0001
     MOTOR_HOME_TO_CENTER    = 0x0002
+    MOTOR_MOVE              = 0x0003
     
     IRM_SET_BIAS_FIELD      = 0x1001
     IRM_FIRE                = 0x1002
@@ -179,6 +180,26 @@ class DevicesControl():
             
         except:
             return False
+   
+    '''
+    '''
+    def getActiveMotor(self, motorStr):
+        activeMotor = None
+        motorLabel = 'UpDown'
+        if 'Changer (X)' in motorStr:
+            motorLabel = 'ChangerX'
+        elif 'Changer (Y)' in motorStr:
+            motorLabel = 'ChangerY'
+        elif 'Turning' in motorStr:
+            motorLabel = 'Turning'
+        elif 'Up/Down' in motorStr:
+            motorLabel = 'UpDown'
+            
+        for device in self.deviceList:
+            if motorLabel in device.label:
+                activeMotor = device
+            
+        return activeMotor    
    
     '''--------------------------------------------------------------------------------------------
                         
@@ -353,17 +374,12 @@ class DevicesControl():
         if self.modConfig.DCMotorHomeToTop_StopOnTrue:
             stop_state = True
             
-        print('Start of HomeToCenter')
         # No homing to center if the Up/Down Motor is not homed
         if (self.upDown.checkInternalStatus(4) != stop_state):
             raise ValueError('Could not home to center!  Home to top not complete!')
         
-        print('Before Reset')
-        
         self.changerX.motorReset()
         self.changerY.motorReset()
-        
-        print('After Reset')
         
         # Wait 1 second for motor power cycle process to finish
         time.sleep(1)
@@ -415,7 +431,6 @@ class DevicesControl():
         time.sleep(0.1)
         self.moveMotorXY(self.changerY, self.MotorPositionMoveToCenter, self.modConfig.ChangerSpeed, False, -3, 0)
 
-        print('Middle of HomeToCenter')
         # Wait for limit switches or timeout
         xStatus = self.changerX.checkInternalStatus(5)
         yStatus = self.changerY.checkInternalStatus(6) 
@@ -448,7 +463,6 @@ class DevicesControl():
             self.modConfig.queue.put('Data: xPos: ' + str(xPos))
             self.modConfig.queue.put('Data: yPos: ' + str(yPos))
             
-        print('End of HomeToCenter')
         return
 
     '''--------------------------------------------------------------------------------------------
@@ -548,6 +562,14 @@ class DevicesControl():
                     
             elif (taskID[0] == self.MOTOR_HOME_TO_CENTER):
                 self.HomeToCenter()
+
+            elif (taskID[0] == self.MOTOR_MOVE):
+                motorStr = taskID[1][0]
+                activeMotor = self.getActiveMotor(motorStr)
+                if (activeMotor != None):
+                    targetPos = taskID[1][1]
+                    velocity = taskID[1][2]
+                    activeMotor.moveMotor(targetPos, velocity)
             
             elif (taskID[0] == self.IRM_FIRE):
                 voltage = taskID[1][0] 

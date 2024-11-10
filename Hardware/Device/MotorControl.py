@@ -194,6 +194,10 @@ class MotorControl(SerialPortDevice):
         Move motor at absolute value
     '''
     def moveMotor(self, moveMotorPos, moveMotorVelocity, waitingForStop=True, stopEnable=0, stopCondition=0):
+        # Send Command and its response to the GUI
+        if (self.modConfig.queue != None):
+            self.modConfig.queue.put('Motor Info: ' + self.label + ';Position ' + str(moveMotorPos) + ';Velocity ' + str(moveMotorVelocity))
+        
         self.pollMotor()
         self.clearPollStatus()
         

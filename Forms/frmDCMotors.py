@@ -49,7 +49,8 @@ class frmDCMotors(wx.Frame):
         txtOffset = 18
         
         # First Column
-        self.movePosBtn = wx.Button(panel, label='Move To Position', pos=(btnXOri, btnYOri), size=(btnLength, btnHeight))
+        movePosBtn = wx.Button(panel, label='Move To Position', pos=(btnXOri, btnYOri), size=(btnLength, btnHeight))
+        movePosBtn.Bind(wx.EVT_BUTTON, self.onMoveMotor)
         homeTopBtn = wx.Button(panel, label='Home to Top', pos=(btnXOri, btnYOri+btnYOffset), size=(btnLength, btnHeight))
         homeTopBtn.Bind(wx.EVT_BUTTON, self.onHomeToTop)
         self.pickupBtn = wx.Button(panel, label='Sample Pickup', pos=(btnXOri, btnYOri+2*btnYOffset), size=(btnLength, btnHeight))
@@ -117,9 +118,9 @@ class frmDCMotors(wx.Frame):
         
         # Radio buttons group
         radioBoxLabels = ['Changer (X)', 'Turning', 'Up/Down', 'Changer (Y)']
-        self.rbox = wx.RadioBox(panel, label = 'Active Controls', pos = (btnXOri + 2*btnXOffset + groupOffset, btnYOri + 2*btnYOffset + 10), choices = radioBoxLabels,
+        self.activeMotroRBox = wx.RadioBox(panel, label = 'Active Controls', pos = (btnXOri + 2*btnXOffset + groupOffset, btnYOri + 2*btnYOffset + 10), choices = radioBoxLabels,
                                 majorDimension = 1, style = wx.RA_SPECIFY_COLS) 
-        self.rbox.Bind(wx.EVT_RADIOBOX,self.onRadioBox) 
+        self.activeMotroRBox.Bind(wx.EVT_RADIOBOX,self.onRadioBox) 
             
         # Bottom TextBox and Buttons
         txtBoxLength = 200
@@ -178,6 +179,25 @@ class frmDCMotors(wx.Frame):
                 elif 'UpDown' in motor.label:
                     self.upDownChkBox.SetValue(True)
                     
+    '''
+        Display infomration for the running background process
+    '''
+    def updateGUI(self, modConfig):
+        self.outputTBox.SetValue(modConfig.outCommand)
+        self.inputTBox.SetValue(modConfig.inResponse)
+        self.lastPosTBox.SetValue(modConfig.lastPositionRead)
+        self.targetPosTBox.SetValue(modConfig.targetPosition)
+        self.velocityTBox.SetValue(modConfig.velocity)
+                
+        if 'ChangerX' in  modConfig.activeMotor:
+            self.activeMotroRBox.SetSelection(0)
+        elif 'Turning' in  modConfig.activeMotor:
+            self.activeMotroRBox.SetSelection(1)
+        elif 'UpDown' in modConfig.activeMotor:
+            self.activeMotroRBox.SetSelection(2)
+        elif 'ChangerY' in  modConfig.activeMotor:
+            self.activeMotroRBox.SetSelection(3)
+            
     '''--------------------------------------------------------------------------------------------
                         
                         Event Handler Functions
@@ -196,16 +216,26 @@ class frmDCMotors(wx.Frame):
         self.parent.pushTaskToQueue([self.parent.devControl.MOTOR_HOME_TO_TOP, [None]])
         self.parent.pushTaskToQueue([self.parent.devControl.MOTOR_HOME_TO_CENTER, [None]])
         return
-                
+       
+    '''
+    '''
+    def onMoveMotor(self, event):
+        activeMotor = self.activeMotroRBox.GetStringSelection()
+        tartgetPosition = int(self.targetPosTBox.GetValue())
+        velocity = int(self.velocityTBox.GetValue())
+        self.parent.pushTaskToQueue([self.parent.devControl.MOTOR_MOVE, [activeMotor, tartgetPosition, velocity]])
+        return
+        
     '''
     '''
     def onRadioBox(self, event):
-        print(self.rbox.GetStringSelection() + ' is clicked from Radio Box')
+        print(self.activeMotroRBox.GetStringSelection() + ' is clicked from Radio Box')
         
     '''
     '''
     def onHalt(self, event):
         self.parent.processQueue.put('Program_Halted')
+        self.parent.process.terminate()
         
     '''
     '''

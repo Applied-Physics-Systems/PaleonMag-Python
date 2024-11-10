@@ -9,6 +9,10 @@ class ModConfig():
     '''
     classdocs
     '''
+    lastPositionRead = ''
+    targetPosition = ''
+    velocity = ''
+    
     processData = ProcessData()
 
     def __init__(self, process=None, config=None, queue=None):
@@ -89,5 +93,43 @@ class ModConfig():
         self.MotorIDChangerY = config['MotorPrograms']['MotorIDChangerY']
         self.MotorIDTurning = config['MotorPrograms']['MotorIDTurning']        
 
+    '''
+    '''
+    def parseCommandExchange(self, exchangeStr):
+        strList = exchangeStr.split(';')
+        if (len(strList) == 3): 
+            self.activeMotor = strList[0].strip()            
+            self.outCommand = strList[1].strip()
+            self.inResponse = strList[2].strip()
             
+            if '@16 12 1' in self.outCommand:
+                if (('UpDown' in self.activeMotor) or 
+                    ('ChangerX' in self.activeMotor) or 
+                    ('ChangerY' in self.activeMotor)):
+                    
+                    respList = self.inResponse.split()
+                    if (len(respList) == 5):
+                        upperWord = int(respList[3], 16)
+                        lowerWord = int(respList[4], 16)
+                        self.lastPositionRead = str(upperWord * 65536 + lowerWord)                     
+
+    '''
+    '''
+    def parseMotorInfo(self, infoStr):
+        strList = infoStr.split(';')
+        
+        for eachStr in strList:
+            params = eachStr.strip().split()
+            if (len(params) == 1):
+                self.activeMotor = params[0]
+            else:
+                if 'Position' in params[0]:
+                    self.targetPosition = params[1]
+                elif 'Velocity' in params[0]:
+                    self.velocity = params[1]
+                    
+
+                    
+        
+    
             

@@ -9,16 +9,12 @@ class frmFlashingStatus(wx.Frame):
     '''
     classdocs
     '''
-    parent = None
 
     def __init__(self, parent, message):
         '''
         Constructor
         '''
         super(frmFlashingStatus, self).__init__(parent)
-        self.parent = parent
-        
-        
         self.InitUI(message)
 
         # Add timer
@@ -35,9 +31,10 @@ class frmFlashingStatus(wx.Frame):
         font = wx.Font(18, wx.DECORATIVE, wx.ITALIC, wx.NORMAL)
         text.SetFont(font)
                 
-        self.SetSize((400, 50))
+        self.SetSize((400, 100))
         self.Centre()
-        self.SetWindowStyle(wx.STAY_ON_TOP)
+        #self.SetWindowStyle(wx.STAY_ON_TOP)
+        self.Show()
         
     '''
     '''
@@ -50,8 +47,8 @@ class frmFlashingStatus(wx.Frame):
 #---------------------------------------------------------------------------------------------------
 if __name__=='__main__':
     try:    
-        app = wx.App(False)
-        frame = frmFlashingStatus(parent=None)
+        app = wx.App(False)        
+        frame = frmFlashingStatus(parent=None, message='Test')
         app.MainLoop()    
         
     except Exception as e:

@@ -24,7 +24,7 @@ from Forms.frmSampleIndexRegistry import frmSampleIndexRegistry
 from Hardware.DevicesControl import DevicesControl
 from Process.ModConfig import ModConfig
 
-VersionNumber = 'Version 0.00.08'
+VersionNumber = 'Version 0.00.09'
 
 ID_DC_MOTORS        = 0
 ID_FILE_REGISTRY    = 1
@@ -36,6 +36,15 @@ ID_QUIT_EXIT        = 5
 FLASH_DISPLAY_OFF_TIME = 10
 
 devControl = DevicesControl()
+
+'''
+    Flashing message panel to show working in progress
+'''
+def flashingFunction(flashingMessage):
+    app = wx.App(False)
+    frmFlashingStatus(parent=None, message=flashingMessage)
+    app.MainLoop()
+    
 
 '''
     Background task processing
@@ -214,8 +223,7 @@ class MainForm(wx.Frame):
     '''
         Build graphic user interface for the main form
     '''
-    def InitUI(self):
-               
+    def InitUI(self):               
         # Add Menu bar on the top 
         menubar = wx.MenuBar()
         
@@ -232,7 +240,7 @@ class MainForm(wx.Frame):
         menubar.Append(windowsMenu, '&Windows')  
         menubar.Append(helpMenu, '&Help')
         
-        self.SetMenuBar(menubar)         
+        self.SetMenuBar(menubar)
         
         # Add Toolbar below the Menu
         toolbar = self.CreateToolBar(style=wx.TB_HORIZONTAL)
@@ -246,6 +254,7 @@ class MainForm(wx.Frame):
                 
         self.messageBox = wx.TextCtrl(self, -1, style = wx.EXPAND|wx.TE_MULTILINE)
         self.messageBox.SetBackgroundColour('Cyan')         
+        self.messageBox.Bind(wx.EVT_LEFT_DOWN, self.onMouseClick)
                 
         # create status bar
         self.statusBar = self.CreateStatusBar(style = wx.BORDER_RAISED)
@@ -372,9 +381,14 @@ class MainForm(wx.Frame):
                 self.appendMessageBox('Run HomeToCenter\n')
             else:
                 runFlag = False
+                
+        elif (processFunction[0] == self.devControl.MOTOR_MOVE):
+            self.appendMessageBox('Move Motor To Target Position\n')
+            self.flashingMessage = 'Move Motor To Target Position'            
 
         elif (processFunction[0] == self.devControl.IRM_FIRE):
             self.appendMessageBox('Run Discharge IRM device\n')
+            self.flashingMessage = 'Run Discharge IRM device'
 
         
         if runFlag:
@@ -402,7 +416,6 @@ class MainForm(wx.Frame):
                 if ('Task Completed' in endMessage):
                     self.backgroundRunningFlag = False
                     self.processData = self.processQueue.get()
-                    self.process.join()
                     # Start new process
                     if (len(self.taskQueue) > 0):
                         self.startProcess()
@@ -428,7 +441,16 @@ class MainForm(wx.Frame):
                 elif ('Command Exchange:' in endMessage):
                     messageList = endMessage.split(':')
                     if (len(messageList) > 1):
-                        print(messageList[1])                      
+                        self.modConfig.parseCommandExchange(messageList[1].strip())
+                        if 'MotorControl' in self.panelList.keys():
+                            self.panelList['MotorControl'].updateGUI(self.modConfig)
+
+                elif ('Motor Info:' in endMessage):
+                    messageList = endMessage.split(':')
+                    if (len(messageList) > 1):
+                        self.modConfig.parseMotorInfo(messageList[1].strip())
+                        if 'MotorControl' in self.panelList.keys():
+                            self.panelList['MotorControl'].updateGUI(self.modConfig)
                                         
                 return
                     
@@ -436,8 +458,8 @@ class MainForm(wx.Frame):
                 if (self.backgroundRunningFlag):
                     self.flashingCount += 1
                     if (self.flashingCount > FLASH_DISPLAY_OFF_TIME): 
-                        flashingPanel = frmFlashingStatus(self, self.flashingMessage)
-                        flashingPanel.Show()
+                        flashingProcess = multiprocessing.Process(target=flashingFunction, args=(self.flashingMessage,))
+                        flashingProcess.start()
                         self.flashingCount = 0
                 else:
                     self.flashingCount = 0
@@ -502,13 +524,21 @@ class MainForm(wx.Frame):
             if not self.NOCOMM_Flag:
                 if (self.processQueue != None): 
                     self.processQueue.put('Program_Halted')
+                self.process.terminate()
             self.Close(force=False)
                 
         # Set focus on panels
         if (menuID != ID_QUIT_EXIT):
             for panel in self.panelList.values():
                 panel.SetFocus()
-                                    
+
+    '''
+        Re-focus all panels to display them 
+    '''
+    def onMouseClick(self, event):
+        for panel in self.panelList.values():
+            panel.SetFocus()
+                                                            
     '''
         Timer event handler
     '''
