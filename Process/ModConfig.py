@@ -12,6 +12,7 @@ class ModConfig():
     lastPositionRead = ''
     targetPosition = ''
     velocity = ''
+    SampleHeight = 0.0
     
     processData = ProcessData()
 
@@ -24,7 +25,6 @@ class ModConfig():
             self.processData = process        
             self.parseConfig(self.processData.config)
         elif (config != None):
-            self.processData.config = config 
             self.parseConfig(config)
             
         self.queue = queue
@@ -35,6 +35,17 @@ class ModConfig():
     def getConfig_Int(self, config, section, label, default):
         try:
             value = int(config[section][label])
+            return value
+        
+        except:
+            return default         
+
+    '''
+        Read an integer value from INI file
+    '''
+    def getConfig_Float(self, config, section, label, default):
+        try:
+            value = float(config[section][label])
             return value
         
         except:
@@ -57,8 +68,14 @@ class ModConfig():
         Set parameters from INI file
     '''
     def parseConfig(self, config):
+        self.processData.config = config
         self.NoCommMode = self.getConfig_Bool(config, 'Program', 'NoCommMode', False)
-        
+
+        self.SlotMin = self.getConfig_Int(config, 'SampleChanger', 'SlotMin', 1)
+        self.SlotMax = self.getConfig_Int(config, 'SampleChanger', 'SlotMax', 200)
+        self.HoleSlotNum = self.getConfig_Int(config, 'SampleChanger', 'HoleSlotNum', 10)
+        self.OneStep = self.getConfig_Float(config, 'SampleChanger', 'OneStep', -1010.1010101)
+
         self.DCMotorHomeToTop_StopOnTrue = self.getConfig_Bool(config, 'SteppingMotor', 'DCMotorHomeToTop_StopOnTrue', True)
         self.UpDownTorqueFactor = self.getConfig_Int(config, 'SteppingMotor', 'UpDownTorqueFactor', 40) 
         self.UpDownMaxTorque = self.getConfig_Int(config, 'SteppingMotor', 'UpDownMaxTorque', 32000)   
@@ -71,8 +88,12 @@ class ModConfig():
         self.LiftAcceleration = self.getConfig_Int(config, 'SteppingMotor', 'LiftAcceleration', 90000)
         self.MeasPos = self.getConfig_Int(config, 'SteppingMotor', 'MeasPos', -30607)
         self.ChangerSpeed = self.getConfig_Int(config, 'SteppingMotor', 'ChangerSpeed', 31000)   
+        self.SCurveFactor = self.getConfig_Int(config, 'SteppingMotor', 'SCurveFactor', 32767)
+        self.SCoilPos = self.getConfig_Int(config, 'SteppingMotor', 'SCoilPos', -4202)
+        self.PickupTorqueThrottle = self.getConfig_Float(config, 'SteppingMotor', 'PickupTorqueThrottle', 0.4)
+        self.SampleHoleAlignmentOffset = self.getConfig_Float(config, 'SteppingMotor', 'SampleHoleAlignmentOffset', -0.02)
 
-        self.UseXYTableAPS = self.getConfig_Bool(config, 'XYTable', 'UseXYTableAPS', False)
+        self.UseXYTableAPS = self.getConfig_Bool(config, 'XYTable', 'UseXYTableAPS', False)        
 
         self.DoVacuumReset = self.getConfig_Bool(config, 'Vacuum', 'DoVacuumReset', False)
 
@@ -128,6 +149,46 @@ class ModConfig():
                 elif 'Velocity' in params[0]:
                     self.velocity = params[1]
                     
+    '''
+        Get XY reading from XY Table
+    '''
+    def XYTablePositions(self, pos, axis):
+        if (axis == 0):
+            xyTableStr = 'XY' + str(pos) + 'X'
+        elif (axis == 1):
+            xyTableStr = 'XY' + str(pos) + 'Y'
+        else:
+            xyTableStr = 'XYHomeX'
+        
+        posCount = self.getConfig_Int(self.processData.config, 'XYTable', xyTableStr, 381830)
+        
+        return posCount
+
+    '''
+        update modConfig dictionarry
+    '''
+    def upDateXYTablePositions(self, pos, axis, value):
+        if (axis == 0):
+            xyTableStr = 'XY' + str(pos) + 'X'
+        elif (axis == 1):
+            xyTableStr = 'XY' + str(pos) + 'Y'
+        else:
+            xyTableStr = 'XYHomeX'
+        
+        self.processData.config['XYTable'][xyTableStr] = value        
+        return
+    
+    '''
+    '''
+    def convertHoletoPosX(self, hole):
+        self.XYTablePositions(hole, 0)
+
+    '''
+    '''
+    def convertHoletoPosY(self, hole):
+        self.XYTablePositions(hole, 1)
+        
+
 
                     
         

@@ -12,6 +12,7 @@ from Hardware.Device.IrmArmControl import IrmArmControl
 
 from Process.ProcessData import ProcessData
 from Process.ModConfig import ModConfig
+from Process.ModChanger import ModChanger
 
 class DevicesControl():
     '''
@@ -20,6 +21,27 @@ class DevicesControl():
     MOTOR_HOME_TO_TOP       = 0x0001
     MOTOR_HOME_TO_CENTER    = 0x0002
     MOTOR_MOVE              = 0x0003
+    MOTOR_SAMPLE_PICKUP     = 0x0004
+    MOTOR_SAMPLE_DROPOFF    = 0x0005
+    MOTOR_ZERO_TP           = 0x0006
+    MOTOR_POLL              = 0x0007
+    MOTOR_CLEAR_POLL        = 0x0008
+    MOTOR_RELABEL_POSITION  = 0x0009
+    MOTOR_SET_CURRENT_HOLE  = 0x000A
+    MOTOR_CHANGE_HOLE       = 0x000B
+    MOTOR_GO_TO_X           = 0x000C
+    MOTOR_GO_TO_Y           = 0x000D
+    MOTOR_SPIN_SAMPLE       = 0x000E
+    MOTOR_CHANGE_TURN_ANGLE = 0x000F
+    MOTOR_CHANGE_HEIGHT     = 0x0010
+    MOTOR_SET_AF_COIL       = 0x0011
+    MOTOR_SET_ZERO          = 0x0012
+    MOTOR_LOAD              = 0x0013
+    MOTOR_READ_POSITION     = 0x0014
+    MOTOR_READ_ANGLE        = 0x0015
+    MOTOR_READ_HOLE         = 0x0016
+    MOTOR_RESET             = 0x0017    
+    MOTOR_STOP              = 0x0018
     
     IRM_SET_BIAS_FIELD      = 0x1001
     IRM_FIRE                = 0x1002
@@ -28,7 +50,6 @@ class DevicesControl():
     MotorPositionMoveToCenter = -900000
     MoveXYMotorsToLimitSwitch_TimeoutSeconds = 120
         
-    lastCmdMove = 1
     modConfig = None
     
     upDown = None
@@ -56,6 +77,7 @@ class DevicesControl():
     '''
     def setDevicesConfig(self, modConfig):  
         self.modConfig = modConfig
+        self.modChanger = ModChanger(self.modConfig)
         message = self.openDevices(modConfig)
         
         return message
@@ -201,45 +223,34 @@ class DevicesControl():
             
         return activeMotor    
    
-    '''--------------------------------------------------------------------------------------------
-                        
-                        Process Functions
-                        
-    --------------------------------------------------------------------------------------------'''
     '''
+        Update data for process that has been changed 
     '''
-    def retrieveProcessData(self, processData):        
-        # Port Open
-        for i in range(0, len(self.deviceList)):
-            self.deviceList[i].PortOpen = processData.PortOpen[i]
-            
-    '''
-    '''
-    def saveProcessData(self, processData):
-        # PortOpen
-        processData.PortOpen = []
-        for device in self.deviceList:
-            processData.PortOpen.append(device.PortOpen)
-        
-        return processData
-
+    def updateProcessData(self):
+        self.modConfig.processData.PortOpen['UpDown'] = self.upDown.modConfig.processData.PortOpen['UpDown']
+        self.modConfig.processData.PortOpen['Turning'] = self.turning.modConfig.processData.PortOpen['Turning']
+        self.modConfig.processData.PortOpen['ChangerX'] = self.changerX.modConfig.processData.PortOpen['ChangerX']
+        self.modConfig.processData.PortOpen['ChangerY'] = self.changerY.modConfig.processData.PortOpen['ChangerY']
+                
+        return self.modConfig.processData 
+   
     '''--------------------------------------------------------------------------------------------
                         
                         Motor Control Functions
                         
-    --------------------------------------------------------------------------------------------'''   
+    --------------------------------------------------------------------------------------------'''  
+    '''
+    '''
+    def upDownHeight(self):
+        return self.upDown.GetPosition()
+        
     '''
         Move the UpDown motor
     '''
     def upDownMove(self, position, speed, waitingForStop=True):
         if self.checkProgramHaltRequest():
             return
-        
-        if not (self.programPausedFlag or self.programHaltedFlag):
-            self.lastMoveCommand = self.lastCmdMove
-            self.lastMoveMotor = 'UpDown'
-            self.lastMoveTarget = position
-        
+                
         movementSign = 1
         startingPos = self.upDown.readPosition()
         if (position < startingPos):
@@ -307,6 +318,32 @@ class DevicesControl():
         return
     
     '''
+    '''
+    def moveMotorAbsoluteXY(self, motorid, moveMotorPos, MoveMotorVelocity, waitingForStop=True, StopEnable=0, StopCondition=0):
+        # Verify that the up/down motor is homed to top
+        stop_state = False
+        if self.modConfig.DCMotorHomeToTop_StopOnTrue:
+            stop_state = True
+            
+        # Home up/down motor to top
+        self.HomeToTop()
+        
+        # No homing to center if the Up/Down Motor is not homed
+        if (self.upDown.checkInternalStatus(4) != stop_state):
+            errorMessage = 'Could not move X,Y motors!  Home to top not complete!'
+            raise ValueError(errorMessage)
+        
+        motorid.pollMotor()
+        motorid.clearPollStatus()
+        commandStr = '134 ' + str(moveMotorPos) + ' '
+        commandStr += ' 483184 ' + str(MoveMotorVelocity) + ' '
+        commandStr += str(StopEnable) + ' ' + str(StopCondition)
+        respStr = motorid.sendMotorCommand(commandStr)
+        if waitingForStop:
+            motorid.waitForMotorStop()
+        
+    
+    '''
         Check for timeout
     '''
     def hasMoveToXYLimit_Timedout(self, startTime):
@@ -317,7 +354,86 @@ class DevicesControl():
             return False
         else:
             return True
+
+    '''
+    '''
+    def convertPosToHole(self, pos):
+        FullLoop = (self.modConfig.SlotMax - self.modConfig.SlotMin + 1)
+        hole = (pos / self.modConfig.OneStep) % FullLoop
+        if (hole <= 0):
+            hole = hole + (self.modConfig.SlotMax - self.modConfig.SlotMin + 1)
+            
+        return hole
+
+    '''
+    '''
+    def convertPosToHoleXY(self, posX, posY):
+        holeXY = -1
+        for i in range(1, 101):
+            testX = abs(posX - self.modConfig.XYTablePositions(i, 0))
+            testXb = (testX < 1000)
+            
+            testY = abs(posY - self.modConfig.XYTablePositions(i, 1))
+            testYb = (testY < 1000)
+            
+            if (testXb and testYb):
+                holeXY = i
+                break
+            
+        if (holeXY == -1):
+            holeXY = self.modConfig.SlotMin
+            
+        return holeXY
+
+    '''
+    '''
+    def changerHole(self):
+        if not self.modConfig.UseXYTableAPS:
+            # Chain Drive
+            curPos = self.changerX.readPosition()
+            curHole = self.convertPosToHole(curPos)
+            
+        else:
+            # We are using an XY Table
+            curPosX = self.changerX.readPosition()
+            curPosY = self.changerY.readPosition()
+            curHole = self.ConvertPosToHoleXY(curPosX, curPosY)
+            
+        return curHole 
        
+    '''
+    '''
+    def convertHoleToPos(self, hole):
+        fullLoop = abs((self.modConfig.SlotMax - self.modConfig.SlotMin + 1) * self.modConfig.OneStep)
+        currentPos = self.changerX.readPosition()
+        self.changerHole()
+        targetHole = hole
+        targetHolePosRaw = self.modConfig.OneStep * hole
+        stepsToGo = (targetHolePosRaw - currentPos) % fullLoop
+        
+        if (abs(stepsToGo) > (fullLoop / 2)):
+            if (stepsToGo > 0):
+                stepsToGo = stepsToGo - fullLoop
+            else:
+                stepsToGo = stepsToGo + fullLoop
+                
+        if not self.modChanger.isHole(targetHole):
+            if (stepsToGo > 0):
+                stepsToGo = stepsToGo + self.modConfig.SampleHoleAlignmentOffset * self.modConfig.OneStep
+            else:
+                stepsToGo = stepsToGo + self.modConfig.SampleHoleAlignmentOffset * self.modConfig.OneStep
+                
+        holePos = int(stepsToGo + currentPos)
+                
+        return holePos
+                
+    '''
+    '''
+    def MotorXYTable_CenterReset(self):
+        xPos, yPos = self.HomeToCenter()
+        self.modConfig.updateXYTablePositions(0, 0, xPos)
+        self.modConfig.updateXYTablePositions(0, 1, yPos)
+                
     '''--------------------------------------------------------------------------------------------
                         
                         Motor Control Task Functions
@@ -370,6 +486,8 @@ class DevicesControl():
         Move the XY table to the center
     '''
     def HomeToCenter(self):
+        xPos = 0 
+        yPos = 0
         stop_state = False
         if self.modConfig.DCMotorHomeToTop_StopOnTrue:
             stop_state = True
@@ -463,11 +581,163 @@ class DevicesControl():
             self.modConfig.queue.put('Data: xPos: ' + str(xPos))
             self.modConfig.queue.put('Data: yPos: ' + str(yPos))
             
-        return
+        return xPos, yPos 
 
+    '''
+    '''
+    def DoSamplePickup(self):
+        self.upDown.setTorque(self.modConfig.PickupTorqueThrottle * self.modConfig.UpDownTorqueFactor, 
+                              self.modConfig.PickupTorqueThrottle * self.modConfig.UpDownTorqueFactor, 
+                              self.modConfig.PickupTorqueThrottle * self.modConfig.UpDownTorqueFactor, 
+                              self.modConfig.PickupTorqueThrottle * self.modConfig.UpDownTorqueFactor)
+        self.upDown.moveMotor(self.modConfig.SampleBottom, self.modConfig.LiftSpeedSlow)
+        currentPos = self.upDownHeight()
+        
+        self.upDown.zeroTargetPos()
+        
+        self.upDown.relabelPos(currentPos)
+        self.upDown.setTorque(self.modConfig.UpDownTorqueFactor, 
+                              self.modConfig.UpDownTorqueFactor, 
+                              self.modConfig.UpDownTorqueFactor, 
+                              self.modConfig.UpDownTorqueFactor)
+        
+        stop_state = False
+        if self.modConfig.DCMotorHomeToTop_StopOnTrue:
+            stop_state = True
+            
+        if (self.upDown.checkInternalStatus(4) == stop_state):
+            errorMessage = 'Quartz tube at sample top but homing switch still set. Check for switch failure.'
+            raise ValueError(errorMessage)
+        
+    '''
+    '''
+    def DoSampleDropoff(self, SampleHeight):
+        self.upDown.pollMotor()
+        self.upDown.clearPollStatus()
+        
+        if self.modConfig.UseXYTableAPS:
+            self.upDown.moveMotor(self.modConfig.SampleBottom + (SampleHeight - 0.1 * SampleHeight), self.modConfig.LiftSpeedSlow, True)
+        else:
+            self.upDown.moveMotor(self.modConfig.SampleBottom + 1.1 * SampleHeight, self.modConfig.LiftSpeedSlow, True)
+
+        stop_state = False
+        if self.modConfig.DCMotorHomeToTop_StopOnTrue:
+            stop_state = True
+            
+        if (self.upDown.checkInternalStatus(4) == stop_state):
+            errorMessage = 'Dropped off sample, but homing switch still set. Check for switch failure.'
+            raise ValueError(errorMessage)
+        
+    '''
+    '''
+    def setChangerHole(self, hole):
+        if (self.modChanger.isValidStart(hole)):
+            if not self.modConfig.UseXYTableAPS:
+                self.changerX.relabelPos(self.convertHoleToPos(hole))
+            else:
+                self.changerX.relabelPos(self.modConfig.convertHoletoPosX(hole))
+                self.changerY.relabelPos(self.modConfig.convertHoletoPosY(hole))
+                
+            self.changerHole()
+            
+        return
+        
+    '''
+    '''
+    def changerMotortoHole(self, hole, waitingForStop=True):
+        # Let's get the sample rod out of the way if necessary
+        if (abs(self.upDownHeight()) > abs(self.modConfig.SampleBottom) * 0.1): 
+            self.HomeToTop()
+        
+        if not self.modConfig.UseXYTableAPS:
+            # This is the routine to use a Chain Drive System
+            fullLoop = (self.modConfig.SlotMax - self.modConfig.SlotMin + 1) * self.modConfig.OneStep
+            startingPos = self.changerX.readPosition()
+            curpos = startingPos
+            
+            if (int(curpos/fullLoop) != 0): 
+                self.changerX.relabelPos(curpos % fullLoop)
+            startinghole = self.changerHole()
+            target = self.convertHoletoPos(hole)
+            self.changerX.moveMotor(target, self.modConfig.ChangerSpeed, waitingForStop)
+            
+            if not waitingForStop: 
+                return
+            curpos = self.changerX.readPosition()
+            
+            if (int(curpos/fullLoop) != 0): 
+                self.changerX.relabelPos(curpos % fullLoop)
+            
+            curhole = self.changerHole()
+            self.modConfig.queue.put('Data: curHole: ' + str(curhole))
+            
+            # Because OneStep is negative, the criteria was never reach (always <0 and not >0.02) till the asolute value (May 2007 L Carporzen)
+            if ((abs(curpos - target) / abs(self.modConfig.OneStep)) > 0.02):
+                # First try to move to move back to the desired position
+                self.changerX.moveMotor(target, 0.5 * self.modConfig.ChangerSpeed)
+                curpos = self.changerX.readPosition()
+            
+            # Quit if fail here, backing off a bit first ...
+            if ((abs(curpos - target) / abs(self.modConfig.OneStep)) > 0.02):
+                self.changerX.moveMotor((curpos - (curpos - startingPos) * 0.1), 0.1 * self.modConfig.ChangerSpeed)
+                time.sleep(0.2)
+                errorMessage = "Unacceptable slop moving changer\n"
+                errorMessage += "from hole " + str(startinghole) + " to hole " + str(hole) + ".\n\n"
+                errorMessage += "Target position: " + str(target) + "\n"
+                errorMessage += "Current position: " + str(curpos) + "\n\n"
+                errorMessage += "Execution has been paused. Please check machine."
+                raise ValueError(errorMessage)
+        else:
+            # We Are using the XY Table
+            if not self.modConfig.processData.HasXYTableBeenHomed:           
+                self.MotorXYTable_CenterReset()
+            
+            startingPosX = self.changerX.readPosition()
+            startingPosY = self.changerY.readPosition()
+            curposX = startingPosX
+            curposY = startingPosY
+            
+            startinghole = self.changerHole()
+            targetX = self.modConfig.convertHoletoPosX(hole)
+            targetY = self.modConfig.convertHoletoPosY(hole)
+            
+            # Then Move Directly To the position, always approaching from the corner
+            self.changerX.moveMotorAbsoluteXY(targetX, self.modConfig.ChangerSpeed, False)
+            self.changerY.moveMotorAbsoluteXY(targetY, self.modConfig.ChangerSpeed, waitingForStop)
+            
+            if not waitingForStop:
+                return
+            curposX = self.changerX.readPosition()
+            curposY = self.changerY.readPosition()
+            
+            curhole = self.changerHole()
+            self.modConfig.queue.put('Data: curHole: ' + str(curhole))
+            
+            # Because OneStep is negative, the criteria was never reach (always <0 and not >0.02) till the asolute value (May 2007 L Carporzen)
+            if (((abs(curposX - targetX) / abs(self.modConfig.OneStep)) > 0.02) or ((abs(curposY - targetY) / abs(self.modConfig.OneStep)) > 0.02)):
+                # First try to move to move back to the desired position
+                self.changerX.moveMotorAbsoluteXY(targetX, 0.5 * self.modConfig.ChangerSpeed)
+                self.changerY.moveMotorAbsoluteXY(targetY, 0.5 * self.modConfig.ChangerSpeed)
+                curposX = self.changerX.readPosition()
+                curposY = self.changerY.readPosition()
+
+            #  Quit if fail here, backing off a bit first ...
+            if (((abs(curpos - target) / abs(self.modConfig.OneStep)) > 0.02) or ((abs(curpos - target) / abs(self.modConfig.OneStep)) > 0.02)):
+                self.changerX.moveMotorAbsoluteXY((curposX - (curposX - startingPosX) * 0.1), 0.1 * self.modConfig.ChangerSpeed)
+                self.changerY.moveMotorAbsoluteXY((curposY - (curposY - startingPosY) * 0.1), 0.1 * self.modConfig.ChangerSpeed)
+                time.sleep(0.2)
+                errorMessage = "Unacceptable slop moving changer\n"
+                errorMessage += "from hole " + str(startinghole) + " to hole " + str(hole) + ".\n\n"
+                errorMessage += "Target position X: " + str(targetX) + '\n'
+                errorMessage += "Current position X: " + str(curposX) + '\n\n'
+                errorMessage += "Target position Y: " + str(targetY) + '\n'
+                errorMessage += "Current position Y: " + str(curposY) + '\n\n'
+                errorMessage += "Execution has been paused. Please check machine."
+                raise ValueError(errorMessage)
+            
     '''--------------------------------------------------------------------------------------------
                         
-                        Motor Control Functions
+                        IRM/ARM Control Functions
                         
     --------------------------------------------------------------------------------------------'''   
     '''
@@ -561,7 +831,7 @@ class DevicesControl():
                 self.HomeToTop()
                     
             elif (taskID[0] == self.MOTOR_HOME_TO_CENTER):
-                self.HomeToCenter()
+                _, _ = self.HomeToCenter()
 
             elif (taskID[0] == self.MOTOR_MOVE):
                 motorStr = taskID[1][0]
@@ -570,6 +840,85 @@ class DevicesControl():
                     targetPos = taskID[1][1]
                     velocity = taskID[1][2]
                     activeMotor.moveMotor(targetPos, velocity)
+            
+            elif (taskID[0] == self.MOTOR_SAMPLE_PICKUP):
+                self.DoSamplePickup()
+
+            elif (taskID[0] == self.MOTOR_SAMPLE_DROPOFF):
+                SampleHeight = taskID[1][0] 
+                self.DoSampleDropoff(SampleHeight)
+                
+            elif (taskID[0] == self.MOTOR_ZERO_TP):
+                motorStr = taskID[1][0]
+                activeMotor = self.getActiveMotor(motorStr)
+                if (activeMotor != None):
+                    activeMotor.zeroTargetPos()
+
+            elif (taskID[0] == self.MOTOR_POLL):
+                motorStr = taskID[1][0]
+                activeMotor = self.getActiveMotor(motorStr)
+                if (activeMotor != None):
+                    activeMotor.pollMotor()
+
+            elif (taskID[0] == self.MOTOR_CLEAR_POLL):
+                motorStr = taskID[1][0]
+                activeMotor = self.getActiveMotor(motorStr)
+                if (activeMotor != None):
+                    activeMotor.clearPollStatus()
+
+            elif (taskID[0] == self.MOTOR_RELABEL_POSITION):
+                motorStr = taskID[1][0]
+                activeMotor = self.getActiveMotor(motorStr)                
+                targetPosition = taskID[1][1]
+                if (activeMotor != None):
+                    activeMotor.relabelPos(targetPosition)
+
+            elif (taskID[0] == self.MOTOR_SET_CURRENT_HOLE):
+                currentHole = taskID[1][0]
+                self.setChangerHole(currentHole)
+
+            elif (taskID[0] == self.MOTOR_CHANGE_HOLE):
+                currentHole = taskID[1][0]
+                self.changerMotortoHole(currentHole)
+            
+            elif (taskID[0] == self.MOTOR_GO_TO_X):
+                print('TODO: ButtonXSet_Click()')
+
+            elif (taskID[0] == self.MOTOR_GO_TO_Y):
+                print('TODO: ButtonYSet_Click()')
+
+            elif (taskID[0] == self.MOTOR_SPIN_SAMPLE):
+                print('TODO: cmdSpinTurningMotor_Click()')
+
+            elif (taskID[0] == self.MOTOR_CHANGE_TURN_ANGLE):
+                print('TODO: ChangeTurnAngleButton_Click()')
+
+            elif (taskID[0] == self.MOTOR_CHANGE_HEIGHT):
+                print('TODO: buttonHeightSet_Click()')
+
+            elif (taskID[0] == self.MOTOR_SET_AF_COIL):
+                print('TODO: SetAfButton_Click()')
+                
+            elif (taskID[0] == self.MOTOR_SET_ZERO):
+                print('TODO: SetZeroButton_Click()')
+
+            elif (taskID[0] == self.MOTOR_LOAD):
+                print('TODO: LoadButton_Click()')
+
+            elif (taskID[0] == self.MOTOR_READ_POSITION):
+                print('TODO: ReadPosButton_Click()')
+
+            elif (taskID[0] == self.MOTOR_READ_ANGLE):
+                print('TODO: ReadAngleButton_Click()')
+
+            elif (taskID[0] == self.MOTOR_READ_HOLE):
+                print('TODO: ReadHoleButton_Click()')
+
+            elif (taskID[0] == self.MOTOR_RESET):
+                print('TODO: MotorResetButton_Click()')
+
+            elif (taskID[0] == self.MOTOR_STOP):
+                print('TODO: MotorStopButton_Click()')
             
             elif (taskID[0] == self.IRM_FIRE):
                 voltage = taskID[1][0] 
@@ -606,7 +955,7 @@ if __name__=='__main__':
         queue = Queue()
 
         config = configparser.ConfigParser()
-        config.read('E:\\Workspace\\SVN\\Windows\\PaleoMag XY 2023\\Settings\\Paleomag_v3_Hung.INI')
+        config.read('C:\\Temp\\PaleonMag\\Settings\\Paleomag_v3_Hung.INI')
         processData = ProcessData()
         processData.config = config 
 
@@ -614,7 +963,8 @@ if __name__=='__main__':
         devControl.setDevicesConfig(modConfig)
                 
         devControl.runTask(queue, [devControl.MOTOR_HOME_TO_TOP, [None]])
-                
+        processData = devControl.updateProcessData()
+        
         print('Done !!!')
         
     except Exception as e:

@@ -36,7 +36,7 @@ class MotorControl(SerialPortDevice):
                            self.modConfig.UpDownTorqueFactor, 
                            self.modConfig.UpDownTorqueFactor)
             
-        self.PortOpen = True
+        self.modConfig.processData.PortOpen[self.label] = True
         
         self.readPosition()
 
@@ -64,7 +64,7 @@ class MotorControl(SerialPortDevice):
         Format the command string to the Silver Lode Command
     '''
     def sendMotorCommand(self, cmdStr):
-        if not self.PortOpen:
+        if not self.modConfig.processData.PortOpen[self.label]:
             self.motorCommConnect()
         
         cmdStr = '@' + self.MotorAddress + ' ' + cmdStr
@@ -176,6 +176,8 @@ class MotorControl(SerialPortDevice):
     
     '''
         Read position from RRG command
+        
+        Return position in integer
     '''
     def readPosition(self):
         respStr = self.sendMotorCommand('12 1')
@@ -237,3 +239,15 @@ class MotorControl(SerialPortDevice):
         
         return respStr
     
+    '''
+    '''
+    def relabelPos(self, position):
+        while (abs(self.readPostion() - position) > 10):
+            self.zeroTargetPos()
+            # @16 11 10 num 'load register
+            self.sendMotorCommand('11 10 ' + str(-1*position))
+            # @16 165 1802 ' subtract register 10 from T&P
+            self.sendMotorCommand('165 1802')
+            
+        return 
+            

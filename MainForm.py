@@ -58,11 +58,10 @@ def workerFunction(queue, taskID):
             return
         modConfig = ModConfig(process=processData, queue=queue)
         devControl.setDevicesConfig(modConfig)
-        devControl.retrieveProcessData(processData)
         
         devControl.runTask(queue, taskID)
         
-        processData = devControl.saveProcessData(processData)
+        processData = devControl.updateProcessData()
         devControl.closeDevices()
         queue.put('Task Completed')    
         queue.put(processData)
@@ -385,6 +384,38 @@ class MainForm(wx.Frame):
         elif (processFunction[0] == self.devControl.MOTOR_MOVE):
             self.appendMessageBox('Move Motor To Target Position\n')
             self.flashingMessage = 'Move Motor To Target Position'            
+
+        elif (processFunction[0] == self.devControl.MOTOR_SAMPLE_PICKUP):
+            self.appendMessageBox('Sample Pickup\n')
+            self.flashingMessage = 'Sample Pickup'            
+
+        elif (processFunction[0] == self.devControl.MOTOR_SAMPLE_DROPOFF):
+            self.appendMessageBox('Sample Dropoff\n')
+            self.flashingMessage = 'Sample Dropoff'            
+
+        elif (processFunction[0] == self.devControl.MOTOR_ZERO_TP):
+            self.appendMessageBox('Zero Target Position\n')
+            self.flashingMessage = 'Zero Target Position'            
+
+        elif (processFunction[0] == self.devControl.MOTOR_POLL):
+            self.appendMessageBox('Poll Motor\n')
+            self.flashingMessage = 'Poll Motor'            
+
+        elif (processFunction[0] == self.devControl.MOTOR_CLEAR_POLL):
+            self.appendMessageBox('Clear Poll Motor Status\n')
+            self.flashingMessage = 'Clear Poll Motor Status'            
+
+        elif (processFunction[0] == self.devControl.MOTOR_RELABEL_POSITION):
+            self.appendMessageBox('Relabel Position\n')
+            self.flashingMessage = 'Relabel Position'            
+
+        elif (processFunction[0] == self.devControl.MOTOR_SET_CURRENT_HOLE):
+            self.appendMessageBox('Set Current Hole\n')
+            self.flashingMessage = 'Set Current Hole'            
+
+        elif (processFunction[0] == self.devControl.MOTOR_CHANGE_HOLE):
+            self.appendMessageBox('Change Hole\n')
+            self.flashingMessage = 'Change Hole'            
 
         elif (processFunction[0] == self.devControl.IRM_FIRE):
             self.appendMessageBox('Run Discharge IRM device\n')

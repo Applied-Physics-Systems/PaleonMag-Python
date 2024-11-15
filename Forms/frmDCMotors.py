@@ -53,12 +53,16 @@ class frmDCMotors(wx.Frame):
         movePosBtn.Bind(wx.EVT_BUTTON, self.onMoveMotor)
         homeTopBtn = wx.Button(panel, label='Home to Top', pos=(btnXOri, btnYOri+btnYOffset), size=(btnLength, btnHeight))
         homeTopBtn.Bind(wx.EVT_BUTTON, self.onHomeToTop)
-        self.pickupBtn = wx.Button(panel, label='Sample Pickup', pos=(btnXOri, btnYOri+2*btnYOffset), size=(btnLength, btnHeight))
-        self.dropoffBtn = wx.Button(panel, label='Sample Dropoff', pos=(btnXOri, btnYOri+3*btnYOffset), size=(btnLength, btnHeight))
+        pickupBtn = wx.Button(panel, label='Sample Pickup', pos=(btnXOri, btnYOri+2*btnYOffset), size=(btnLength, btnHeight))
+        pickupBtn.Bind(wx.EVT_BUTTON, self.onSamplePickup)
+        dropoffBtn = wx.Button(panel, label='Sample Dropoff', pos=(btnXOri, btnYOri+3*btnYOffset), size=(btnLength, btnHeight))
+        dropoffBtn.Bind(wx.EVT_BUTTON, self.onSampleDropoff)
         homeCenterBtn = wx.Button(panel, label='Home To Center', pos=(btnXOri, btnYOri+4*btnYOffset), size=(btnLength, btnHeight))
         homeCenterBtn.Bind(wx.EVT_BUTTON, self.onHomeToCenter)
-        self.zeroTPBtn = wx.Button(panel, label='Zero T/P', pos=(btnXOri, btnYOri+7*btnYOffset), size=(btnLength, btnHeight))
-        self.pollMotorBtn = wx.Button(panel, label='Poll Motor', pos=(btnXOri, btnYOri+8*btnYOffset), size=(btnLength, btnHeight))
+        zeroTPBtn = wx.Button(panel, label='Zero T/P', pos=(btnXOri, btnYOri+7*btnYOffset), size=(btnLength, btnHeight))
+        zeroTPBtn.Bind(wx.EVT_BUTTON, self.onZeroTargetPosition)
+        pollMotorBtn = wx.Button(panel, label='Poll Motor', pos=(btnXOri, btnYOri+8*btnYOffset), size=(btnLength, btnHeight))
+        pollMotorBtn.Bind(wx.EVT_BUTTON, self.onPollMotor)
         closeBtn = wx.Button(panel, label='Close', pos=(btnXOri, btnYOri+9*btnYOffset), size=(btnLength, btnHeight))
         closeBtn.Bind(wx.EVT_BUTTON, self.onClose)
         
@@ -67,12 +71,15 @@ class frmDCMotors(wx.Frame):
         self.targetPosTBox = wx.TextCtrl(panel, pos=(btnXOri+btnXOffset, txtBoxOri), size=(btnLength, txtBoxHeight))
         self.changeHeightBtn = wx.Button(panel, label='Change Height', pos=(btnXOri+btnXOffset, btnYOri+btnYOffset), size=(btnLength, btnHeight))
         self.changeAngleTopBtn = wx.Button(panel, label='Change Turn Angle', pos=(btnXOri+btnXOffset, btnYOri+2*btnYOffset), size=(btnLength, btnHeight))
-        self.changeHoleBtn = wx.Button(panel, label='Change Hole', pos=(btnXOri+btnXOffset, btnYOri+3*btnYOffset), size=(btnLength, btnHeight))
+        changeHoleBtn = wx.Button(panel, label='Change Hole', pos=(btnXOri+btnXOffset, btnYOri+3*btnYOffset), size=(btnLength, btnHeight))
+        changeHoleBtn.Bind(wx.EVT_BUTTON, self.onChangeHole)
         self.goXBtn = wx.Button(panel, label='Go to X', pos=(btnXOri+btnXOffset, btnYOri+4*btnYOffset), size=(smallBtnLength, btnHeight))
         self.goXTBox = wx.TextCtrl(panel, pos=(btnXOri+btnXOffset + smallBtnLength + 10, txtBoxOri+4*btnYOffset), size=(samllTxtBoxLength, txtBoxHeight))
         self.spinSampleBtn = wx.Button(panel, label='Spin Sample (rps)', pos=(btnXOri+btnXOffset, btnYOri+5*btnYOffset), size=(btnLength, btnHeight))
-        self.relabelPBtn = wx.Button(panel, label='Relabel P', pos=(btnXOri+btnXOffset, btnYOri+7*btnYOffset), size=(btnLength, btnHeight))
-        self.clearPollPBtn = wx.Button(panel, label='Clear Poll Status', pos=(btnXOri+btnXOffset, btnYOri+8*btnYOffset), size=(btnLength, btnHeight))
+        relabelPBtn = wx.Button(panel, label='Relabel P', pos=(btnXOri+btnXOffset, btnYOri+7*btnYOffset), size=(btnLength, btnHeight))
+        relabelPBtn.Bind(wx.EVT_BUTTON, self.onRelabelPos)
+        clearPollPBtn = wx.Button(panel, label='Clear Poll Status', pos=(btnXOri+btnXOffset, btnYOri+8*btnYOffset), size=(btnLength, btnHeight))
+        clearPollPBtn.Bind(wx.EVT_BUTTON, self.onClearPoll)
         
         # Third Column
         wx.StaticText(panel, label='Velocity', pos=(btnXOri+2*btnXOffset, txtBoxOri - txtOffset))
@@ -83,7 +90,8 @@ class frmDCMotors(wx.Frame):
         self.goYBtn = wx.Button(panel, label='Go to Y', pos=(btnXOri+2*btnXOffset, btnYOri+4*btnYOffset), size=(smallBtnLength, btnHeight))
         self.goYTBox = wx.TextCtrl(panel, pos=(btnXOri+2*btnXOffset + smallBtnLength + 10, txtBoxOri+4*btnYOffset), size=(samllTxtBoxLength, txtBoxHeight))
         self.spinSampleTBox = wx.TextCtrl(panel, pos=(btnXOri+2*btnXOffset, txtBoxOri+5*btnYOffset), size=(btnLength, txtBoxHeight))
-        self.setCurrentHoleBtn = wx.Button(panel, label='Set Current Hole', pos=(btnXOri+2*btnXOffset, btnYOri+7*btnYOffset), size=(btnLength, btnHeight))
+        setCurrentHoleBtn = wx.Button(panel, label='Set Current Hole', pos=(btnXOri+2*btnXOffset, btnYOri+7*btnYOffset), size=(btnLength, btnHeight))
+        setCurrentHoleBtn.Bind(wx.EVT_BUTTON, self.onSetCurrentHole)
         
         #------------------------------------------------------------------------------------------------------------------------
         secondRegion = btnXOri+3*btnXOffset - 10
@@ -96,15 +104,18 @@ class frmDCMotors(wx.Frame):
         wx.StaticText(panel, label='Set Position', pos=(btnXOri, txtBoxOri - txtOffset))
         
         # First Column
-        self.topBtn = wx.Button(panel, label='Top', pos=(btnXOri, btnYOri), size=(smallBtnLength, btnHeight))
+        topBtn = wx.Button(panel, label='Top', pos=(btnXOri, btnYOri), size=(smallBtnLength, btnHeight))
+        topBtn.Bind(wx.EVT_BUTTON, self.onSetTop)
         self.afCoilBtn = wx.Button(panel, label='AF Coil', pos=(btnXOri, btnYOri + btnYOffset), size=(smallBtnLength, btnHeight))
         self.zeroBtn = wx.Button(panel, label='Zero', pos=(btnXOri, btnYOri + 2*btnYOffset), size=(smallBtnLength, btnHeight))
-        self.measBtn = wx.Button(panel, label='Meas.', pos=(btnXOri, btnYOri + 3*btnYOffset), size=(smallBtnLength, btnHeight))
+        measBtn = wx.Button(panel, label='Meas.', pos=(btnXOri, btnYOri + 3*btnYOffset), size=(smallBtnLength, btnHeight))
+        measBtn.Bind(wx.EVT_BUTTON, self.onSetMeas)
         
         # Second Column
         self.irmLoBtn = wx.Button(panel, label='IRM Lo', pos=(btnXOri + btnXOffset, btnYOri), size=(smallBtnLength, btnHeight))
         self.irmHiBtn = wx.Button(panel, label='IRM Hi', pos=(btnXOri + btnXOffset, btnYOri + btnYOffset), size=(smallBtnLength, btnHeight))
-        self.sCoilBtn = wx.Button(panel, label='S Coil', pos=(btnXOri + btnXOffset, btnYOri + 2*btnYOffset), size=(smallBtnLength, btnHeight))
+        sCoilBtn = wx.Button(panel, label='S Coil', pos=(btnXOri + btnXOffset, btnYOri + 2*btnYOffset), size=(smallBtnLength, btnHeight))
+        sCoilBtn.Bind(wx.EVT_BUTTON, self.onSetCoil)
         self.loadBtn = wx.Button(panel, label='Load', pos=(btnXOri + btnXOffset, btnYOri + 4*btnYOffset), size=(smallBtnLength, btnHeight))
         
         # Checkbox group
@@ -228,19 +239,106 @@ class frmDCMotors(wx.Frame):
         
     '''
     '''
+    def onSamplePickup(self, event):
+        self.parent.pushTaskToQueue([self.parent.devControl.MOTOR_SAMPLE_PICKUP, [None]])
+        return
+        
+    '''
+    '''
+    def onSampleDropoff(self, event):
+        self.parent.pushTaskToQueue([self.parent.devControl.MOTOR_SAMPLE_DROPOFF, [self.parent.modConfig.SampleHeight]])
+        return
+        
+    '''
+    '''
+    def onZeroTargetPosition(self, event):
+        activeMotor = self.activeMotroRBox.GetStringSelection()
+        self.parent.pushTaskToQueue([self.parent.devControl.MOTOR_ZERO_TP, [activeMotor]])
+        return
+       
+    '''
+    '''
+    def onPollMotor(self, event):
+        activeMotor = self.activeMotroRBox.GetStringSelection()
+        self.parent.pushTaskToQueue([self.parent.devControl.MOTOR_POLL, [activeMotor]])
+        return
+    
+    '''
+    '''
+    def onClearPoll(self, event):
+        activeMotor = self.activeMotroRBox.GetStringSelection()
+        self.parent.pushTaskToQueue([self.parent.devControl.MOTOR_CLEAR_POLL, [activeMotor]])
+        return        
+        
+    '''
+    '''
+    def onRelabelPos(self, event):
+        activeMotor = self.activeMotroRBox.GetStringSelection()
+        tartgetPosition = int(self.targetPosTBox.GetValue())
+        self.parent.pushTaskToQueue([self.parent.devControl.MOTOR_CLEAR_POLL, [activeMotor, tartgetPosition]])
+        return        
+        
+    '''
+    '''
+    def onChangeHole(self, event):
+        try:
+            currentHole = float(self.changeHoleTBox.GetValue())
+        except:
+            currentHole = 0.0
+        self.parent.pushTaskToQueue([self.parent.devControl.MOTOR_CHANGE_HOLE, [currentHole]])
+        return 
+        
+    '''
+    '''
+    def onSetCurrentHole(self, event):
+        try:
+            currentHole = float(self.changeHoleTBox.GetValue())
+        except:
+            currentHole = 0.0
+        self.parent.pushTaskToQueue([self.parent.devControl.MOTOR_SET_CURRENT_HOLE, [currentHole]])
+        return
+                
+    '''
+    '''
+    def onSetTop(self, event):
+        self.targetPosTBox.SetValue('0')
+        self.changeHeightTBox.SetValue('0')
+        return
+        
+    '''
+        Set the value of the place to move to the center of the Af coils
+    '''
+    def onSetMeas(self, event):
+        measStr = str(int(self.modConfig.MeasPos + self.modConfig.SampleHeight / 2))
+        self.targetPosTBox.SetValue(measStr)
+        self.changeHeightTBox.SetValue(measStr)
+        return 
+    
+    '''
+    '''
+    def onSetCoil(self, event):
+        self.targetPosTBox.SetValue(str(self.modConfig.SCoilPos))
+        self.changeHeightTBox.SetValue(str(self.modConfig.SCoilPos))
+        return
+    
+    '''
+    '''
     def onRadioBox(self, event):
         print(self.activeMotroRBox.GetStringSelection() + ' is clicked from Radio Box')
+        return
         
     '''
     '''
     def onHalt(self, event):
         self.parent.processQueue.put('Program_Halted')
         self.parent.process.terminate()
+        return
         
     '''
     '''
     def onClose(self, event):
         self.Close(force=False)
+        return
 
     '''
     '''
@@ -250,6 +348,7 @@ class frmDCMotors(wx.Frame):
                 del self.parent.panelList['MotorControl']
                 
         self.Destroy()
+        return
         
 #===================================================================================================
 # Main Module
