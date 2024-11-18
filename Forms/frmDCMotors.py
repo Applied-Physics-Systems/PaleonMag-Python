@@ -69,13 +69,17 @@ class frmDCMotors(wx.Frame):
         # Second Column
         wx.StaticText(panel, label='Target Position', pos=(btnXOri+btnXOffset, txtBoxOri - txtOffset))
         self.targetPosTBox = wx.TextCtrl(panel, pos=(btnXOri+btnXOffset, txtBoxOri), size=(btnLength, txtBoxHeight))
-        self.changeHeightBtn = wx.Button(panel, label='Change Height', pos=(btnXOri+btnXOffset, btnYOri+btnYOffset), size=(btnLength, btnHeight))
-        self.changeAngleTopBtn = wx.Button(panel, label='Change Turn Angle', pos=(btnXOri+btnXOffset, btnYOri+2*btnYOffset), size=(btnLength, btnHeight))
+        changeHeightBtn = wx.Button(panel, label='Change Height', pos=(btnXOri+btnXOffset, btnYOri+btnYOffset), size=(btnLength, btnHeight))
+        changeHeightBtn.Bind(wx.EVT_BUTTON, self.onChangeHeight)
+        changeAngleTopBtn = wx.Button(panel, label='Change Turn Angle', pos=(btnXOri+btnXOffset, btnYOri+2*btnYOffset), size=(btnLength, btnHeight))
+        changeAngleTopBtn.Bind(wx.EVT_BUTTON, self.onChangeTurnAngle)
         changeHoleBtn = wx.Button(panel, label='Change Hole', pos=(btnXOri+btnXOffset, btnYOri+3*btnYOffset), size=(btnLength, btnHeight))
         changeHoleBtn.Bind(wx.EVT_BUTTON, self.onChangeHole)
-        self.goXBtn = wx.Button(panel, label='Go to X', pos=(btnXOri+btnXOffset, btnYOri+4*btnYOffset), size=(smallBtnLength, btnHeight))
+        goXBtn = wx.Button(panel, label='Go to X', pos=(btnXOri+btnXOffset, btnYOri+4*btnYOffset), size=(smallBtnLength, btnHeight))
+        goXBtn.Bind(wx.EVT_BUTTON, self.onGoX)
         self.goXTBox = wx.TextCtrl(panel, pos=(btnXOri+btnXOffset + smallBtnLength + 10, txtBoxOri+4*btnYOffset), size=(samllTxtBoxLength, txtBoxHeight))
-        self.spinSampleBtn = wx.Button(panel, label='Spin Sample (rps)', pos=(btnXOri+btnXOffset, btnYOri+5*btnYOffset), size=(btnLength, btnHeight))
+        spinSampleBtn = wx.Button(panel, label='Spin Sample (rps)', pos=(btnXOri+btnXOffset, btnYOri+5*btnYOffset), size=(btnLength, btnHeight))
+        spinSampleBtn.Bind(wx.EVT_BUTTON, self.onSpinSample)
         relabelPBtn = wx.Button(panel, label='Relabel P', pos=(btnXOri+btnXOffset, btnYOri+7*btnYOffset), size=(btnLength, btnHeight))
         relabelPBtn.Bind(wx.EVT_BUTTON, self.onRelabelPos)
         clearPollPBtn = wx.Button(panel, label='Clear Poll Status', pos=(btnXOri+btnXOffset, btnYOri+8*btnYOffset), size=(btnLength, btnHeight))
@@ -87,7 +91,8 @@ class frmDCMotors(wx.Frame):
         self.changeHeightTBox = wx.TextCtrl(panel, pos=(btnXOri+2*btnXOffset, txtBoxOri+btnYOffset), size=(btnLength, txtBoxHeight))
         self.changeAngleTBox = wx.TextCtrl(panel, pos=(btnXOri+2*btnXOffset, txtBoxOri+2*btnYOffset), size=(btnLength, txtBoxHeight))
         self.changeHoleTBox = wx.TextCtrl(panel, pos=(btnXOri+2*btnXOffset, txtBoxOri+3*btnYOffset), size=(btnLength, txtBoxHeight))
-        self.goYBtn = wx.Button(panel, label='Go to Y', pos=(btnXOri+2*btnXOffset, btnYOri+4*btnYOffset), size=(smallBtnLength, btnHeight))
+        goYBtn = wx.Button(panel, label='Go to Y', pos=(btnXOri+2*btnXOffset, btnYOri+4*btnYOffset), size=(smallBtnLength, btnHeight))
+        goYBtn.Bind(wx.EVT_BUTTON, self.onGoY)
         self.goYTBox = wx.TextCtrl(panel, pos=(btnXOri+2*btnXOffset + smallBtnLength + 10, txtBoxOri+4*btnYOffset), size=(samllTxtBoxLength, txtBoxHeight))
         self.spinSampleTBox = wx.TextCtrl(panel, pos=(btnXOri+2*btnXOffset, txtBoxOri+5*btnYOffset), size=(btnLength, txtBoxHeight))
         setCurrentHoleBtn = wx.Button(panel, label='Set Current Hole', pos=(btnXOri+2*btnXOffset, btnYOri+7*btnYOffset), size=(btnLength, btnHeight))
@@ -106,8 +111,10 @@ class frmDCMotors(wx.Frame):
         # First Column
         topBtn = wx.Button(panel, label='Top', pos=(btnXOri, btnYOri), size=(smallBtnLength, btnHeight))
         topBtn.Bind(wx.EVT_BUTTON, self.onSetTop)
-        self.afCoilBtn = wx.Button(panel, label='AF Coil', pos=(btnXOri, btnYOri + btnYOffset), size=(smallBtnLength, btnHeight))
-        self.zeroBtn = wx.Button(panel, label='Zero', pos=(btnXOri, btnYOri + 2*btnYOffset), size=(smallBtnLength, btnHeight))
+        afCoilBtn = wx.Button(panel, label='AF Coil', pos=(btnXOri, btnYOri + btnYOffset), size=(smallBtnLength, btnHeight))
+        afCoilBtn.Bind(wx.EVT_BUTTON, self.onSetAFCoil)
+        zeroBtn = wx.Button(panel, label='Zero', pos=(btnXOri, btnYOri + 2*btnYOffset), size=(smallBtnLength, btnHeight))
+        zeroBtn.Bind(wx.EVT_BUTTON, self.onSetZero)
         measBtn = wx.Button(panel, label='Meas.', pos=(btnXOri, btnYOri + 3*btnYOffset), size=(smallBtnLength, btnHeight))
         measBtn.Bind(wx.EVT_BUTTON, self.onSetMeas)
         
@@ -116,7 +123,8 @@ class frmDCMotors(wx.Frame):
         self.irmHiBtn = wx.Button(panel, label='IRM Hi', pos=(btnXOri + btnXOffset, btnYOri + btnYOffset), size=(smallBtnLength, btnHeight))
         sCoilBtn = wx.Button(panel, label='S Coil', pos=(btnXOri + btnXOffset, btnYOri + 2*btnYOffset), size=(smallBtnLength, btnHeight))
         sCoilBtn.Bind(wx.EVT_BUTTON, self.onSetCoil)
-        self.loadBtn = wx.Button(panel, label='Load', pos=(btnXOri + btnXOffset, btnYOri + 4*btnYOffset), size=(smallBtnLength, btnHeight))
+        loadBtn = wx.Button(panel, label='Load', pos=(btnXOri + btnXOffset, btnYOri + 4*btnYOffset), size=(smallBtnLength, btnHeight))
+        loadBtn.Bind(wx.EVT_BUTTON, self.onLoad)
         
         # Checkbox group
         groupOffset = 0
@@ -150,20 +158,25 @@ class frmDCMotors(wx.Frame):
         btnHeight -= 2
         wx.StaticText(panel, label='Last Pos Read', pos=(btnXOri, txtBoxOri + 2*txtBoxYOffset + txtOffset))
         self.lastPosTBox = wx.TextCtrl(panel, pos=(btnXOri+btnXOffset, txtBoxOri + 2*txtBoxYOffset), size=(txtBoxLength, txtBoxHeight))
-        self.readPosBtn = wx.Button(panel, label='Read Position', pos=(btnXOri + btnXOffset + buttonXOffset, txtBoxOri + 2*txtBoxYOffset - buttonYOffset), size=(smallBtnLength, btnHeight))
+        readPosBtn = wx.Button(panel, label='Read Position', pos=(btnXOri + btnXOffset + buttonXOffset, txtBoxOri + 2*txtBoxYOffset - buttonYOffset), size=(smallBtnLength, btnHeight))
+        readPosBtn.Bind(wx.EVT_BUTTON, self.onReadPosition)
         wx.StaticText(panel, label='Last Turn Angle', pos=(btnXOri, txtBoxOri + 3*txtBoxYOffset + txtOffset))
         self.lastTurnTBox = wx.TextCtrl(panel, pos=(btnXOri+btnXOffset, txtBoxOri + 3*txtBoxYOffset), size=(txtBoxLength, txtBoxHeight))
-        self.readTurnBtn = wx.Button(panel, label='Read Angle', pos=(btnXOri + btnXOffset + buttonXOffset, txtBoxOri + 3*txtBoxYOffset - buttonYOffset), size=(smallBtnLength, btnHeight))
+        readTurnBtn = wx.Button(panel, label='Read Angle', pos=(btnXOri + btnXOffset + buttonXOffset, txtBoxOri + 3*txtBoxYOffset - buttonYOffset), size=(smallBtnLength, btnHeight))
+        readTurnBtn.Bind(wx.EVT_BUTTON, self.onReadAngle)
         wx.StaticText(panel, label='Last Hole Read', pos=(btnXOri, txtBoxOri + 4*txtBoxYOffset + txtOffset))
         self.lastHoleTBox = wx.TextCtrl(panel, pos=(btnXOri+btnXOffset, txtBoxOri + 4*txtBoxYOffset), size=(txtBoxLength, txtBoxHeight))
-        self.readHoleBtn = wx.Button(panel, label='Read Hole', pos=(btnXOri + btnXOffset + buttonXOffset, txtBoxOri + 4*txtBoxYOffset - buttonYOffset), size=(smallBtnLength, btnHeight))
+        readHoleBtn = wx.Button(panel, label='Read Hole', pos=(btnXOri + btnXOffset + buttonXOffset, txtBoxOri + 4*txtBoxYOffset - buttonYOffset), size=(smallBtnLength, btnHeight))
+        readHoleBtn.Bind(wx.EVT_BUTTON, self.onReadHole)
         
         # Last row of buttons
         btnHeight += 2
         btnXOffset += 17
         txtBoxOri += 5*txtBoxYOffset + 20
-        self.resetBtn = wx.Button(panel, label='Reset', pos=(btnXOri, txtBoxOri), size=(smallBtnLength, btnHeight))
-        self.stopBtn = wx.Button(panel, label='Stop', pos=(btnXOri + btnXOffset, txtBoxOri), size=(smallBtnLength, btnHeight))
+        resetBtn = wx.Button(panel, label='Reset', pos=(btnXOri, txtBoxOri), size=(smallBtnLength, btnHeight))
+        resetBtn.Bind(wx.EVT_BUTTON, self.onReset)
+        stopBtn = wx.Button(panel, label='Stop', pos=(btnXOri + btnXOffset, txtBoxOri), size=(smallBtnLength, btnHeight))
+        stopBtn.Bind(wx.EVT_BUTTON, self.onStop)
         haltBtn = wx.Button(panel, label='HALT!', pos=(btnXOri + 2*btnXOffset, txtBoxOri), size=(smallBtnLength, btnHeight))
         haltBtn.Bind(wx.EVT_BUTTON, self.onHalt)
         haltBtn.SetBackgroundColour('Red')
@@ -320,11 +333,94 @@ class frmDCMotors(wx.Frame):
         self.targetPosTBox.SetValue(str(self.modConfig.SCoilPos))
         self.changeHeightTBox.SetValue(str(self.modConfig.SCoilPos))
         return
+        
+    '''
+    '''
+    def onSetZero(self, event):
+        self.targetPosTBox.SetValue(str(self.modConfig.ZeroPos))
+        self.changeHeightTBox.SetValue(str(self.modConfig.ZeroPos))
+        return        
+        
+    '''
+    '''
+    def onGoX(self, event):
+        xPos = self.goXTBox.GetValue() 
+        self.parent.pushTaskToQueue([self.parent.devControl.MOTOR_GO_TO_X, [xPos]])
+        return
+        
+    '''
+    '''
+    def onGoY(self, event):
+        yPos = self.goYTBox.GetValue() 
+        self.parent.pushTaskToQueue([self.parent.devControl.MOTOR_GO_TO_Y, [yPos]])
+        return
+        
+    '''
+    '''
+    def onSpinSample(self, event):
+        spinRPS = self.spinSampleTBox.GetValue() 
+        self.parent.pushTaskToQueue([self.parent.devControl.MOTOR_SPIN_SAMPLE, [spinRPS]])
+        return
+        
+    '''
+    '''
+    def onChangeTurnAngle(self, event):
+        turnAngle = self.changeAngleTBox.GetValue() 
+        self.parent.pushTaskToQueue([self.parent.devControl.MOTOR_CHANGE_TURN_ANGLE, [turnAngle]])
+        return
+        
+    '''
+    '''
+    def onChangeHeight(self, event):
+        height = self.changeHeightTBox.GetValue() 
+        self.parent.pushTaskToQueue([self.parent.devControl.MOTOR_CHANGE_HEIGHT, [height]])
+        return
+        
+    '''
+    '''
+    def onSetAFCoil(self, event):
+        # Set the value of the place to move to the center of the Af coils
+        self.targetPosTBox.SetValue(str(self.modConfig.AFPos))
+        self.changeHeightTBox.SetValue(str(self.modConfig.AFPos))
+        return
     
+    def onLoad(self, event):
+        self.parent.pushTaskToQueue([self.parent.devControl.MOTOR_LOAD, [None]])
+        return
+        
+    '''
+    '''
+    def onReadPosition(self, event):
+        self.parent.pushTaskToQueue([self.parent.devControl.MOTOR_READ_POSITION, [None]])
+        return
+       
+    '''
+    '''
+    def onReadAngle(self, event):
+        self.parent.pushTaskToQueue([self.parent.devControl.MOTOR_READ_ANGLE, [None]])
+        return
+        
+    '''
+    '''
+    def onReadHole(self, event):
+        self.parent.pushTaskToQueue([self.parent.devControl.MOTOR_READ_HOLE, [None]])
+        return
+       
+    '''
+    '''
+    def onReset(self, event): 
+        self.parent.pushTaskToQueue([self.parent.devControl.MOTOR_RESET, [None]])
+        return        
+        
+    '''
+    '''
+    def onStop(self, event):
+        self.parent.pushTaskToQueue([self.parent.devControl.MOTOR_STOP, [None]])
+        return        
+        
     '''
     '''
     def onRadioBox(self, event):
-        print(self.activeMotroRBox.GetStringSelection() + ' is clicked from Radio Box')
         return
         
     '''

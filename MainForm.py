@@ -24,7 +24,7 @@ from Forms.frmSampleIndexRegistry import frmSampleIndexRegistry
 from Hardware.DevicesControl import DevicesControl
 from Process.ModConfig import ModConfig
 
-VersionNumber = 'Version 0.00.09'
+VersionNumber = 'Version 0.00.11'
 
 ID_DC_MOTORS        = 0
 ID_FILE_REGISTRY    = 1
@@ -364,11 +364,12 @@ class MainForm(wx.Frame):
         runFlag = True
         
         processFunction = self.taskQueue.pop(0)
-        if (processFunction[0] == self.devControl.MOTOR_HOME_TO_TOP):
-            self.appendMessageBox('Run HomeToTop\n')
+        taskID = processFunction[0] 
+        if (taskID == self.devControl.MOTOR_HOME_TO_TOP):
+            self.appendMessageBox(self.devControl.messages[taskID] + '\n')
             self.flashingMessage = 'Please Wait, Homing To The Top'
             
-        elif (processFunction[0] == self.devControl.MOTOR_HOME_TO_CENTER):
+        elif (taskID == self.devControl.MOTOR_HOME_TO_CENTER):
             self.flashingMessage = 'Please Wait, Homing XY Table'
             noCommStr = 'The XY Stage needs to be homed to the center, now\n\n'
             noCommStr += 'The code will home the Up/Down glass tube to the top limit switch'
@@ -377,50 +378,14 @@ class MainForm(wx.Frame):
             noCommStr += 'Do you want the XY stage to be homed to the center position, now?'
             dlg = wx.MessageBox(noCommStr, style=wx.YES_NO|wx.CENTER, caption='Warning: XY State Homing!')
             if (dlg == wx.YES):
-                self.appendMessageBox('Run HomeToCenter\n')
+                self.appendMessageBox(self.devControl.messages[taskID] + '\n')
             else:
                 runFlag = False
                 
-        elif (processFunction[0] == self.devControl.MOTOR_MOVE):
-            self.appendMessageBox('Move Motor To Target Position\n')
-            self.flashingMessage = 'Move Motor To Target Position'            
-
-        elif (processFunction[0] == self.devControl.MOTOR_SAMPLE_PICKUP):
-            self.appendMessageBox('Sample Pickup\n')
-            self.flashingMessage = 'Sample Pickup'            
-
-        elif (processFunction[0] == self.devControl.MOTOR_SAMPLE_DROPOFF):
-            self.appendMessageBox('Sample Dropoff\n')
-            self.flashingMessage = 'Sample Dropoff'            
-
-        elif (processFunction[0] == self.devControl.MOTOR_ZERO_TP):
-            self.appendMessageBox('Zero Target Position\n')
-            self.flashingMessage = 'Zero Target Position'            
-
-        elif (processFunction[0] == self.devControl.MOTOR_POLL):
-            self.appendMessageBox('Poll Motor\n')
-            self.flashingMessage = 'Poll Motor'            
-
-        elif (processFunction[0] == self.devControl.MOTOR_CLEAR_POLL):
-            self.appendMessageBox('Clear Poll Motor Status\n')
-            self.flashingMessage = 'Clear Poll Motor Status'            
-
-        elif (processFunction[0] == self.devControl.MOTOR_RELABEL_POSITION):
-            self.appendMessageBox('Relabel Position\n')
-            self.flashingMessage = 'Relabel Position'            
-
-        elif (processFunction[0] == self.devControl.MOTOR_SET_CURRENT_HOLE):
-            self.appendMessageBox('Set Current Hole\n')
-            self.flashingMessage = 'Set Current Hole'            
-
-        elif (processFunction[0] == self.devControl.MOTOR_CHANGE_HOLE):
-            self.appendMessageBox('Change Hole\n')
-            self.flashingMessage = 'Change Hole'            
-
-        elif (processFunction[0] == self.devControl.IRM_FIRE):
-            self.appendMessageBox('Run Discharge IRM device\n')
-            self.flashingMessage = 'Run Discharge IRM device'
-
+        else:
+            if (taskID in self.devControl.messages.keys()):
+                self.appendMessageBox(self.devControl.messages[taskID] + '\n')
+            self.flashingMessage = None
         
         if runFlag:
             self.backgroundRunningFlag = True
@@ -488,7 +453,7 @@ class MainForm(wx.Frame):
             except:
                 if (self.backgroundRunningFlag):
                     self.flashingCount += 1
-                    if (self.flashingCount > FLASH_DISPLAY_OFF_TIME): 
+                    if ((self.flashingCount > FLASH_DISPLAY_OFF_TIME) and (self.flashingMessage != None)): 
                         flashingProcess = multiprocessing.Process(target=flashingFunction, args=(self.flashingMessage,))
                         flashingProcess.start()
                         self.flashingCount = 0

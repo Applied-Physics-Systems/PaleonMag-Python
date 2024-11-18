@@ -34,17 +34,39 @@ class DevicesControl():
     MOTOR_SPIN_SAMPLE       = 0x000E
     MOTOR_CHANGE_TURN_ANGLE = 0x000F
     MOTOR_CHANGE_HEIGHT     = 0x0010
-    MOTOR_SET_AF_COIL       = 0x0011
-    MOTOR_SET_ZERO          = 0x0012
-    MOTOR_LOAD              = 0x0013
-    MOTOR_READ_POSITION     = 0x0014
-    MOTOR_READ_ANGLE        = 0x0015
-    MOTOR_READ_HOLE         = 0x0016
-    MOTOR_RESET             = 0x0017    
-    MOTOR_STOP              = 0x0018
+    MOTOR_LOAD              = 0x0011
+    MOTOR_READ_POSITION     = 0x0012
+    MOTOR_READ_ANGLE        = 0x0013
+    MOTOR_READ_HOLE         = 0x0014
+    MOTOR_RESET             = 0x0015    
+    MOTOR_STOP              = 0x0016
     
     IRM_SET_BIAS_FIELD      = 0x1001
     IRM_FIRE                = 0x1002
+    
+    messages = {MOTOR_HOME_TO_TOP: 'Run HomeToTop\n',
+                MOTOR_HOME_TO_CENTER: 'Run HomeToCenter\n',
+                MOTOR_MOVE: 'Move Motor To Target Position',
+                MOTOR_SAMPLE_PICKUP: 'Sample Pickup',
+                MOTOR_SAMPLE_DROPOFF: 'Sample Dropoff',
+                MOTOR_ZERO_TP: 'Zero Target Position',
+                MOTOR_POLL: 'Poll Motor',
+                MOTOR_CLEAR_POLL: 'Clear Poll Motor Status',
+                MOTOR_RELABEL_POSITION: 'Relabel Position',
+                MOTOR_SET_CURRENT_HOLE: 'Set Current Hole',
+                MOTOR_CHANGE_HOLE: 'Change Hole',
+                MOTOR_GO_TO_X: 'Go to X',
+                MOTOR_GO_TO_Y: 'Go to Y',
+                MOTOR_SPIN_SAMPLE: 'Spin Sample',
+                MOTOR_CHANGE_TURN_ANGLE: 'Change Turn Angle',
+                MOTOR_CHANGE_HEIGHT: 'Change Height',
+                MOTOR_LOAD: 'Load',
+                MOTOR_READ_POSITION: 'Read Position',
+                MOTOR_READ_ANGLE: 'Read Angle', 
+                MOTOR_READ_HOLE: 'Read Hole',
+                MOTOR_RESET: 'Reset',
+                MOTOR_STOP: 'Stop',                
+                IRM_FIRE: 'Discharge IRM device'}
     
     MotorPositionMoveToLoadCorner = 900000
     MotorPositionMoveToCenter = -900000
@@ -338,7 +360,7 @@ class DevicesControl():
         commandStr = '134 ' + str(moveMotorPos) + ' '
         commandStr += ' 483184 ' + str(MoveMotorVelocity) + ' '
         commandStr += str(StopEnable) + ' ' + str(StopCondition)
-        respStr = motorid.sendMotorCommand(commandStr)
+        motorid.sendMotorCommand(commandStr)
         if waitingForStop:
             motorid.waitForMotorStop()
         
@@ -895,13 +917,7 @@ class DevicesControl():
 
             elif (taskID[0] == self.MOTOR_CHANGE_HEIGHT):
                 print('TODO: buttonHeightSet_Click()')
-
-            elif (taskID[0] == self.MOTOR_SET_AF_COIL):
-                print('TODO: SetAfButton_Click()')
                 
-            elif (taskID[0] == self.MOTOR_SET_ZERO):
-                print('TODO: SetZeroButton_Click()')
-
             elif (taskID[0] == self.MOTOR_LOAD):
                 print('TODO: LoadButton_Click()')
 
@@ -912,7 +928,7 @@ class DevicesControl():
                 print('TODO: ReadAngleButton_Click()')
 
             elif (taskID[0] == self.MOTOR_READ_HOLE):
-                print('TODO: ReadHoleButton_Click()')
+                self.changerHole()
 
             elif (taskID[0] == self.MOTOR_RESET):
                 print('TODO: MotorResetButton_Click()')
