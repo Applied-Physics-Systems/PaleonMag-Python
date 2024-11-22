@@ -6,6 +6,7 @@ Created on Oct 28, 2024
 import os
 import time
 import configparser
+import numpy as np
 
 from Hardware.Device.MotorControl import MotorControl
 from Hardware.Device.IrmArmControl import IrmArmControl
@@ -409,6 +410,20 @@ class DevicesControl():
 
     '''
     '''
+    def convertPosToAngle(self, pos):
+        angle = (pos / (-1 * self.modConfig.TurningMotorFullRotation)) * 360
+        
+        return angle 
+
+    '''
+    '''
+    def convertAngleToPos(self, angle):
+        pos = int(-1 * self.modConfig.TurningMotorFullRotation * angle / 360)
+        
+        return pos
+
+    '''
+    '''
     def changerHole(self):
         if not self.modConfig.UseXYTableAPS:
             # Chain Drive
@@ -456,6 +471,46 @@ class DevicesControl():
         self.modConfig.updateXYTablePositions(0, 0, xPos)
         self.modConfig.updateXYTablePositions(0, 1, yPos)
                 
+    '''
+        To enable the Quicksilver motors to return to the home position, center of the XY Table
+        correctly.  Both X and Y axis must find the center of the table and stop there correctly
+        (Stop Condition = if logic bit #1 becomes true, stop all motion on Up/Down motor;
+        When the home position limit switch is pressed, logic bit #1 changes from false to true.)
+
+        Note: untested.  Requires planning of limit switches to fix code and verify code works properly    
+    '''
+    def MoveToCorner(self):
+        self.HomeToTop()
+        
+        stop_state = False
+        if self.modConfig.DCMotorHomeToTop_StopOnTrue:
+            stop_state = 1
+        
+        # No homing to center if the Up/Down Motor is not homed
+        if (self.upDown.checkInternalStatus(4) != stop_state):
+            errorMessage = "Could not move to corner!  Home to top not complete!"
+            raise ValueError(errorMessage)
+                
+        start_time = time.time()
+    
+        self.changerX.moveMotorXY(self.MotorPositionMoveToLoadCorner, self.modConfig.ChangerSpeed, False, -1, 0)
+        self.changerY.MoveMotorXY(self.MotorPositionMoveToLoadCorner, self.modConfig.ChangerSpeed, False, -2, 0)
+       
+        # Move to load corner
+        while ((self.changerX.checkInternalStatus(4) != False) or (self.changerY.checkInternalStatus(5) != False)):                 
+            time.sleep(0.1)        
+        
+        if not ((self.changerX.checkInternalStatus( 4) == False) and (self.changerY.checkInternalStatus(5) == False)):
+            if (self.HasMoveToXYLimit_Timedout(start_time)):            
+                # Home to center has timed out
+                errorMessage =  "Move XY Stage to Load Corner timed-out after: " 
+                errorMessage += str(self.MoveXYMotorsToLimitSwitch_TimeoutSeconds) + "seconds."                              
+            else:
+                errorMessage = "Moved XY Stage to Load Corner but did not hit load corner limit switch(es)!"           
+            raise ValueError(errorMessage)
+            
+        return
+        
     '''--------------------------------------------------------------------------------------------
                         
                         Motor Control Task Functions
@@ -602,6 +657,8 @@ class DevicesControl():
             yPos = self.changerY.readPosition()
             self.modConfig.queue.put('Data: xPos: ' + str(xPos))
             self.modConfig.queue.put('Data: yPos: ' + str(yPos))
+            
+            self.modConfig.HasXYTableBeenHomed = True
             
         return xPos, yPos 
 
@@ -756,7 +813,128 @@ class DevicesControl():
                 errorMessage += "Current position Y: " + str(curposY) + '\n\n'
                 errorMessage += "Execution has been paused. Please check machine."
                 raise ValueError(errorMessage)
+
+    '''
+    '''
+    def turningMotorAngle(self):
+        angle = self.convertPosToAngle(self.turning.readPosition())
+        self.modConfig.queue.put('Data: TurningAngle: ' + str(angle))
+        
+        return angle 
+           
+    '''
+    '''
+    def setTurningMotorAngle(self, angle):
+        # Get the sign of the turning motor full rotation setting
+        turnSign = np.sign(self.modConfig.TurningMotorFullRotation)
+        
+        # Get the current motor position
+        pos = self.turning.readPosition()
+        
+        # If the motor position is less than zero and TurningMotorFullRotation is positive
+        # OR, if the motor position is greater than zero and TurningMotorFullRotation is negative
+        # Then add TurningMotorFullRotation to pos until pos is within 5% of +/- TurningMotorFullRotation
+        if ((pos < 0) and (turnSign == 1)):
+            # If TurningMotorFullRotation > 0, then pos is increasing in value to more than
+            # -0.95 * TurningMotorFullRotation.
+            while (pos <= (-1*self.modConfig.TurningMotorFullRotation * 0.95)):
+                pos = pos + self.modConfig.TurningMotorFullRotation
+                
+        elif ((pos > 0) and (turnSign == -1)):
+            # If TurningMotorFullRotation < 0, then pos is decreasing in value to less than
+            # -0.05 * TurningMotorFullRotation.
+            while (pos >= (-1*self.modConfig.TurningMotorFullRotation * 0.05)):
+                pos = pos + self.modConfig.TurningMotorFullRotation
+           
+        elif ((pos < 0) and (turnSign == -1)):
+            # If TurningMotorFullRotation < 0, then pos is increasing in value to more than
+            # '0.95 * TurningMotorFullRotation.
+            while (pos <= (self.modConfig.TurningMotorFullRotation * 0.95)):
+                pos = pos - self.modConfig.TurningMotorFullRotation
             
+        elif (abs(pos) < abs(self.modConfig.TurningMotorFullRotation * 0.05)):
+            # Do nothing
+            # This is the close enough
+            pass
+        else:
+            # If TurningMotorFullRotation > 0, then pos is decreasing in value to less than
+            # '0.95 * Abs(TurningMotorFullRotation).
+            while (pos >= abs(self.modConfig.TurningMotorFullRotation * 0.05)):
+                pos = pos - abs(self.modConfig.TurningMotorFullRotation)
+        
+        self.turning.relabelPos(pos)
+        self.modConfig.queue.put('Data: TurningAngle: ' + str(self.convertPosToAngle(pos)))
+        # If TurningMotorAngle != angle Then RelabelPos MotorTurning, pos
+        # TurningAngleBox = angle
+     
+    '''
+    '''
+    def turningMotorRotate(self, angle, waitingForStop=True):
+        startingPos = self.turning.readPosition()
+        startingangle = self.turningMotorAngle()
+        
+        target = self.convertAngleToPos(angle)
+        self.turning.moveMotor(target, self.modConfig.TurnerSpeed, waitingForStop)
+        if not waitingForStop:
+            return
+        
+        CurAngle = self.turningMotorAngle()
+        if (abs((CurAngle - angle) % 360) > 3):
+            # First try to move to move back to the desired position
+            # MoveMotor MotorTurning, startingPos, TurnerSpeed, pauseOverride:=True
+            # curpos = ReadPosition(MotorTurning)            
+            self.turning.moveMotor(target, self.modConfig.TurnerSpeed)
+            CurAngle = self.turningMotorAngle()
+        
+        # Quit here if this is bad ...
+        if (abs((CurAngle - angle) % 360) > 3):
+            curpos = self.turning.readPosition()
+            # Here start the lines which could be remove for rockmag measurements:
+            self.turning.moveMotor((curpos - (curpos - startingPos) * 0.1), 0.1 * self.modConfig.TurnerSpeed)
+            time.sleep(0.2)     # Can be remove to don't wait
+            
+            errorMessage = "Unacceptable slop on turning motor from\n"
+            errorMessage += str(startingangle) + "degrees to " + str(angle) + " degrees.\n\n" 
+            errorMessage += "Target position: " + str(target) + "\n"
+            errorMessage += "Current position: " + str(curpos) + "\n\n"
+            errorMessage += "Execution has been paused. Please check machine."
+            raise ValueError(errorMessage)
+        
+        CurAngle = self.turningMotorAngle()
+        
+        CurAngle = CurAngle - int(CurAngle / 360) * 360     # Integer division
+        if (CurAngle != self.turningMotorAngle()): 
+            self.setTurningMotorAngle(CurAngle)                
+    
+    '''
+    '''
+    def turningMotorSpin(self, speedRPS, Duration=60):
+        if (speedRPS == 0):
+            self.turning.motorStop()
+            activeAngle = self.turningMotorAngle()
+            CurAngle = activeAngle - int(activeAngle / 360) * 360
+            if (CurAngle != activeAngle): 
+                self.setTurningMotorAngle(CurAngle)
+                
+            activeAngle = self.turningMotorAngle()
+            if (CurAngle != activeAngle): 
+                self.setTurningMotorAngle(CurAngle)
+                
+            if (abs(CurAngle) > 10):
+                target = 360
+            else:
+                target = 0
+            
+            self.turningMotorRotate(target)
+            self.turning.waitForMotorStop()
+            self.setTurningMotorAngle(0)
+            CurAngle = self.turningMotorAngle()
+        else:
+            startingPos = self.turing.readPosition()
+            startingangle = self.turningMotorAngle()
+            target = startingPos - self.modConfig.TurningMotorFullRotation * speedRPS * Duration
+            self.turning.moveMotor(target, abs(self.modConfig.TurningMotor1rps * speedRPS), False)
+        
     '''--------------------------------------------------------------------------------------------
                         
                         IRM/ARM Control Functions
@@ -904,37 +1082,59 @@ class DevicesControl():
                 self.changerMotortoHole(currentHole)
             
             elif (taskID[0] == self.MOTOR_GO_TO_X):
-                print('TODO: ButtonXSet_Click()')
+                moveMotorPos = taskID[1][0]
+                if not self.modConfig.modConfig.HasXYTableBeenHomed:
+                    self.HomeToTop()                    # MotorUPDN_TopReset
+                    self.MotorXYTable_CenterReset()
+                    
+                self.moveMotorXY(self.changerX, moveMotorPos, self.modConfig.ChangerSpeed, False)
 
             elif (taskID[0] == self.MOTOR_GO_TO_Y):
-                print('TODO: ButtonYSet_Click()')
+                moveMotorPos = taskID[1][0]
+                if not self.modConfig.modConfig.HasXYTableBeenHomed:
+                    self.HomeToTop()                    # MotorUPDN_TopReset
+                    self.MotorXYTable_CenterReset()
+                    
+                self.moveMotorAbsoluteXY(self.changerY, moveMotorPos, self.modConfig.ChangerSpeed, False)
 
             elif (taskID[0] == self.MOTOR_SPIN_SAMPLE):
-                print('TODO: cmdSpinTurningMotor_Click()')
+                spinRPS = taskID[1][0]
+                self.turningMotorSpin(spinRPS)
 
             elif (taskID[0] == self.MOTOR_CHANGE_TURN_ANGLE):
-                print('TODO: ChangeTurnAngleButton_Click()')
+                angle = taskID[1][0]
+                self.turningMotorRotate(angle)
 
             elif (taskID[0] == self.MOTOR_CHANGE_HEIGHT):
-                print('TODO: buttonHeightSet_Click()')
+                height = taskID[1][0]
+                self.upDownMove(height, 0)
                 
             elif (taskID[0] == self.MOTOR_LOAD):
-                print('TODO: LoadButton_Click()')
+                self.MoveToCorner()
 
             elif (taskID[0] == self.MOTOR_READ_POSITION):
-                print('TODO: ReadPosButton_Click()')
+                motorStr = taskID[1][0]
+                activeMotor = self.getActiveMotor(motorStr)
+                if (activeMotor != None):
+                    activeMotor.readPosition()
 
             elif (taskID[0] == self.MOTOR_READ_ANGLE):
-                print('TODO: ReadAngleButton_Click()')
+                self.turningMotorAngle()
 
             elif (taskID[0] == self.MOTOR_READ_HOLE):
                 self.changerHole()
 
             elif (taskID[0] == self.MOTOR_RESET):
-                print('TODO: MotorResetButton_Click()')
+                self.turning.motorReset()
+                self.upDown.motorReset()
+                self.changerX.motorReset()
+                self.changerY.motorReset()
 
             elif (taskID[0] == self.MOTOR_STOP):
-                print('TODO: MotorStopButton_Click()')
+                self.turning.motorStop()
+                self.upDown.motorStop()
+                self.changerX.motorStop()
+                self.changerY.motorStop()
             
             elif (taskID[0] == self.IRM_FIRE):
                 voltage = taskID[1][0] 

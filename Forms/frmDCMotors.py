@@ -212,7 +212,10 @@ class frmDCMotors(wx.Frame):
         self.lastPosTBox.SetValue(modConfig.lastPositionRead)
         self.targetPosTBox.SetValue(modConfig.targetPosition)
         self.velocityTBox.SetValue(modConfig.velocity)
-                
+        self.goXTBox.SetValue(modConfig.xPos)
+        self.goYTBox.SetValue(modConfig.yPos)
+        self.spinSampleTBox.SetValue(modConfig.turningAngle)
+            
         if 'ChangerX' in  modConfig.activeMotor:
             self.activeMotroRBox.SetSelection(0)
         elif 'Turning' in  modConfig.activeMotor:
@@ -391,7 +394,8 @@ class frmDCMotors(wx.Frame):
     '''
     '''
     def onReadPosition(self, event):
-        self.parent.pushTaskToQueue([self.parent.devControl.MOTOR_READ_POSITION, [None]])
+        activeMotor = self.activeMotroRBox.GetStringSelection() 
+        self.parent.pushTaskToQueue([self.parent.devControl.MOTOR_READ_POSITION, [activeMotor]])
         return
        
     '''

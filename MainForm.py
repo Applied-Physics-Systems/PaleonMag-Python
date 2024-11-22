@@ -20,11 +20,13 @@ from Forms.frmTip import frmTip
 from Forms.frmFlashingStatus import frmFlashingStatus
 from Forms.frmMagnetometerControl import frmMagnetometerControl
 from Forms.frmSampleIndexRegistry import frmSampleIndexRegistry
+from Forms.frmSQUID import frmSQUID
+from Forms.frmVacuum import frmVacuum
 
 from Hardware.DevicesControl import DevicesControl
 from Process.ModConfig import ModConfig
 
-VersionNumber = 'Version 0.00.11'
+VersionNumber = 'Version 0.00.12'
 
 ID_DC_MOTORS        = 0
 ID_FILE_REGISTRY    = 1
@@ -32,6 +34,8 @@ ID_MAG_CONTROL      = 2
 ID_LOG_OUT          = 3
 ID_NOCOMM_OFF       = 4
 ID_QUIT_EXIT        = 5
+ID_SQUID            = 6
+ID_VACUUM           = 7
 
 FLASH_DISPLAY_OFF_TIME = 10
 
@@ -144,10 +148,10 @@ class MainForm(wx.Frame):
         motorItem = wx.MenuItem(diagMenu, ID_DC_MOTORS, text = "DC Motors", kind = wx.ITEM_NORMAL)
         diagMenu.Append(motorItem)
         
-        squidItem = wx.MenuItem(diagMenu, wx.ID_NEW, text = "SQUID", kind = wx.ITEM_NORMAL)
+        squidItem = wx.MenuItem(diagMenu, ID_SQUID, text = "SQUID", kind = wx.ITEM_NORMAL)
         diagMenu.Append(squidItem)
         
-        vacuumItem = wx.MenuItem(diagMenu, wx.ID_NEW, text = "Vacuum", kind = wx.ITEM_NORMAL)
+        vacuumItem = wx.MenuItem(diagMenu, ID_VACUUM, text = "Vacuum", kind = wx.ITEM_NORMAL)
         diagMenu.Append(vacuumItem)
         
         subDemagMenu = wx.Menu()
@@ -447,6 +451,13 @@ class MainForm(wx.Frame):
                         self.modConfig.parseMotorInfo(messageList[1].strip())
                         if 'MotorControl' in self.panelList.keys():
                             self.panelList['MotorControl'].updateGUI(self.modConfig)
+                            
+                elif ('Data:' in endMessage):
+                    messageList = endMessage.split(':')
+                    if (len(messageList) > 2):
+                        self.modConfig.parseMotorData(messageList[1].strip(), messageList[2].strip())
+                        if 'MotorControl' in self.panelList.keys():
+                            self.panelList['MotorControl'].updateGUI(self.modConfig)
                                         
                 return
                     
@@ -495,6 +506,18 @@ class MainForm(wx.Frame):
                 dcMotorControl = frmDCMotors(parent=self)
                 dcMotorControl.Show()
                 self.panelList['MotorControl'] = dcMotorControl
+
+        elif (menuID == ID_SQUID):
+            if not 'SQUIDControl' in self.panelList.keys():
+                SQUIDControl = frmSQUID(parent=self)
+                SQUIDControl.Show()
+                self.panelList['SQUIDControl'] = SQUIDControl
+
+        elif (menuID == ID_VACUUM):
+            if not 'VacuumControl' in self.panelList.keys():
+                vacuumControl = frmVacuum(parent=self)
+                vacuumControl.Show()
+                self.panelList['VacuumControl'] = vacuumControl
             
         elif (menuID == ID_NOCOMM_OFF):
             if self.NOCOMM_Flag:  

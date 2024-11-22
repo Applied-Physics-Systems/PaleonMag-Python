@@ -13,6 +13,9 @@ class ModConfig():
     targetPosition = ''
     velocity = ''
     SampleHeight = 0.0
+    xPos = '0'
+    yPos = '0'
+    turningAngle = '0'
     
     processData = ProcessData()
 
@@ -91,7 +94,10 @@ class ModConfig():
         self.SCurveFactor = self.getConfig_Int(config, 'SteppingMotor', 'SCurveFactor', 32767)
         self.SCoilPos = self.getConfig_Int(config, 'SteppingMotor', 'SCoilPos', -4202)
         self.AFPos = self.getConfig_Int(config, 'SteppingMotor', 'AFPos', -8405)
-        self.ZeroPos = self.getConfig_Int(config, 'SteppingMotor', 'ZeroPos', -25886)
+        self.ZeroPos = self.getConfig_Int(config, 'SteppingMotor', 'ZeroPos', -25886)        
+        self.TurningMotorFullRotation = self.getConfig_Int(config, 'SteppingMotor', 'TurningMotorFullRotation', 2000)
+        self.TurningMotor1rps = self.getConfig_Int(config, 'SteppingMotor', 'TurningMotor1rps', 16000000)
+        self.TurnerSpeed = self.getConfig_Int(config, 'SteppingMotor', 'TurnerSpeed', 2000000)
         self.PickupTorqueThrottle = self.getConfig_Float(config, 'SteppingMotor', 'PickupTorqueThrottle', 0.4)
         self.SampleHoleAlignmentOffset = self.getConfig_Float(config, 'SteppingMotor', 'SampleHoleAlignmentOffset', -0.02)
 
@@ -150,6 +156,16 @@ class ModConfig():
                     self.targetPosition = params[1]
                 elif 'Velocity' in params[0]:
                     self.velocity = params[1]
+
+    '''
+    '''
+    def parseMotorData(self, label, dataStr):
+        if 'xPos' in label:
+            self.xPos = dataStr
+        elif 'yPos' in label:
+            self.yPos = dataStr
+        elif 'TurningAngle' in label:
+            self.turningAngle = dataStr
                     
     '''
         Get XY reading from XY Table
