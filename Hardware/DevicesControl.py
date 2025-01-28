@@ -10,6 +10,8 @@ import numpy as np
 
 from Hardware.Device.MotorControl import MotorControl
 from Hardware.Device.IrmArmControl import IrmArmControl
+from Hardware.Device.SQUIDControl import SQUIDControl
+from Hardware.Device.VacuumControl import VacuumControl
 
 from Process.ProcessData import ProcessData
 from Process.ModConfig import ModConfig
@@ -45,6 +47,20 @@ class DevicesControl():
     IRM_SET_BIAS_FIELD      = 0x1001
     IRM_FIRE                = 0x1002
     
+    SQUID_READ_COUNT        = 0x2001
+    SQUID_READ_DATA         = 0x2002
+    SQUID_READ_RANGE        = 0x2003
+    SQUID_RESET_COUNT       = 0x2004
+    SQUID_CONFIGURE         = 0x2005
+    SQUID_CHANGE_RATE       = 0x2006
+    SQUID_SET_CFG           = 0x2007
+    SQUID_READ              = 0x2008
+    
+    VACUUM_SET_CONNECT      = 0x3001
+    VACUUM_SET_MOTOR        = 0x3002
+    VACUUM_RESET            = 0x3003
+    VACUUM_SET_DEGAUSSER    = 0x3004
+    
     messages = {MOTOR_HOME_TO_TOP: 'Run HomeToTop\n',
                 MOTOR_HOME_TO_CENTER: 'Run HomeToCenter\n',
                 MOTOR_MOVE: 'Move Motor To Target Position',
@@ -67,7 +83,19 @@ class DevicesControl():
                 MOTOR_READ_HOLE: 'Read Hole',
                 MOTOR_RESET: 'Reset',
                 MOTOR_STOP: 'Stop',                
-                IRM_FIRE: 'Discharge IRM device'}
+                IRM_FIRE: 'Discharge IRM device',
+                SQUID_READ_COUNT: 'Read count from SQUID',
+                SQUID_READ_DATA: 'Read data from SQUID',
+                SQUID_READ_RANGE: 'Read range from SQUID',
+                SQUID_RESET_COUNT: 'Reset count SQUID',
+                SQUID_CONFIGURE: 'Configure SQUID',
+                SQUID_CHANGE_RATE:'Change rate for SQUID',
+                SQUID_SET_CFG:'Set configuration for SQUID',
+                SQUID_READ:'Read from SQUID',
+                VACUUM_SET_CONNECT:'Set vacuum connection on/off',
+                VACUUM_SET_MOTOR:'Set vacuum motor on/off',
+                VACUUM_RESET:'Reset vacuum',
+                VACUUM_SET_DEGAUSSER:'Set degausser cooler on/off'}
     
     MotorPositionMoveToLoadCorner = 900000
     MotorPositionMoveToCenter = -900000
@@ -81,6 +109,7 @@ class DevicesControl():
     turning = None
     vacuum = None
     apsIRM = None
+    SQUID = None
     deviceList = []
     
     devicesAllGoodFlag = False
@@ -108,7 +137,8 @@ class DevicesControl():
     '''
         Open UART serial communication port for motor
     '''
-    def openMotorComm(self, device, comPort, label, modConfig):        
+    def openMotorComm(self, device, label, modConfig, portLabel):    
+        comPort = 'COM' + modConfig.processData.config['COMPorts'][portLabel]                    
         message = ''
         if (device != None):
             if (device.openDevice()):
@@ -123,13 +153,14 @@ class DevicesControl():
             except:
                 message += ' Failed to open'
                 self.devicesAllGoodFlag = False
-        
+                
         return device, message + '\n'
 
     '''
-        Open UART serial communication port for motor
+        Open UART serial communication port for IRM/ARM
     '''
-    def openIrmArmComm(self, device, comPort, label, modConfig):        
+    def openIrmArmComm(self, device, label, modConfig, portLabel):        
+        comPort = 'COM' + modConfig.processData.config['COMPorts'][portLabel]
         message = ''
         if (device != None):
             if (device.openDevice()):
@@ -144,8 +175,51 @@ class DevicesControl():
             except:
                 message += ' Failed to open'
                 self.devicesAllGoodFlag = False
-
         
+        return device, message + '\n'
+
+    '''
+        Open UART serial communication port for Vacuum
+    '''
+    def openVacuumComm(self, device, label, modConfig, portLabel):
+        comPort = 'COM' + modConfig.processData.config['COMPorts'][portLabel]        
+        message = ''
+        if (device != None):
+            if (device.openDevice()):
+                message += device.label + ' opened' 
+            else:
+                message += device.label + ' fail to open'
+                self.devicesAllGoodFlag = False
+        else:
+            try:            
+                message += label + ': ' + comPort  
+                device = VacuumControl(9600, self.currentPath, comPort, label, modConfig)
+            except:
+                message += ' Failed to open'
+                self.devicesAllGoodFlag = False
+        
+        return device, message + '\n'
+
+    '''
+        Open UART serial communication port for motor
+    '''
+    def openSQUIDComm(self, device, label, modConfig, portLabel):        
+        comPort = 'COM' + modConfig.processData.config['COMPorts'][portLabel]
+        message = ''
+        if (device != None):
+            if (device.openDevice()):
+                message += device.label + ' opened' 
+            else:
+                message += device.label + ' fail to open'
+                self.devicesAllGoodFlag = False
+        else:
+            try:            
+                message += label + ': ' + comPort  
+                device = SQUIDControl(1200, self.currentPath, comPort, label, modConfig)
+            except:
+                message += ' Failed to open'
+                self.devicesAllGoodFlag = False
+                
         return device, message + '\n'
         
     '''
@@ -155,41 +229,40 @@ class DevicesControl():
                 
         message = '\n'
         self.deviceList = []
-        comPort = 'COM' + modConfig.processData.config['COMPorts']['COMPortUpDown']        
-        self.upDown, respStr = self.openMotorComm(self.upDown, comPort, 'UpDown', modConfig)
+        self.upDown, respStr = self.openMotorComm(self.upDown, 'UpDown', modConfig, 'COMPortUpDown')
         message += respStr
         if (self.upDown != None):
             self.deviceList.append(self.upDown)
         
-        comPort = 'COM' + modConfig.processData.config['COMPorts']['COMPortChanger']
-        self.changerX, respStr = self.openMotorComm(self.changerX, comPort, 'ChangerX', modConfig)
+        self.changerX, respStr = self.openMotorComm(self.changerX, 'ChangerX', modConfig, 'COMPortChanger')
         message += respStr
         if (self.changerX != None):
             self.deviceList.append(self.changerX)
 
-        comPort = 'COM' + modConfig.processData.config['COMPorts']['COMPortChangerY']
-        self.changerY, respStr = self.openMotorComm(self.changerY, comPort, 'ChangerY', modConfig)
+        self.changerY, respStr = self.openMotorComm(self.changerY, 'ChangerY', modConfig, 'COMPortChangerY')
         message += respStr
         if (self.changerY != None):
             self.deviceList.append(self.changerY)
 
-        comPort = 'COM' + modConfig.processData.config['COMPorts']['COMPortTurning']
-        self.turning, respStr = self.openMotorComm(self.turning, comPort, 'Turning', modConfig)
+        self.turning, respStr = self.openMotorComm(self.turning, 'Turning', modConfig, 'COMPortTurning')
         message += respStr    
         if (self.turning != None):
             self.deviceList.append(self.turning)
 
-        comPort = 'COM' + modConfig.processData.config['COMPorts']['COMPortVacuum']
-        self.vacuum, respStr = self.openMotorComm(self.vacuum, comPort, 'Vacuum', modConfig)
+        self.vacuum, respStr = self.openVacuumComm(self.vacuum, 'Vacuum', modConfig, 'COMPortVacuum')
         message += respStr    
         if (self.vacuum != None):
             self.deviceList.append(self.vacuum)
 
-        comPort = 'COM' + modConfig.processData.config['COMPorts']['COMPortApsIrm']
-        self.apsIRM, respStr = self.openIrmArmComm(self.apsIRM, comPort, 'IrmArm', modConfig)
+        self.apsIRM, respStr = self.openIrmArmComm(self.apsIRM, 'IrmArm', modConfig, 'COMPortApsIrm')
         message += respStr    
         if (self.apsIRM != None):
             self.deviceList.append(self.apsIRM)
+
+        self.SQUID, respStr = self.openSQUIDComm(self.SQUID, 'SQUID', modConfig, 'COMPortSquids')
+        message += respStr    
+        if (self.SQUID != None):
+            self.deviceList.append(self.SQUID)
         
         return message 
 
@@ -1139,7 +1212,63 @@ class DevicesControl():
             elif (taskID[0] == self.IRM_FIRE):
                 voltage = taskID[1][0] 
                 self.FireIRM(voltage)
+
+            elif (taskID[0] == self.SQUID_READ_COUNT):
+                activeAxis = taskID[1][0]
+                cmdStr, respStr = self.SQUID.readCount(activeAxis)
+                queue.put('SQUID:' + cmdStr + ':' + respStr)
+
+            elif (taskID[0] == self.SQUID_READ_DATA):
+                activeAxis = taskID[1][0]
+                cmdStr, respStr = self.SQUID.readData(activeAxis)
+                queue.put('SQUID:' + cmdStr + ':' + respStr)
+                
+            elif (taskID[0] == self.SQUID_READ_RANGE):
+                activeAxis = taskID[1][0]
+                cmdStr, respStr = self.SQUID.readRange(activeAxis)
+                queue.put('SQUID:' + cmdStr + ':' + respStr)
+
+            elif (taskID[0] == self.SQUID_RESET_COUNT):
+                activeAxis = taskID[1][0]
+                cmdStr, respStr = self.SQUID.resetCount(activeAxis)
+                queue.put('SQUID:' + cmdStr + ':' + respStr)
+
+            elif (taskID[0] == self.SQUID_CONFIGURE):
+                activeAxis = taskID[1][0]
+                cmdStr, respStr = self.SQUID.configure(activeAxis)
+                queue.put('SQUID:' + cmdStr + ':' + respStr)
+                
+            elif (taskID[0] == self.SQUID_CHANGE_RATE):
+                activeAxis = taskID[1][0]
+                rateLabel = taskID[1][1]
+                cmdStr, respStr = self.SQUID.changeRate(activeAxis, rateLabel)
+                queue.put('SQUID:' + cmdStr + ':' + respStr)
+
+            elif (taskID[0] == self.SQUID_SET_CFG):
+                activeAxis = taskID[1][0]
+                cfgLabel = taskID[1][1]
+                cmdStr, respStr = self.SQUID.setCfg(activeAxis, cfgLabel)
+                queue.put('SQUID:' + cmdStr + ':' + respStr)
+                
+            elif (taskID[0] == self.SQUID_READ):
+                cmdStr, respStr = self.SQUID.getResponse()
+                queue.put('SQUID:' + cmdStr + ':' + respStr)
             
+            elif (taskID[0] == self.VACUUM_SET_CONNECT):
+                mode = taskID[1][0]
+                print('TODO: VACUUM_SET_CONNECTION ' + mode)                
+
+            elif (taskID[0] == self.VACUUM_SET_MOTOR):
+                mode = taskID[1][0]
+                print('TODO: VACUUM_SET_MOTOR ' + mode)                
+                
+            elif (taskID[0] == self.VACUUM_RESET):
+                print('TODO: VACUUM_RESET')                
+
+            elif (taskID[0] == self.VACUUM_SET_DEGAUSSER):
+                mode = taskID[1][0]
+                print('TODO: VACUUM_SET_DEGAUSSER ' + mode)                
+                
         except ValueError as e:
             self.modConfig.queue.put('Error: ' + str(e))
         

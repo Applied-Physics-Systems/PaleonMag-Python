@@ -136,6 +136,7 @@ class SerialPortDevice():
     # Send command to the serial device
     #---------------------------------------------------------------------------------------------------
     def sendString(self, commandStr):
+        
         self.serialDevice.write(commandStr.encode())
 
     #===================================================================================================
