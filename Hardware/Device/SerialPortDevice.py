@@ -36,8 +36,8 @@ class SerialPortDevice():
             self.DeviceDictionary = {}
             # Build dictionary for the instrument
             if 'Hardware\\Hardware' in pathName:
-                pathName = pathName.replace('Hardware\\Hardware', 'Hardware')
-            with open( pathName + '\\' + deviceName + '.txt', 'rt') as deviceFile:
+                pathName = pathName.replace('Hardware\\Hardware\\', 'Hardware\\')
+            with open( pathName + deviceName + '.txt', 'rt') as deviceFile:
                 for line in deviceFile:
                     line = str.strip(line)
                     if line != '':                    

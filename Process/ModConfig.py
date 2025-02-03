@@ -5,6 +5,25 @@ Created on Nov 8, 2024
 '''
 from Process.ProcessData import ProcessData
 
+CHANNEL = {'CH0': 0,
+           'CH1': 1,
+           'CH2': 2,
+           'CH3': 3,
+           'CH4': 4,
+           'CH5': 5,
+           'CH6': 6,
+           'CH7': 7}
+
+class Channel():
+    ChanName = ''
+    ChanNum = 0
+    ChanType = ''
+     
+    def __init__(self, chanName, chanNum, chanType):
+        self.ChanName = chanName
+        self.ChanNum = chanNum
+        self.ChanType = chanType
+
 class ModConfig():
     '''
     classdocs
@@ -31,6 +50,19 @@ class ModConfig():
             self.parseConfig(config)
             
         self.queue = queue
+        
+    '''
+    '''
+    def retrieveChannel(self, dataStr):
+        dataList = dataStr.split('-')
+        
+        chanName = dataStr  
+        chanNum = CHANNEL[dataList[2]]
+        chanType = dataList[0] 
+        
+        channel = Channel(chanName, chanNum, chanType)
+        
+        return channel
         
     '''
         Read an integer value from INI file
@@ -109,6 +141,13 @@ class ModConfig():
         self.EnableAxialIRM = self.getConfig_Bool(config, 'Modules', 'EnableAxialIRM', False)
         
         self.AFUnits = config['AF']['AFUnits']
+        
+        self.DegausserToggle = self.retrieveChannel(config['Channels']['DegausserToggle'])
+        self.MotorToggle = self.retrieveChannel(config['Channels']['MotorToggle'])
+        self.VacuumToggleA = self.retrieveChannel(config['Channels']['VacuumToggleA'])        
+        
+        self.EnableVacuum = self.getConfig_Bool(config, 'Modules', 'EnableVacuum', False)
+        self.EnableDegausserCooler = self.getConfig_Bool(config, 'Modules', 'EnableDegausserCooler', False)
         
         self.IRMSystem = config['IRMPulse']['IRMSystem']        
         self.ApsIrm_DoRangeChange = self.getConfig_Bool(config, 'IRMPulse', 'ApsIrm_DoRangeChange', False)

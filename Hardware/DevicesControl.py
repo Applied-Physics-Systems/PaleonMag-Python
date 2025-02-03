@@ -12,6 +12,7 @@ from Hardware.Device.MotorControl import MotorControl
 from Hardware.Device.IrmArmControl import IrmArmControl
 from Hardware.Device.SQUIDControl import SQUIDControl
 from Hardware.Device.VacuumControl import VacuumControl
+from Hardware.Device.ADWinControl import ADWinControl
 
 from Process.ProcessData import ProcessData
 from Process.ModConfig import ModConfig
@@ -110,6 +111,7 @@ class DevicesControl():
     vacuum = None
     apsIRM = None
     SQUID = None
+    ADwin = None
     deviceList = []
     
     devicesAllGoodFlag = False
@@ -121,7 +123,7 @@ class DevicesControl():
         Constructor
         '''
         self.currentPath = os.getcwd()
-        self.currentPath += '\\Hardware\\Device'        
+        self.currentPath += '\\Hardware\\Device\\'        
         self.DCMotorHomeToTop_StopOnTrue = False
                     
     '''
@@ -264,6 +266,8 @@ class DevicesControl():
         if (self.SQUID != None):
             self.deviceList.append(self.SQUID)
         
+        self.ADwin = ADWinControl(self.currentPath, self.modConfig)
+        
         return message 
 
     '''
@@ -327,6 +331,8 @@ class DevicesControl():
         self.modConfig.processData.PortOpen['Turning'] = self.turning.modConfig.processData.PortOpen['Turning']
         self.modConfig.processData.PortOpen['ChangerX'] = self.changerX.modConfig.processData.PortOpen['ChangerX']
         self.modConfig.processData.PortOpen['ChangerY'] = self.changerY.modConfig.processData.PortOpen['ChangerY']
+        
+        self.modConfig.processData.ADwinDO = self.ADwin.modConfig.processData.ADwinDO
                 
         return self.modConfig.processData 
    
@@ -1087,7 +1093,56 @@ class DevicesControl():
             print('TODO: Implement FireASC_IrmAtPulseVolts voltage, CalibrationMode')
         else:
             self.FireAPS_AtCalibratedTarget(voltage)
+
+        return
+
+    '''--------------------------------------------------------------------------------------------
+                        
+                        Vacuum Control Task Functions
+                        
+    --------------------------------------------------------------------------------------------'''
+    '''
+    '''
+    def Vacuum_valveConnect(self, mode):
+        if not self.modConfig.EnableVacuum:
+            return
+
+        if 'On' in mode:
+            cmdStr, respStr = self.vacuum.setValveConnect()
+            self.ADwin.DoDAQIO(self.modConfig.VacuumToggleA, boolValue=True)
+        else:
+            cmdStr, respStr = self.vacuum.clearValveConnect()
+            self.ADwin.DoDAQIO(self.modConfig.VacuumToggleA, boolValue=False)
+            
+        return cmdStr, respStr
         
+    '''
+    '''
+    def Vacuum_motorPower(self, mode):
+        if not self.modConfig.EnableVacuum:
+            return
+        
+        if 'On' in mode:
+            cmdStr, respStr = self.vacuum.setVacuumOn()
+            self.ADwin.DoDAQIO(self.modConfig.MotorToggle, boolValue=True)
+        else:
+            cmdStr, respStr = self.vacuum.setVacuumOff()
+            self.ADwin.DoDAQIO(self.modConfig.MotorToggle, boolValue=False)
+        
+        return cmdStr, respStr
+        
+    '''
+    '''
+    def Vacuum_degausserCooler(self, mode):
+        if not self.modConfig.EnableDegausserCooler:
+            return
+        
+        if 'On' in mode:
+            self.ADwin.DoDAQIO(self.modConfig.DegausserToggle, boolValue=True)
+        else:
+            self.ADwin.DoDAQIO(self.modConfig.DegausserToggle, boolValue=False)
+        
+        return
 
     '''--------------------------------------------------------------------------------------------
                         
@@ -1256,18 +1311,21 @@ class DevicesControl():
             
             elif (taskID[0] == self.VACUUM_SET_CONNECT):
                 mode = taskID[1][0]
-                print('TODO: VACUUM_SET_CONNECTION ' + mode)                
+                cmdStr, respStr = self.Vacuum_valveConnect(mode)
+                queue.put('Vacuum:' + cmdStr + ':' + respStr)
 
             elif (taskID[0] == self.VACUUM_SET_MOTOR):
                 mode = taskID[1][0]
-                print('TODO: VACUUM_SET_MOTOR ' + mode)                
+                cmdStr, respStr = self.Vacuum_motorPower(mode)
+                queue.put('Vacuum:' + cmdStr + ':' + respStr)
                 
             elif (taskID[0] == self.VACUUM_RESET):
-                print('TODO: VACUUM_RESET')                
+                cmdStr, respStr = self.vacuum.reset()        
+                queue.put('Vacuum:' + cmdStr + ':' + respStr)        
 
             elif (taskID[0] == self.VACUUM_SET_DEGAUSSER):
                 mode = taskID[1][0]
-                print('TODO: VACUUM_SET_DEGAUSSER ' + mode)                
+                self.Vacuum_degausserCooler(mode)                
                 
         except ValueError as e:
             self.modConfig.queue.put('Error: ' + str(e))

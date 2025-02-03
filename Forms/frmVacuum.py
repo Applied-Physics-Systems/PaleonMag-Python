@@ -51,12 +51,14 @@ class frmVacuum(wx.Frame):
         wx.StaticText(panel, label='Vacuum Connect', pos=(btnXOri, txtBoxOri + 3*txtOffset + btnYOffset))
         self.connectRBox = wx.RadioBox(panel, label = '', pos = (btnXOri + btnXOffset, btnYOri + btnYOffset), choices = radioBoxLabels,
                                 majorDimension = 1, style = wx.RA_SPECIFY_ROWS)
+        self.connectRBox.SetStringSelection('Off')
         self.connectRBox.Bind(wx.EVT_RADIOBOX,self.onConnectRadioBox) 
         
         # Third Row
         wx.StaticText(panel, label='Vacuum Motor', pos=(btnXOri, txtBoxOri + 4*txtOffset + 2*btnYOffset))
         self.motorRBox = wx.RadioBox(panel, label = '', pos = (btnXOri + btnXOffset, btnYOri + txtOffset + 2*btnYOffset), choices = radioBoxLabels,
                                 majorDimension = 1, style = wx.RA_SPECIFY_ROWS)
+        self.motorRBox.SetStringSelection('Off')
         self.motorRBox.Bind(wx.EVT_RADIOBOX,self.onMotorRadioBox)
         
         # Fourth Row
@@ -73,6 +75,7 @@ class frmVacuum(wx.Frame):
         wx.StaticText(panel, label='Degausser Cooler', pos=(btnXOri, secondRegion + 4*txtOffset))
         self.degausserRBox = wx.RadioBox(panel, label = '', pos = (btnXOri + btnXOffset, secondRegion + txtOffset), choices = radioBoxLabels,
                                 majorDimension = 1, style = wx.RA_SPECIFY_ROWS)
+        self.degausserRBox.SetStringSelection('Off')
         self.degausserRBox.Bind(wx.EVT_RADIOBOX,self.onDegausserRadioBox)
         closeBtn = wx.Button(panel, label='Close', pos=(btnXOri + txtBoxXOffset, secondRegion + 3*txtOffset), size=(btnLength, btnHeight))
         closeBtn.Bind(wx.EVT_BUTTON, self.onClose)
@@ -87,6 +90,16 @@ class frmVacuum(wx.Frame):
         self.SetTitle('Vacuum Control')
         self.Centre()
         self.Show(True)
+
+    '''--------------------------------------------------------------------------------------------
+                        
+                        Public API Functions
+                        
+    --------------------------------------------------------------------------------------------'''
+    def updateFrmVacuum(self, cmdStr, respStr):
+        self.outputTBox.SetValue(cmdStr)
+        self.inputTBox.SetValue(respStr)
+        return
 
     '''--------------------------------------------------------------------------------------------
                         

@@ -13,6 +13,7 @@ class ProcessData():
     frmSettingsOptions2Visible = False
     frmSettingsChkOverrideHomeToTop_ForMoveMotorAbsoluteXY = False
     HasXYTableBeenHomed = False
+    ADwinDO = 0
     
     PortOpen = {'UpDown': False,
                 'Turning': False,

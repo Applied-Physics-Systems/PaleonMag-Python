@@ -8,6 +8,7 @@ Created on Oct 4, 2024
 Libraries used in this project
     pip install wxPython
     pip install pyserial
+    pip install adwin
 
 '''
 import wx
@@ -26,7 +27,7 @@ from Forms.frmVacuum import frmVacuum
 from Hardware.DevicesControl import DevicesControl
 from Process.ModConfig import ModConfig
 
-VersionNumber = 'Version 0.00.13'
+VersionNumber = 'Version 0.00.14'
 
 ID_DC_MOTORS        = 0
 ID_FILE_REGISTRY    = 1
@@ -423,7 +424,7 @@ class MainForm(wx.Frame):
                 endMessage = self.mainQueue.get(timeout=0.01)
                 if ('Task Completed' in endMessage):
                     self.backgroundRunningFlag = False
-                    self.processData = self.mainQueue.get()
+                    self.modConfig.processData = self.mainQueue.get()
                     # Start new process
                     if (len(self.taskQueue) > 0):
                         self.startProcess()
@@ -472,6 +473,12 @@ class MainForm(wx.Frame):
                     if (len(messageList) > 2):
                         if 'SQUIDControl' in self.panelList.keys():
                             self.panelList['SQUIDControl'].updateFrmSQUID(messageList[1].strip(), messageList[2].strip())
+
+                elif ('Vacuum:' in endMessage):
+                    messageList = endMessage.split(':')
+                    if (len(messageList) > 2):
+                        if 'VacuumControl' in self.panelList.keys():
+                            self.panelList['VacuumControl'].updateFrmVacuum(messageList[1].strip(), messageList[2].strip())
                                         
                 return
                     
