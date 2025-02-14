@@ -22,8 +22,12 @@ class ModChanger():
     '''
     def isValidStart(self, num):
         status = False
-        if ((int(num) >= self.modConfig.SlotMin) and (int(num) <= self.modConfig.SlotMax)):
-            status = True
+        
+        try:
+            if ((int(num) >= self.modConfig.SlotMin) and (int(num) <= self.modConfig.SlotMax)):
+                status = True
+        except:
+            status = False
         
         return status
         

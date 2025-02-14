@@ -308,9 +308,9 @@ class frmDCMotors(wx.Frame):
     '''
     def onSetCurrentHole(self, event):
         try:
-            currentHole = float(self.changeHoleTBox.GetValue())
+            currentHole = int(self.changeHoleTBox.GetValue())
         except:
-            currentHole = 0.0
+            currentHole = 0
         self.parent.pushTaskToQueue([self.parent.devControl.MOTOR_SET_CURRENT_HOLE, [currentHole]])
         return
                 

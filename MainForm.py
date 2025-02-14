@@ -23,11 +23,12 @@ from Forms.frmMagnetometerControl import frmMagnetometerControl
 from Forms.frmSampleIndexRegistry import frmSampleIndexRegistry
 from Forms.frmSQUID import frmSQUID
 from Forms.frmVacuum import frmVacuum
+from Forms.frmADWIN_AF import frmADWIN_AF
 
 from Hardware.DevicesControl import DevicesControl
 from Process.ModConfig import ModConfig
 
-VersionNumber = 'Version 0.00.14'
+VersionNumber = 'Version 0.00.15'
 
 ID_DC_MOTORS        = 0
 ID_FILE_REGISTRY    = 1
@@ -37,6 +38,7 @@ ID_NOCOMM_OFF       = 4
 ID_QUIT_EXIT        = 5
 ID_SQUID            = 6
 ID_VACUUM           = 7
+ID_DEMAG_AF         = 8
 
 FLASH_DISPLAY_OFF_TIME = 10
 
@@ -156,7 +158,7 @@ class MainForm(wx.Frame):
         diagMenu.Append(vacuumItem)
         
         subDemagMenu = wx.Menu()
-        demagWindowItem = wx.MenuItem(subDemagMenu, wx.ID_NEW, text = "AF Demag Window", kind = wx.ITEM_NORMAL)
+        demagWindowItem = wx.MenuItem(subDemagMenu, ID_DEMAG_AF, text = "AF Demag Window", kind = wx.ITEM_NORMAL)
         subDemagMenu.Append(demagWindowItem)
         tunerItem = wx.MenuItem(subDemagMenu, wx.ID_NEW, text = "AF Tuner / Clip Test", kind = wx.ITEM_NORMAL)
         subDemagMenu.Append(tunerItem)
@@ -561,6 +563,13 @@ class MainForm(wx.Frame):
                 registryControl = frmSampleIndexRegistry(parent=self)
                 registryControl.Show()
                 self.panelList['RegistryControl'] = registryControl                    
+            
+        elif (menuID == ID_DEMAG_AF):
+            if not 'ADWinAFControl' in self.panelList.keys():
+                demagAfControl = frmADWIN_AF(parent=self)
+                demagAfControl.Show()
+                self.panelList['ADWinAFControl'] = demagAfControl                    
+            
             
         elif (menuID == ID_QUIT_EXIT):
             if not self.NOCOMM_Flag:

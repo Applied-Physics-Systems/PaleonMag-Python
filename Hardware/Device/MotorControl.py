@@ -73,10 +73,11 @@ class MotorControl(SerialPortDevice):
         time.sleep(0.01)        # Sleep for 100 ms
 
         respStr = self.readLine()
+        resplist = respStr.split('\n') 
         
         # Send Command and its response to the GUI
         if (self.modConfig.queue != None):
-            self.modConfig.queue.put('Command Exchange: ' + self.label + ';' + cmdStr + ';' + respStr)
+            self.modConfig.queue.put('Command Exchange: ' + self.label + ';' + cmdStr + ';' + resplist[-1])
         
         return respStr 
 
@@ -189,6 +190,8 @@ class MotorControl(SerialPortDevice):
             upperWord = int(respList[3], 16) * 65536
             lowerWord = int(respList[4], 16)
             position = upperWord + lowerWord
+            if (position > 0x7FFFFFFF):
+                position -= 0x100000000
             
         return position
            
@@ -242,12 +245,15 @@ class MotorControl(SerialPortDevice):
     '''
     '''
     def relabelPos(self, position):
-        while (abs(self.readPostion() - position) > 10):
+        iPosition = int(position)
+        while (abs(self.readPosition() - iPosition) > 10):
             self.zeroTargetPos()
             # @16 11 10 num 'load register
-            self.sendMotorCommand('11 10 ' + str(-1*position))
+            self.sendMotorCommand('11 10 ' + str(-1*iPosition))
             # @16 165 1802 ' subtract register 10 from T&P
             self.sendMotorCommand('165 1802')
             
         return 
+    
+    
             

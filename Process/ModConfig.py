@@ -141,6 +141,13 @@ class ModConfig():
         self.EnableAxialIRM = self.getConfig_Bool(config, 'Modules', 'EnableAxialIRM', False)
         
         self.AFUnits = config['AF']['AFUnits']
+        self.AxialRampUpVoltsPerSec = self.getConfig_Float(config, 'AF', 'AxialRampUpVoltsPerSec', 3.3)
+        self.TransRampUpVoltsPerSec = self.getConfig_Float(config, 'AF', 'TransRampUpVoltsPerSec', 3.3)
+        self.MinRampUpTime_ms = self.getConfig_Int(config, 'AF', 'MinRampUpTime_ms', 500)
+        self.MaxRampUpTime_ms = self.getConfig_Int(config, 'AF', 'MaxRampUpTime_ms', 1500)
+        self.RampDownNumPeriodsPerVolt = self.getConfig_Int(config, 'AF', 'RampDownNumPeriodsPerVolt', 200)
+        self.MinRampDown_NumPeriods = self.getConfig_Int(config, 'AF', 'MinRampDown_NumPeriods', 500)
+        self.MaxRampDown_NumPeriods = self.getConfig_Int(config, 'AF', 'MaxRampDown_NumPeriods', 5000)
         
         self.DegausserToggle = self.retrieveChannel(config['Channels']['DegausserToggle'])
         self.MotorToggle = self.retrieveChannel(config['Channels']['MotorToggle'])
@@ -160,6 +167,14 @@ class ModConfig():
         self.MotorIDChangerX = config['MotorPrograms']['MotorIDChanger']
         self.MotorIDChangerY = config['MotorPrograms']['MotorIDChangerY']
         self.MotorIDTurning = config['MotorPrograms']['MotorIDTurning']        
+
+        self.AfAxialResFreq = self.getConfig_Float(config, 'AFAxial', 'AFAxialResFreq', 360)
+        self.AfAxialRampMax = self.getConfig_Float(config, 'AFAxial', 'AFAxialRampMax', 5.5) 
+        self.AfAxialMonMax = self.getConfig_Float(config, 'AFAxial', 'AFAxialMonMax', 5.5)
+        
+        self.AfTransResFreq = self.getConfig_Float(config, 'AFTrans', 'AFTransResFreq', 327)
+        self.AfTransRampMax = self.getConfig_Float(config, 'AFTrans', 'AFTransRampMax', 5.3)
+        self.AfTransMonMax = self.getConfig_Float(config, 'AFTrans', 'AFTransMonMax', 5.3)
 
     '''
     '''
@@ -224,7 +239,7 @@ class ModConfig():
     '''
         update modConfig dictionarry
     '''
-    def upDateXYTablePositions(self, pos, axis, value):
+    def updateXYTablePositions(self, pos, axis, value):
         if (axis == 0):
             xyTableStr = 'XY' + str(pos) + 'X'
         elif (axis == 1):
@@ -232,19 +247,20 @@ class ModConfig():
         else:
             xyTableStr = 'XYHomeX'
         
-        self.processData.config['XYTable'][xyTableStr] = value        
+        self.processData.config['XYTable'][xyTableStr] = str(value)        
         return
     
     '''
     '''
     def convertHoletoPosX(self, hole):
-        self.XYTablePositions(hole, 0)
+        posCount = self.XYTablePositions(hole, 0)
+        return posCount
 
     '''
     '''
     def convertHoletoPosY(self, hole):
-        self.XYTablePositions(hole, 1)
-        
+        posCount = self.XYTablePositions(hole, 1)
+        return posCount
 
 
                     
