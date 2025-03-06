@@ -148,10 +148,14 @@ class ModConfig():
         self.RampDownNumPeriodsPerVolt = self.getConfig_Int(config, 'AF', 'RampDownNumPeriodsPerVolt', 200)
         self.MinRampDown_NumPeriods = self.getConfig_Int(config, 'AF', 'MinRampDown_NumPeriods', 500)
         self.MaxRampDown_NumPeriods = self.getConfig_Int(config, 'AF', 'MaxRampDown_NumPeriods', 5000)
+        self.AFRelays_UseUpPosition = self.getConfig_Bool(config, 'AF', 'AFRelays_UseUpPosition', False)
         
         self.DegausserToggle = self.retrieveChannel(config['Channels']['DegausserToggle'])
         self.MotorToggle = self.retrieveChannel(config['Channels']['MotorToggle'])
-        self.VacuumToggleA = self.retrieveChannel(config['Channels']['VacuumToggleA'])        
+        self.VacuumToggleA = self.retrieveChannel(config['Channels']['VacuumToggleA'])  
+        self.AFAxialRelay = self.retrieveChannel(config['Channels']['AFAxialRelay'])       
+        self.AFTransRelay = self.retrieveChannel(config['Channels']['AFTransRelay'])
+        self.IRMRelay = self.retrieveChannel(config['Channels']['IRMRelay'])
         
         self.EnableVacuum = self.getConfig_Bool(config, 'Modules', 'EnableVacuum', False)
         self.EnableDegausserCooler = self.getConfig_Bool(config, 'Modules', 'EnableDegausserCooler', False)

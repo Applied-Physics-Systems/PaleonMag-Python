@@ -28,7 +28,7 @@ from Forms.frmADWIN_AF import frmADWIN_AF
 from Hardware.DevicesControl import DevicesControl
 from Process.ModConfig import ModConfig
 
-VersionNumber = 'Version 0.00.15'
+VersionNumber = 'Version 0.00.16'
 
 ID_DC_MOTORS        = 0
 ID_FILE_REGISTRY    = 1

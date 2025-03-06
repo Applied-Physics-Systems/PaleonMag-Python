@@ -229,7 +229,10 @@ class DevicesControl():
         if (self.SQUID != None):
             self.deviceList.append(self.SQUID)
         
-        self.ADwin = ADWinControl(self.currentPath, self.modConfig)
+        try:
+            self.ADwin = ADWinControl(self.currentPath, self.modConfig)
+        except:
+            self.ADwin = None
         
         return message 
 
@@ -590,7 +593,7 @@ class DevicesControl():
                 
             elif (taskID[0] == self.AF_SWITCH_COIL):
                 activeCoil = taskID[1][0]
-                print('TODO: ' + activeCoil)
+                self.ADwin.trySetRelays_ADwin(activeCoil)
                 
             elif (taskID[0] == self.AF_REFRESH_T):
                 print('TODO: AF_REFRESH_T')
@@ -735,7 +738,12 @@ if __name__=='__main__':
         modConfig = ModConfig(process=processData, queue=queue)
         devControl.setDevicesConfig(modConfig)
 
+        start_time = time.perf_counter()
         runAllMotorsFunctions(devControl)
+                
+        end_time = time.perf_counter()
+        elapsed_time = end_time - start_time
+        print(f"Elapsed time: {elapsed_time:.4f} seconds")
                 
         print('Done !!!')
         

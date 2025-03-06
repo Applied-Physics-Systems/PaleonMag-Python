@@ -109,9 +109,9 @@ class SerialPortDevice():
     def sendCommand(self, commandStr, echoEnable):
         self.clearUartBuffer()
         self.serialDevice.write(commandStr + '\r')
-        cmdSize = len(commandStr) + 1
         
         if (echoEnable):
+            cmdSize = len(commandStr) + 1
             time.sleep(0.01)
             echoStr = ''
             echoStatus = True
@@ -187,15 +187,14 @@ class SerialPortDevice():
     # Read a line from the device
     #---------------------------------------------------------------------------------------------------
     def readLine(self):
-        readCharacter = '\x00'
-        counter = 0
+        readCharacters = ""
         readLine = ''
-        while ((readCharacter!='\x04') and ((readCharacter!='\n')or(readCharacter!='\r')) and (counter<100)):
-            readCharacter = self.serialDevice.read().decode('utf-8')
-            counter += 1
-            readLine += readCharacter
-            if (len(readCharacter)==0):
-                readCharacter = '\x04'
+        keepReading = True
+        while keepReading:
+            readCharacters = self.serialDevice.read(self.serialDevice.in_waiting).decode('utf-8')
+            readLine += readCharacters
+            if (('\x04' in readLine) or ('\n' in readLine) or ('\r' in readLine)):
+                keepReading = False 
                     
         return readLine 
 

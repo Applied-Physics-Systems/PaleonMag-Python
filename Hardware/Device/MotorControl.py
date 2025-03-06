@@ -78,7 +78,7 @@ class MotorControl(SerialPortDevice):
         # Send Command and its response to the GUI
         if (self.modConfig.queue != None):
             self.modConfig.queue.put('Command Exchange: ' + self.label + ';' + cmdStr + ';' + resplist[-1])
-        
+                
         return respStr 
 
     '''--------------------------------------------------------------------------------------------
@@ -147,7 +147,7 @@ class MotorControl(SerialPortDevice):
             oldPosition[0] = pollPosition              
             pollPosition = self.readPosition()      # Dummy read
             
-            time.sleep(0.1)
+            time.sleep(0.01)
             pollPosition = self.readPosition()
             
             # if we're not moving, we're done
