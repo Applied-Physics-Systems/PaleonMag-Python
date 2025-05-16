@@ -15,7 +15,7 @@ class frmADWIN_AF(wx.Frame):
     '''
     classdocs
     '''
-
+    ramp_in_progress = False
 
     def __init__(self, parent):
         '''
@@ -311,6 +311,85 @@ class frmADWIN_AF(wx.Frame):
         
         return downSlope
 
+    '''
+    '''
+    def setCheckBox(self, paramStr, checkBox):
+        if 'True' in paramStr:
+            checkBox.SetValue(True)
+        else:
+            checkBox.SetValue(False)
+        return
+
+    '''
+    '''
+    def getADWinValues(self):
+        self.parent.modConfig.processData.ADwin_optCalRamp = self.calibrateRBox.GetSelection()
+        try:
+            peakField = float(self.peakFieldTBox.GetValue())
+        except:
+            peakField = 0.0
+        self.parent.modConfig.processData.ADwin_peakField = peakField
+        try:
+            monitorTrigVolt = float(self.peakMonitorTBox.GetValue())
+        except:
+            monitorTrigVolt = 0.0
+        self.parent.modConfig.processData.ADwin_monitorTrigVolt = monitorTrigVolt
+        
+        return
+        
+    '''--------------------------------------------------------------------------------------------
+                        
+                        Public API Functions
+                        
+    --------------------------------------------------------------------------------------------'''
+    '''
+        Display infomration for the running background process
+    '''
+    def updateGUI(self, messageList):
+        for eachEntry in messageList:
+            if 'T1 = ' in eachEntry:
+                self.axialTempTBox.SetValue(eachEntry.strip().replace('T1 = ', ''))                
+            elif 'T2 = ' in eachEntry:
+                self.transTempTBox.SetValue(eachEntry.strip().replace('T2 = ', ''))
+            elif 'Coil Status = ' in eachEntry:
+                self.setCheckBox(eachEntry, self.lockCoilChkBox)
+            elif 'Unmonitored Ramp = ' in eachEntry:
+                self.setCheckBox(eachEntry, self.rampChkBox)
+            elif 'Peak Field = ' in eachEntry:
+                self.peakFieldTBox.SetValue(eachEntry.strip().replace('Peak Field = ', ''))
+            elif 'Peak Monitor Voltage = ' in eachEntry:
+                self.peakMonitorTBox.SetValue(eachEntry.strip().replace('Peak Monitor Voltage = ', ''))
+            elif 'Peak Ramp Voltage = ' in eachEntry:
+                self.peakRampTBox.SetValue(eachEntry.strip().replace('Peak Ramp Voltage = ', ''))
+            elif 'OptCalRamp = ' in eachEntry:
+                index = int(eachEntry.strip().replace('OptCalRamp = ', ''))
+                self.calibrateRBox.SetSelection(index)
+            elif 'Frequency = ' in eachEntry:
+                self.sineFreqTBox.SetValue(eachEntry.strip().replace('Frequency = ', ''))
+            elif 'Up Slope = ' in eachEntry:
+                self.rampUpSlopeTBox.SetValue(eachEntry.strip().replace('Up Slope = ', ''))
+            elif 'Down Slope = ' in eachEntry:
+                self.rampDownSlopeTBox.SetValue(eachEntry.strip().replace('Down Slope = ', ''))
+            elif 'Ramp Rate = ' in eachEntry:
+                self.rampRateTBox.SetValue(eachEntry.strip().replace('Ramp Rate = ', ''))
+            elif 'Ramp Peak Duration = ' in eachEntry:
+                self.timePeakTBox.SetValue(eachEntry.strip().replace('Ramp Peak Duration = ', ''))
+            elif 'Ramp Up Duration = ' in eachEntry:
+                self.rampUpLabel.SetValue(eachEntry.strip().replace('Ramp Up Duration = ', ''))
+            elif 'Ramp Down Duration = ' in eachEntry:
+                self.rampDownLabel.SetValue(eachEntry.strip().replace('Ramp Down Duration = ', ''))
+            elif 'Total Ramp Duration = ' in eachEntry:
+                self.rampTimeLabel.SetValue(eachEntry.strip().replace('Total Ramp Duration = ', ''))
+                
+        return
+                    
+    '''
+        Handle cleanup if neccessary
+    '''
+    def runEndTask(self):
+        self.ramp_in_progress = False
+        return
+
     '''--------------------------------------------------------------------------------------------
                         
                         Event Handler Functions
@@ -442,7 +521,10 @@ class frmADWIN_AF(wx.Frame):
     '''
     '''
     def onCleanCoil(self, event):
-        self.parent.pushTaskToQueue([self.parent.devControl.AF_CLEAN_COIL, []])
+        if not self.ramp_in_progress:
+            self.getADWinValues()
+            self.ramp_in_progress = True
+            self.parent.pushTaskToQueue([self.parent.devControl.AF_CLEAN_COIL, [self.debugChkBox.GetValue()]])
         return
         
     '''

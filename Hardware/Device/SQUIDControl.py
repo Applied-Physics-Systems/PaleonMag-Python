@@ -28,6 +28,7 @@ class SQUIDControl(SerialPortDevice):
         respStr = self.readLine()
         
         return '', respStr    
+    
     '''
     '''
     def readCount(self, activeAxis):

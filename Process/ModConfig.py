@@ -3,6 +3,7 @@ Created on Nov 8, 2024
 
 @author: hungd
 '''
+import numpy as np
 from Process.ProcessData import ProcessData
 
 CHANNEL = {'CH0': 0,
@@ -14,6 +15,9 @@ CHANNEL = {'CH0': 0,
            'CH6': 6,
            'CH7': 7}
 
+'''
+    ---------------------------------------------------------------------------------------
+'''
 class Channel():
     ChanName = ''
     ChanNum = 0
@@ -24,10 +28,42 @@ class Channel():
         self.ChanNum = chanNum
         self.ChanType = chanType
 
+'''
+    ---------------------------------------------------------------------------------------
+'''
+class WaveForm():
+    def __init__(self):
+        self.WaveININum = 0
+        self.BoardUsed = 'ADWIN-light-16,1'
+        self.Chan = 'AO-1-CH0'
+        self.Channel = None 
+        self.WaveName = ''
+        self.StartPoint = 0
+        self.MemAlloc = False
+        self.DoDeallocate = False
+        self.IO = 'OUTPUT'
+        self.IORate = 50000
+        self.RangeMax = 10
+        self.RangeMin = -10
+        self.Slope = 2.292696
+        
+        self.PeakVoltage = 0
+        self.SineFreqMin = 0
+        self.TimeStep = 0
+        
+
+'''
+    ---------------------------------------------------------------------------------------
+'''
 class ModConfig():
     '''
     classdocs
     '''
+    AxialCoilSystem = -1
+    TransverseCoilSystem = 1
+    IRMAxialCoilSystem = 2 
+    NoCoilSystem = 0
+    
     lastPositionRead = ''
     targetPosition = ''
     velocity = ''
@@ -42,7 +78,7 @@ class ModConfig():
         '''
         Constructor
         '''
-        
+        self.waveForms = {}
         if (process != None):
             self.processData = process        
             self.parseConfig(self.processData.config)
@@ -98,7 +134,16 @@ class ModConfig():
         
         except:
             return default         
-                
+    '''
+    '''
+    def getConfig_Array(self, config, section, label, rows):
+        dataArray = np.zeros((rows, 2))
+        for i in range(1, rows):
+            dataArray[i, 0] = self.getConfig_Float(config, section, label + 'X' + str(i), 0.0) 
+            dataArray[i, 1] = self.getConfig_Float(config, section, label + 'Y' + str(i), 0.0)
+        
+        return dataArray
+        
     '''
         Set parameters from INI file
     '''
@@ -138,16 +183,22 @@ class ModConfig():
         self.DoVacuumReset = self.getConfig_Bool(config, 'Vacuum', 'DoVacuumReset', False)
 
         self.EnableARM = self.getConfig_Bool(config, 'Modules', 'EnableARM', False)
+        self.EnableAF = self.getConfig_Bool(config, 'Modules', 'EnableAF', False)
+        self.EnableAFAnalysis = self.getConfig_Bool(config, 'Modules', 'EnableAFAnalysis', False)
         self.EnableAxialIRM = self.getConfig_Bool(config, 'Modules', 'EnableAxialIRM', False)
         
-        self.AFUnits = config['AF']['AFUnits']
+        self.AFUnits = config['AF']['AFUnits'].strip()
+        self.AFSystem = config['AF']['AFSystem'].strip()
         self.AxialRampUpVoltsPerSec = self.getConfig_Float(config, 'AF', 'AxialRampUpVoltsPerSec', 3.3)
         self.TransRampUpVoltsPerSec = self.getConfig_Float(config, 'AF', 'TransRampUpVoltsPerSec', 3.3)
+        self.TSlope = self.getConfig_Float(config, 'AF', 'TSlope', 53.588)
+        self.Toffset = self.getConfig_Float(config, 'AF', 'Toffset', 260.62)
         self.MinRampUpTime_ms = self.getConfig_Int(config, 'AF', 'MinRampUpTime_ms', 500)
         self.MaxRampUpTime_ms = self.getConfig_Int(config, 'AF', 'MaxRampUpTime_ms', 1500)
         self.RampDownNumPeriodsPerVolt = self.getConfig_Int(config, 'AF', 'RampDownNumPeriodsPerVolt', 200)
         self.MinRampDown_NumPeriods = self.getConfig_Int(config, 'AF', 'MinRampDown_NumPeriods', 500)
         self.MaxRampDown_NumPeriods = self.getConfig_Int(config, 'AF', 'MaxRampDown_NumPeriods', 5000)
+        self.HoldAtPeakField_NumPeriods = self.getConfig_Int(config, 'AF', 'HoldAtPeakField_NumPeriods', 300)
         self.AFRelays_UseUpPosition = self.getConfig_Bool(config, 'AF', 'AFRelays_UseUpPosition', False)
         
         self.DegausserToggle = self.retrieveChannel(config['Channels']['DegausserToggle'])
@@ -156,9 +207,13 @@ class ModConfig():
         self.AFAxialRelay = self.retrieveChannel(config['Channels']['AFAxialRelay'])       
         self.AFTransRelay = self.retrieveChannel(config['Channels']['AFTransRelay'])
         self.IRMRelay = self.retrieveChannel(config['Channels']['IRMRelay'])
+        self.AnalogT1 = self.retrieveChannel(config['Channels']['AnalogT1'])
+        self.AnalogT2 = self.retrieveChannel(config['Channels']['AnalogT2'])
         
         self.EnableVacuum = self.getConfig_Bool(config, 'Modules', 'EnableVacuum', False)
         self.EnableDegausserCooler = self.getConfig_Bool(config, 'Modules', 'EnableDegausserCooler', False)
+        self.EnableT1 = self.getConfig_Bool(config, 'Modules', 'EnableT1', False)
+        self.EnableT2 = self.getConfig_Bool(config, 'Modules', 'EnableT2', False)
         
         self.IRMSystem = config['IRMPulse']['IRMSystem']        
         self.ApsIrm_DoRangeChange = self.getConfig_Bool(config, 'IRMPulse', 'ApsIrm_DoRangeChange', False)
@@ -172,13 +227,54 @@ class ModConfig():
         self.MotorIDChangerY = config['MotorPrograms']['MotorIDChangerY']
         self.MotorIDTurning = config['MotorPrograms']['MotorIDTurning']        
 
+        self.AfAxialMax = self.getConfig_Int(config, 'AFAxial', 'AfAxialMax', 2900)
+        self.AfAxialMin = self.getConfig_Int(config, 'AFAxial', 'AFAxialMin', 10)
+        self.AFAxialCount = self.getConfig_Int(config, 'AFAxial', 'AFAxialCount', 40)
         self.AfAxialResFreq = self.getConfig_Float(config, 'AFAxial', 'AFAxialResFreq', 360)
         self.AfAxialRampMax = self.getConfig_Float(config, 'AFAxial', 'AFAxialRampMax', 5.5) 
         self.AfAxialMonMax = self.getConfig_Float(config, 'AFAxial', 'AFAxialMonMax', 5.5)
+        self.AFAxialCalDone = self.getConfig_Bool(config, 'AFAxial', 'AFAxialCalDone', False)
+        self.AFAxial = self.getConfig_Array(config, 'AFAxial', 'AFAxial', self.AFAxialCount+1)
         
+        self.AfTransMax = self.getConfig_Int(config, 'AFTrans', 'AFTransMax', 850)
+        self.AfTransMin = self.getConfig_Int(config, 'AFTrans', 'AFTransMin', 10)
+        self.AfTransCount = self.getConfig_Int(config, 'AFTrans', 'AFTransCount', 41)
         self.AfTransResFreq = self.getConfig_Float(config, 'AFTrans', 'AFTransResFreq', 327)
         self.AfTransRampMax = self.getConfig_Float(config, 'AFTrans', 'AFTransRampMax', 5.3)
         self.AfTransMonMax = self.getConfig_Float(config, 'AFTrans', 'AFTransMonMax', 5.3)
+        self.AfTransCalDone = self.getConfig_Bool(config, 'AFTrans', 'AFTransCalDone', False)
+        self.AfTrans = self.getConfig_Array(config, 'AFTrans', 'AFTrans', self.AfTransCount+1)
+        
+        self.waveForms = self.getWaveForms(config)
+
+    '''
+    '''
+    def getWaveForms(self, config):
+        waveForms = {}
+        
+        try:
+            count = int(config['WaveForms']['WaveFormCount'])
+            for index in range(0, count):
+                waveForm = WaveForm()
+                waveForm.WaveININum = self.getConfig_Int(config, 'WaveForms', 'WaveININum' + str(index), 0)
+                waveForm.BoardUsed = config['WaveForms']['BoardUsed' + str(index)]
+                waveForm.Chan = config['WaveForms']['Chan' + str(index)]
+                waveForm.Channel = self.retrieveChannel(waveForm.Chan) 
+                waveForm.WaveName = config['WaveForms']['WaveName' + str(index)]
+                waveForm.StartPoint = self.getConfig_Int(config, 'WaveForms', 'StartPoint' + str(index), 0)
+                waveForm.MemAlloc = self.getConfig_Bool(config, 'WaveForms', 'MemAlloc', False)
+                waveForm.DoDeallocate = self.getConfig_Bool(config, 'WaveForms', 'DoDeallocate', False)
+                waveForm.IO = config['WaveForms']['IO' + str(index)]
+                waveForm.IORate = self.getConfig_Int(config, 'WaveForms', 'IORate' + str(index), 50000)
+                waveForm.RangeMax = self.getConfig_Int(config, 'WaveForms', 'RangeMax' + str(index), 10)
+                waveForm.RangeMin = self.getConfig_Int(config, 'WaveForms', 'RangeMin' + str(index), -10)
+                waveForm.Slope = self.getConfig_Float(config, 'WaveForms', 'Slope', 2.292696)
+                waveForms[waveForm.WaveName] = waveForm
+            
+            return waveForms
+        
+        except:
+            return waveForms         
 
     '''
     '''

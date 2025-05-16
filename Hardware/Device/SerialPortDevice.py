@@ -136,8 +136,11 @@ class SerialPortDevice():
     # Send command to the serial device
     #---------------------------------------------------------------------------------------------------
     def sendString(self, commandStr):
-        
+        self.clearUartBuffer()    
+        time.sleep(0.1)    
         self.serialDevice.write(commandStr.encode())
+        
+        return
 
     #===================================================================================================
     # Send command to the serial device
@@ -193,7 +196,7 @@ class SerialPortDevice():
         while keepReading:
             readCharacters = self.serialDevice.read(self.serialDevice.in_waiting).decode('utf-8')
             readLine += readCharacters
-            if (('\x04' in readLine) or ('\n' in readLine) or ('\r' in readLine)):
+            if (('\x04' in readLine) or ('\n' in readLine) or ('\r' in readLine) or ('\0' in readLine)):
                 keepReading = False 
                     
         return readLine 
@@ -272,8 +275,11 @@ class SerialPortDevice():
     # clear UART buffer
     #---------------------------------------------------------------------------------------------------
     def clearUartBuffer(self):
-        self.serialDevice.flushOutput()
         self.serialDevice.flushInput()
+        self.serialDevice.flushOutput()
+        self.serialDevice.reset_input_buffer()
+        self.serialDevice.reset_output_buffer()
+        return
         
     #===================================================================================================
     # Open device serial port

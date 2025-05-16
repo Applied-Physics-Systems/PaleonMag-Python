@@ -118,9 +118,17 @@ class frmSQUID(wx.Frame):
                         Public API Functions
                         
     --------------------------------------------------------------------------------------------'''
-    def updateFrmSQUID(self, cmdStr, respStr):
+    def updateGUI(self, messageList):
+        cmdStr = messageList[0]
+        respStr = messageList[1]
         self.outputTBox.SetValue(cmdStr)
         self.inputTBox.SetValue(respStr)
+        return
+        
+    '''
+        Handle cleanup if neccessary
+    '''
+    def runEndTask(self):
         return
         
     '''--------------------------------------------------------------------------------------------

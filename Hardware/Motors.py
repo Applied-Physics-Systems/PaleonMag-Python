@@ -461,7 +461,7 @@ class Motors():
         time.sleep(0.1)
         
         self.moveMotorXY(self.changerY, self.MotorPositionMoveToLoadCorner, self.modConfig.ChangerSpeed, False, -2, 0)
-        
+                
         # Wait for limit switches or timeout
         xStatus = self.changerX.checkInternalStatus(4)
         yStatus = self.changerY.checkInternalStatus(5) 
@@ -471,11 +471,11 @@ class Motors():
             time.sleep(0.1)
             xStatus = self.changerX.checkInternalStatus(4)
             yStatus = self.changerY.checkInternalStatus(5) 
-        
+                        
         # At this point, if not hit the limit switches for XY yet, set error
         xStatus = self.changerX.checkInternalStatus(4)
         yStatus = self.changerY.checkInternalStatus(5) 
-        if (xStatus and yStatus):            
+        if not ((xStatus == False) and (yStatus == False)):            
             if self.hasMoveToXYLimit_Timedout(startTime):
                 errorMessage = 'Home XY Stage, move motors to Load Corner limit switches timed-out after '
                 errorMessage += str(self.MoveXYMotorsToLimitSwitch_TimeoutSeconds) + ' seconds'
@@ -513,7 +513,7 @@ class Motors():
             
         xStatus = self.changerX.checkInternalStatus(5)
         yStatus = self.changerY.checkInternalStatus(6) 
-        if (xStatus and yStatus):
+        if not ((xStatus == False) and (yStatus == False)):
             if self.hasMoveToXYLimit_Timedout(startTime):
                 errorMessage = 'Home XY Stage, move motors to Center limit switches timed-out after '
                 errorMessage += str(self.MoveXYMotorsToLimitSwitch_TimeoutSeconds) + ' seconds'
@@ -530,8 +530,6 @@ class Motors():
             
             xPos = self.changerX.readPosition()
             yPos = self.changerY.readPosition()
-            self.modConfig.queue.put('Data: xPos: ' + str(xPos))
-            self.modConfig.queue.put('Data: yPos: ' + str(yPos))
             
             self.modConfig.processData.HasXYTableBeenHomed = True
             
@@ -625,7 +623,7 @@ class Motors():
                 self.changerX.relabelPos(curpos % fullLoop)
             
             curhole = self.changerHole()
-            self.modConfig.queue.put('Data: curHole: ' + str(curhole))
+            self.modConfig.queue.put('MotorControl:Data: curHole: ' + str(curhole))
             
             # Because OneStep is negative, the criteria was never reach (always <0 and not >0.02) till the asolute value (May 2007 L Carporzen)
             if ((abs(curpos - target) / abs(self.modConfig.OneStep)) > 0.02):
@@ -667,7 +665,7 @@ class Motors():
             curposY = self.changerY.readPosition()
             
             curhole = self.changerHole()
-            self.modConfig.queue.put('Data: curHole: ' + str(curhole))
+            self.modConfig.queue.put('MotorControl:Data: curHole: ' + str(curhole))
             
             # Because OneStep is negative, the criteria was never reach (always <0 and not >0.02) till the asolute value (May 2007 L Carporzen)
             if (((abs(curposX - targetX) / abs(self.modConfig.OneStep)) > 0.02) or ((abs(curposY - targetY) / abs(self.modConfig.OneStep)) > 0.02)):
@@ -696,8 +694,7 @@ class Motors():
     '''
     def turningMotorAngle(self):
         angle = self.convertPosToAngle(self.turning.readPosition())
-        self.modConfig.queue.put('Data: TurningAngle: ' + str(angle))
-        
+                
         return angle 
            
     '''
@@ -741,9 +738,10 @@ class Motors():
                 pos = pos - abs(self.modConfig.TurningMotorFullRotation)
         
         self.turning.relabelPos(pos)
-        self.modConfig.queue.put('Data: TurningAngle: ' + str(self.convertPosToAngle(pos)))
+        self.modConfig.queue.put('MotorControl:Data: TurningAngle: ' + str(self.convertPosToAngle(pos)))
         # If TurningMotorAngle != angle Then RelabelPos MotorTurning, pos
         # TurningAngleBox = angle
+        return pos
      
     '''
     '''

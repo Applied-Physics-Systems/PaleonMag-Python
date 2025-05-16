@@ -230,8 +230,9 @@ class DevicesControl():
             self.deviceList.append(self.SQUID)
         
         try:
-            self.ADwin = ADWinControl(self.currentPath, self.modConfig)
-        except:
+            self.ADwin = ADWinControl(self.currentPath, modConfig=self.modConfig)
+        except Exception as e:
+            print('Error: Initializing ADWinControl; ' + str(e))
             self.ADwin = None
         
         return message 
@@ -274,14 +275,12 @@ class DevicesControl():
         These are the data that are exchanged between processes.
     '''
     def updateProcessData(self):
-        self.modConfig.processData = self.motors.modConfig.processData
         self.modConfig.processData.PortOpen['UpDown'] = self.motors.upDown.modConfig.processData.PortOpen['UpDown']
         self.modConfig.processData.PortOpen['Turning'] = self.motors.turning.modConfig.processData.PortOpen['Turning']
         self.modConfig.processData.PortOpen['ChangerX'] = self.motors.changerX.modConfig.processData.PortOpen['ChangerX']
         self.modConfig.processData.PortOpen['ChangerY'] = self.motors.changerY.modConfig.processData.PortOpen['ChangerY']
-        
         self.modConfig.processData.ADwinDO = self.ADwin.modConfig.processData.ADwinDO
-                
+                        
         return self.modConfig.processData 
            
     '''--------------------------------------------------------------------------------------------
@@ -424,14 +423,20 @@ class DevicesControl():
     '''
     def runTask(self, queue, taskID):
         self.queue = queue
-        try:
+        deviceID = 'None'
+        try:            
             if (taskID[0] == self.MOTOR_HOME_TO_TOP):
+                deviceID = 'MotorControl'
                 self.motors.HomeToTop()
                     
             elif (taskID[0] == self.MOTOR_HOME_TO_CENTER):
-                _, _ = self.motors.HomeToCenter()
+                deviceID = 'MotorControl'
+                xPos, yPos = self.motors.HomeToCenter()
+                self.modConfig.queue.put('MotorControl:Data: xPos: ' + str(xPos))
+                self.modConfig.queue.put('MotorControl:Data: yPos: ' + str(yPos))
 
             elif (taskID[0] == self.MOTOR_MOVE):
+                deviceID = 'MotorControl'
                 motorStr = taskID[1][0]
                 activeMotor = self.motors.getActiveMotor(motorStr)
                 if (activeMotor != None):
@@ -440,31 +445,37 @@ class DevicesControl():
                     activeMotor.moveMotor(targetPos, velocity)
             
             elif (taskID[0] == self.MOTOR_SAMPLE_PICKUP):
+                deviceID = 'MotorControl'
                 self.motors.DoSamplePickup()
 
             elif (taskID[0] == self.MOTOR_SAMPLE_DROPOFF):
+                deviceID = 'MotorControl'
                 SampleHeight = taskID[1][0] 
                 self.motors.DoSampleDropoff(SampleHeight)
                 
             elif (taskID[0] == self.MOTOR_ZERO_TP):
+                deviceID = 'MotorControl'
                 motorStr = taskID[1][0]
                 activeMotor = self.motors.getActiveMotor(motorStr)
                 if (activeMotor != None):
                     activeMotor.zeroTargetPos()
 
             elif (taskID[0] == self.MOTOR_POLL):
+                deviceID = 'MotorControl'
                 motorStr = taskID[1][0]
                 activeMotor = self.motors.getActiveMotor(motorStr)
                 if (activeMotor != None):
                     activeMotor.pollMotor()
 
             elif (taskID[0] == self.MOTOR_CLEAR_POLL):
+                deviceID = 'MotorControl'
                 motorStr = taskID[1][0]
                 activeMotor = self.motors.getActiveMotor(motorStr)
                 if (activeMotor != None):
                     activeMotor.clearPollStatus()
 
             elif (taskID[0] == self.MOTOR_RELABEL_POSITION):
+                deviceID = 'MotorControl'
                 motorStr = taskID[1][0]
                 activeMotor = self.motors.getActiveMotor(motorStr)                
                 targetPosition = taskID[1][1]
@@ -472,14 +483,17 @@ class DevicesControl():
                     activeMotor.relabelPos(targetPosition)
 
             elif (taskID[0] == self.MOTOR_SET_CURRENT_HOLE):
+                deviceID = 'MotorControl'
                 currentHole = taskID[1][0]
                 self.motors.setChangerHole(currentHole)
 
             elif (taskID[0] == self.MOTOR_CHANGE_HOLE):
+                deviceID = 'MotorControl'
                 currentHole = taskID[1][0]
                 self.motors.changerMotortoHole(currentHole)
             
             elif (taskID[0] == self.MOTOR_GO_TO_X):
+                deviceID = 'MotorControl'
                 moveMotorPos = taskID[1][0]
                 if not self.modConfig.processData.HasXYTableBeenHomed:
                     self.motors.HomeToTop()                    # MotorUPDN_TopReset
@@ -488,6 +502,7 @@ class DevicesControl():
                 self.motors.moveMotorXY(self.motors.changerX, moveMotorPos, self.modConfig.ChangerSpeed, False)
 
             elif (taskID[0] == self.MOTOR_GO_TO_Y):
+                deviceID = 'MotorControl'
                 moveMotorPos = taskID[1][0]
                 if not self.modConfig.processData.HasXYTableBeenHomed:
                     self.motors.HomeToTop()                    # MotorUPDN_TopReset
@@ -496,118 +511,162 @@ class DevicesControl():
                 self.motors.moveMotorAbsoluteXY(self.motors.changerY, moveMotorPos, self.modConfig.ChangerSpeed, False)
 
             elif (taskID[0] == self.MOTOR_SPIN_SAMPLE):
+                deviceID = 'MotorControl'
                 spinRPS = taskID[1][0]
                 self.motors.turningMotorSpin(spinRPS)
 
             elif (taskID[0] == self.MOTOR_CHANGE_TURN_ANGLE):
+                deviceID = 'MotorControl'
                 angle = taskID[1][0]
                 self.motors.turningMotorRotate(angle)
 
             elif (taskID[0] == self.MOTOR_CHANGE_HEIGHT):
+                deviceID = 'MotorControl'
                 height = taskID[1][0]
                 self.motors.upDownMove(height, 0)
                 
             elif (taskID[0] == self.MOTOR_LOAD):
+                deviceID = 'MotorControl'
                 self.motors.MoveToCorner()
 
             elif (taskID[0] == self.MOTOR_READ_POSITION):
+                deviceID = 'MotorControl'
                 motorStr = taskID[1][0]
                 activeMotor = self.motors.getActiveMotor(motorStr)
                 if (activeMotor != None):
                     activeMotor.readPosition()
 
             elif (taskID[0] == self.MOTOR_READ_ANGLE):
-                self.motors.turningMotorAngle()
+                deviceID = 'MotorControl'
+                angle = self.motors.turningMotorAngle()
+                self.modConfig.queue.put('MotorControl:Data: TurningAngle: ' + str(angle))
 
             elif (taskID[0] == self.MOTOR_READ_HOLE):
+                deviceID = 'MotorControl'
                 self.motors.changerHole()
 
             elif (taskID[0] == self.MOTOR_RESET):
+                deviceID = 'MotorControl'
                 self.motors.reset()
 
             elif (taskID[0] == self.MOTOR_STOP):
+                deviceID = 'MotorControl'
                 self.motors.stop()
             
             elif (taskID[0] == self.IRM_FIRE):
+                deviceID = 'IRMControl'
                 voltage = taskID[1][0] 
                 self.FireIRM(voltage)
 
             elif (taskID[0] == self.SQUID_READ_COUNT):
+                deviceID = 'SQUIDControl'
                 activeAxis = taskID[1][0]
                 cmdStr, respStr = self.SQUID.readCount(activeAxis)
-                queue.put('SQUID:' + cmdStr + ':' + respStr)
+                queue.put('SQUIDControl:' + cmdStr + ':' + respStr)
 
             elif (taskID[0] == self.SQUID_READ_DATA):
+                deviceID = 'SQUIDControl'
                 activeAxis = taskID[1][0]
                 cmdStr, respStr = self.SQUID.readData(activeAxis)
-                queue.put('SQUID:' + cmdStr + ':' + respStr)
+                queue.put('SQUIDControl:' + cmdStr + ':' + respStr)
                 
             elif (taskID[0] == self.SQUID_READ_RANGE):
+                deviceID = 'SQUIDControl'
                 activeAxis = taskID[1][0]
                 cmdStr, respStr = self.SQUID.readRange(activeAxis)
-                queue.put('SQUID:' + cmdStr + ':' + respStr)
+                queue.put('SQUIDControl:' + cmdStr + ':' + respStr)
 
             elif (taskID[0] == self.SQUID_RESET_COUNT):
+                deviceID = 'SQUIDControl'
                 activeAxis = taskID[1][0]
                 cmdStr, respStr = self.SQUID.resetCount(activeAxis)
-                queue.put('SQUID:' + cmdStr + ':' + respStr)
+                queue.put('SQUIDControl:' + cmdStr + ':' + respStr)
 
             elif (taskID[0] == self.SQUID_CONFIGURE):
+                deviceID = 'SQUIDControl'
                 activeAxis = taskID[1][0]
                 cmdStr, respStr = self.SQUID.configure(activeAxis)
-                queue.put('SQUID:' + cmdStr + ':' + respStr)
+                queue.put('SQUIDControl:' + cmdStr + ':' + respStr)
                 
             elif (taskID[0] == self.SQUID_CHANGE_RATE):
+                deviceID = 'SQUIDControl'
                 activeAxis = taskID[1][0]
                 rateLabel = taskID[1][1]
                 cmdStr, respStr = self.SQUID.changeRate(activeAxis, rateLabel)
-                queue.put('SQUID:' + cmdStr + ':' + respStr)
+                queue.put('SQUIDControl:' + cmdStr + ':' + respStr)
 
             elif (taskID[0] == self.SQUID_SET_CFG):
+                deviceID = 'SQUIDControl'
                 activeAxis = taskID[1][0]
                 cfgLabel = taskID[1][1]
                 cmdStr, respStr = self.SQUID.setCfg(activeAxis, cfgLabel)
-                queue.put('SQUID:' + cmdStr + ':' + respStr)
+                queue.put('SQUIDControl:' + cmdStr + ':' + respStr)
                 
             elif (taskID[0] == self.SQUID_READ):
+                deviceID = 'SQUIDControl'
                 cmdStr, respStr = self.SQUID.getResponse()
-                queue.put('SQUID:' + cmdStr + ':' + respStr)
+                queue.put('SQUIDControl:' + cmdStr + ':' + respStr)
             
             elif (taskID[0] == self.VACUUM_SET_CONNECT):
+                deviceID = 'VacuumControl'
                 mode = taskID[1][0]
                 cmdStr, respStr = self.Vacuum_valveConnect(mode)
-                queue.put('Vacuum:' + cmdStr + ':' + respStr)
+                queue.put('VacuumControl:' + cmdStr + ':' + respStr)
 
             elif (taskID[0] == self.VACUUM_SET_MOTOR):
+                deviceID = 'VacuumControl'
                 mode = taskID[1][0]
                 cmdStr, respStr = self.Vacuum_motorPower(mode)
-                queue.put('Vacuum:' + cmdStr + ':' + respStr)
+                queue.put('VacuumControl:' + cmdStr + ':' + respStr)
                 
             elif (taskID[0] == self.VACUUM_RESET):
+                deviceID = 'VacuumControl'        
                 cmdStr, respStr = self.vacuum.reset()        
-                queue.put('Vacuum:' + cmdStr + ':' + respStr)        
+                queue.put('VacuumControl:' + cmdStr + ':' + respStr)
 
             elif (taskID[0] == self.VACUUM_SET_DEGAUSSER):
+                deviceID = 'VacuumControl'                
                 mode = taskID[1][0]
-                self.Vacuum_degausserCooler(mode)                
+                self.Vacuum_degausserCooler(mode)
                 
             elif (taskID[0] == self.AF_SWITCH_COIL):
+                deviceID = 'ADWinAFControl'
                 activeCoil = taskID[1][0]
                 self.ADwin.trySetRelays_ADwin(activeCoil)
                 
             elif (taskID[0] == self.AF_REFRESH_T):
-                print('TODO: AF_REFRESH_T')
+                deviceID = 'ADWinAFControl'                
+                temp1, temp2 = self.ADwin.refreshTs()
+                queue.put('ADWinAFControl:' + temp1 + ':' + temp2)
                 
             elif (taskID[0] == self.AF_CLEAN_COIL):
-                print('TODO: AF_CLEAN_COIL')
+                deviceID = 'ADWinAFControl'
+                Verbose = taskID[1][0]        
+                self.ADwin.executeRamp(self.modConfig.AxialCoilSystem, 
+                                       self.modConfig.AfAxialMax, 
+                                       PeakHangTime = 0, 
+                                       CalRamp = True, 
+                                       ClipTest = False, 
+                                       Verbose=Verbose)
+        
+                self.ADwin.executeRamp(self.modConfig.TransverseCoilSystem, 
+                                       self.modConfig.AfTransMax, 
+                                       PeakHangTime = 0, 
+                                       CalRamp = True, 
+                                       ClipTest = False, 
+                                       Verbose=Verbose)                
 
             elif (taskID[0] == self.AF_START_RAMP):
+                deviceID = 'ADWinAFControl'
                 print('TODO: AF_START_RAMP')
                 
         except ValueError as e:
-            self.modConfig.queue.put('Error: ' + str(e))
+            self.modConfig.queue.put(deviceID + ':Error: ' + str(e))
+
+        except IOError as e:
+            self.modConfig.queue.put(deviceID + ':MessageBox: ' + str(e))
         
-        return
+        return deviceID
 
 #===================================================================================================
 # Test Queue
@@ -731,7 +790,7 @@ if __name__=='__main__':
         queue = Queue()
 
         config = configparser.ConfigParser()
-        config.read('C:\\Temp\\PaleonMag\\Settings\\Paleomag_v3_Hung.INI')
+        config.read('C:\\Users\\hd.nguyen.APPLIEDPHYSICS\\workspace\\SVN\\Windows\\Rock Magnetometer\\Paleomag_v3_Hung.INI')
         processData = ProcessData()
         processData.config = config 
 
@@ -739,8 +798,11 @@ if __name__=='__main__':
         devControl.setDevicesConfig(modConfig)
 
         start_time = time.perf_counter()
-        runAllMotorsFunctions(devControl)
-                
+        #runAllMotorsFunctions(devControl)
+        print('AF_CLEAN_COIL')
+        devControl.runTask(queue, [devControl.AF_CLEAN_COIL, [True]])
+        devControl.updateProcessData()
+                        
         end_time = time.perf_counter()
         elapsed_time = end_time - start_time
         print(f"Elapsed time: {elapsed_time:.4f} seconds")

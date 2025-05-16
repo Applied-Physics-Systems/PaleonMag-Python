@@ -206,24 +206,37 @@ class frmDCMotors(wx.Frame):
     '''
         Display infomration for the running background process
     '''
-    def updateGUI(self, modConfig):
-        self.outputTBox.SetValue(modConfig.outCommand)
-        self.inputTBox.SetValue(modConfig.inResponse)
-        self.lastPosTBox.SetValue(modConfig.lastPositionRead)
-        self.targetPosTBox.SetValue(modConfig.targetPosition)
-        self.velocityTBox.SetValue(modConfig.velocity)
-        self.goXTBox.SetValue(modConfig.xPos)
-        self.goYTBox.SetValue(modConfig.yPos)
-        self.spinSampleTBox.SetValue(modConfig.turningAngle)
+    def updateGUI(self, messageList):
+        if ('Command Exchange' in messageList[0]):
+            self.parent.modConfig.parseCommandExchange(messageList[1].strip())
+        elif ('Motor Info' in messageList[0]):
+            self.parent.modConfig.parseMotorInfo(messageList[1].strip())
+        elif ('Data' in messageList[0]):
+            self.parent.modConfig.parseMotorData(messageList[1].strip(), messageList[2].strip())
             
-        if 'ChangerX' in  modConfig.activeMotor:
+        self.outputTBox.SetValue(self.parent.modConfig.outCommand)
+        self.inputTBox.SetValue(self.parent.modConfig.inResponse)
+        self.lastPosTBox.SetValue(self.parent.modConfig.lastPositionRead)
+        self.targetPosTBox.SetValue(self.parent.modConfig.targetPosition)
+        self.velocityTBox.SetValue(self.parent.modConfig.velocity)
+        self.goXTBox.SetValue(self.parent.modConfig.xPos)
+        self.goYTBox.SetValue(self.parent.modConfig.yPos)
+        self.spinSampleTBox.SetValue(self.parent.modConfig.turningAngle)
+            
+        if 'ChangerX' in self.parent.modConfig.activeMotor:
             self.activeMotroRBox.SetSelection(0)
-        elif 'Turning' in  modConfig.activeMotor:
+        elif 'Turning' in self.parent.modConfig.activeMotor:
             self.activeMotroRBox.SetSelection(1)
-        elif 'UpDown' in modConfig.activeMotor:
+        elif 'UpDown' in self.parent.modConfig.activeMotor:
             self.activeMotroRBox.SetSelection(2)
-        elif 'ChangerY' in  modConfig.activeMotor:
+        elif 'ChangerY' in  self.parent.modConfig.activeMotor:
             self.activeMotroRBox.SetSelection(3)
+            
+    '''
+        Handle cleanup if neccessary
+    '''
+    def runEndTask(self):
+        return
             
     '''--------------------------------------------------------------------------------------------
                         

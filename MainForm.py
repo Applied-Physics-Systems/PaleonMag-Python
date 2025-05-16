@@ -9,6 +9,7 @@ Libraries used in this project
     pip install wxPython
     pip install pyserial
     pip install adwin
+    pip install PyUniversalLibrary
 
 '''
 import wx
@@ -24,6 +25,7 @@ from Forms.frmSampleIndexRegistry import frmSampleIndexRegistry
 from Forms.frmSQUID import frmSQUID
 from Forms.frmVacuum import frmVacuum
 from Forms.frmADWIN_AF import frmADWIN_AF
+from Forms.frmCalibrateCoils import frmCalibrateCoils
 
 from Hardware.DevicesControl import DevicesControl
 from Process.ModConfig import ModConfig
@@ -56,26 +58,29 @@ def flashingFunction(flashingMessage):
 '''
     Background task processing
 '''
-def workerFunction(processQueue, mainQueue, taskID):
+def workerFunction(processData, mainQueue, taskID):
     try:
-        processData = processQueue.get()
         if isinstance(processData, str):
-            mainQueue.put('Task Completed')
+            mainQueue.put('None:Task Completed')
             mainQueue.put(processData)
             return
         modConfig = ModConfig(process=processData, queue=mainQueue)
         devControl.setDevicesConfig(modConfig)
         
-        devControl.runTask(mainQueue, taskID)
+        deviceID = devControl.runTask(mainQueue, taskID)
         
         processData = devControl.updateProcessData()
-        devControl.closeDevices()
-        mainQueue.put('Task Completed')    
+                
+        mainQueue.put(deviceID + ':Task Completed')    
         mainQueue.put(processData)
-        
+                
+        devControl.closeDevices()
+                
     except Exception as e:
         print(processData)
         print(e)
+    
+    return
 
 '''
     Main form for PaleonMag software
@@ -84,7 +89,6 @@ class MainForm(wx.Frame):
     '''
     classdocs
     '''
-    processQueue = None
     mainQueue = None
     process = None
     taskQueue = []
@@ -249,15 +253,18 @@ class MainForm(wx.Frame):
         self.SetMenuBar(menubar)
         
         # Add Toolbar below the Menu
-        toolbar = self.CreateToolBar(style=wx.TB_HORIZONTAL)
-        toolbar.AddTool(ID_FILE_REGISTRY, 'File Registry', wx.Bitmap('.\\Resources\\GrayButton_FileRegistry.png')) 
-        toolbar.AddTool(ID_MAG_CONTROL, 'Magnetometer Control', wx.Bitmap('.\\Resources\\GrayButton_MagControl.png'))
-        toolbar.AddTool(ID_LOG_OUT, 'Log Out', wx.Bitmap('.\\Resources\\YellowButton_LogOut.png'))
-        toolbar.AddTool(ID_NOCOMM_OFF, 'Turn Off NOCOMM Mode', wx.Bitmap('.\\Resources\\GrayButton_TurnOff.png'))
-        toolbar.AddTool(ID_QUIT_EXIT, 'Quit & EXIT', wx.Bitmap('.\\Resources\\RedButton_Exit.png'))
-        toolbar.Realize()
+        self.toolbar = self.CreateToolBar(style=wx.TB_HORIZONTAL)
+        self.toolbar.AddTool(ID_FILE_REGISTRY, 'File Registry', wx.Bitmap('.\\Resources\\GrayButton_FileRegistry.png')) 
+        self.toolbar.AddTool(ID_MAG_CONTROL, 'Magnetometer Control', wx.Bitmap('.\\Resources\\GrayButton_MagControl.png'))
+        self.toolbar.AddTool(ID_LOG_OUT, 'Log Out', wx.Bitmap('.\\Resources\\YellowButton_LogOut.png'))
+        if self.modConfig.NoCommMode:
+            self.toolbar.AddTool(ID_NOCOMM_OFF, 'Turn Off NOCOMM Mode', wx.Bitmap('.\\Resources\\NoCommOn.png'))
+        else:
+            self.toolbar.AddTool(ID_NOCOMM_OFF, 'Turn Off NOCOMM Mode', wx.Bitmap('.\\Resources\\NoCommOff.png'))
+        self.toolbar.AddTool(ID_QUIT_EXIT, 'Quit & EXIT', wx.Bitmap('.\\Resources\\RedButton_Exit.png'))
+        self.toolbar.Realize()
         self.Bind(wx.EVT_MENU, self.menuhandler)
-                
+                        
         self.messageBox = wx.TextCtrl(self, -1, style = wx.EXPAND|wx.TE_MULTILINE)
         self.messageBox.SetBackgroundColour('Cyan')         
         self.messageBox.Bind(wx.EVT_LEFT_DOWN, self.onMouseClick)
@@ -273,7 +280,7 @@ class MainForm(wx.Frame):
             self.statusBar.SetStatusText("NoCOMM mode off", 0)
                 
         self.SetSize((1500, 1000)) 
-        self.SetTitle('Paleonmagnetic Magnetometer Controller Systems - ' + VersionNumber)
+        self.SetTitle('PaleoMagnetic Magnetometer Controller Systems - ' + VersionNumber)
         self.Centre() 
         self.Show(True)
         
@@ -410,11 +417,9 @@ class MainForm(wx.Frame):
     '''
     def runProcess(self, taskID):
         self.timer.Stop()
-        self.processQueue = multiprocessing.Queue()
         self.mainQueue = multiprocessing.Queue()
-        self.process = multiprocessing.Process(target=workerFunction, args=(self.processQueue, self.mainQueue, taskID))
+        self.process = multiprocessing.Process(target=workerFunction, args=(self.modConfig.processData, self.mainQueue, taskID))
         self.process.start()
-        self.processQueue.put(self.modConfig.processData)        
         self.timer.Start(int(200))      # Checking every 200ms 
                 
     '''
@@ -425,9 +430,15 @@ class MainForm(wx.Frame):
             try:
                 endMessage = self.mainQueue.get(timeout=0.01)
                 if ('Task Completed' in endMessage):
-                    self.backgroundRunningFlag = False
-                    self.modConfig.processData = self.mainQueue.get()
+                    self.modConfig.processData = self.mainQueue.get()                    
+                                                                                                            
+                    # Clean up end of task
+                    messageList = endMessage.split(':')
+                    if messageList[0] in self.panelList.keys():
+                        self.panelList[messageList[0]].runEndTask()  
+                                        
                     # Start new process
+                    self.backgroundRunningFlag = False
                     if (len(self.taskQueue) > 0):
                         self.startProcess()
                             
@@ -435,53 +446,38 @@ class MainForm(wx.Frame):
                         self.appendMessageBox('Tasks Completed\n')
                         self.statusBar.SetStatusText('Tasks Completed', 1)
                         self.timer.Stop()
-                        
+                                                
                 elif ('Error:' in endMessage):
                     self.taskQueue = []
                     messageList = endMessage.split(':')
-                    if (len(messageList) > 1):                          
+                    if (len(messageList) > 2):    
                         self.messageBox.SetBackgroundColour('Red')           
-                        wx.MessageBox(messageList[1], caption='PaleonMag')
+                        wx.MessageBox(messageList[2], caption='PaleonMag')
                         self.messageBox.SetBackgroundColour('Cyan')
+                        
+                elif ('MessageBox:' in endMessage):
+                    messageList = endMessage.split(':')
+                    dlg = wx.MessageBox(messageList[2], style=wx.YES_NO|wx.CENTER, caption=messageList[0])
+                    if (dlg == wx.YES):
+                        frmCalibrateCoils(self)
                 
                 elif ('Warning:' in endMessage):
                     messageList = endMessage.split(':')
-                    if (len(messageList) > 1):
-                        self.statusBar.SetStatusText(messageList[1], 1)     
+                    if (len(messageList) > 2):
+                        self.statusBar.SetStatusText(messageList[2], 1)     
                         
-                elif ('Command Exchange:' in endMessage):
+                else:
+                    '''
+                        string format
+                            message_0:message_1: ... :message_n
+                        message_x format
+                            label = value
+                    '''
                     messageList = endMessage.split(':')
                     if (len(messageList) > 1):
-                        self.modConfig.parseCommandExchange(messageList[1].strip())
-                        if 'MotorControl' in self.panelList.keys():
-                            self.panelList['MotorControl'].updateGUI(self.modConfig)
-
-                elif ('Motor Info:' in endMessage):
-                    messageList = endMessage.split(':')
-                    if (len(messageList) > 1):
-                        self.modConfig.parseMotorInfo(messageList[1].strip())
-                        if 'MotorControl' in self.panelList.keys():
-                            self.panelList['MotorControl'].updateGUI(self.modConfig)
-                            
-                elif ('Data:' in endMessage):
-                    messageList = endMessage.split(':')
-                    if (len(messageList) > 2):
-                        self.modConfig.parseMotorData(messageList[1].strip(), messageList[2].strip())
-                        if 'MotorControl' in self.panelList.keys():
-                            self.panelList['MotorControl'].updateGUI(self.modConfig)
-                            
-                elif ('SQUID:' in endMessage):
-                    messageList = endMessage.split(':')
-                    if (len(messageList) > 2):
-                        if 'SQUIDControl' in self.panelList.keys():
-                            self.panelList['SQUIDControl'].updateFrmSQUID(messageList[1].strip(), messageList[2].strip())
-
-                elif ('Vacuum:' in endMessage):
-                    messageList = endMessage.split(':')
-                    if (len(messageList) > 2):
-                        if 'VacuumControl' in self.panelList.keys():
-                            self.panelList['VacuumControl'].updateFrmVacuum(messageList[1].strip(), messageList[2].strip())
-                                        
+                        if messageList[0] in self.panelList.keys():
+                            self.panelList[messageList[0]].updateGUI(messageList[1:])
+                                                                                        
                 return
                     
             except:
@@ -548,9 +544,11 @@ class MainForm(wx.Frame):
             if self.NOCOMM_Flag:  
                 self.NOCOMM_Flag = False
                 self.statusBar.SetStatusText('NoCOMM mode off', 0)
+                self.toolbar.SetToolNormalBitmap(id=ID_NOCOMM_OFF, bitmap=wx.Bitmap('.\\Resources\\NoCommOff.png'))
             else:
                 self.NOCOMM_Flag = True
                 self.statusBar.SetStatusText('NoCOMM mode on', 0)
+                self.toolbar.SetToolNormalBitmap(id=ID_NOCOMM_OFF, bitmap=wx.Bitmap('.\\Resources\\NoCommOn.png'))
             
         elif (menuID == ID_MAG_CONTROL):
             if not 'MagnetometerControl' in self.panelList.keys():
@@ -573,8 +571,6 @@ class MainForm(wx.Frame):
             
         elif (menuID == ID_QUIT_EXIT):
             if not self.NOCOMM_Flag:
-                if (self.processQueue != None): 
-                    self.processQueue.put('Program_Halted')
                 if (self.process != None): 
                     self.process.terminate()
             self.Close(force=False)

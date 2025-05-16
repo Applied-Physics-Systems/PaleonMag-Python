@@ -66,7 +66,7 @@ class MotorControl(SerialPortDevice):
     def sendMotorCommand(self, cmdStr):
         if not self.modConfig.processData.PortOpen[self.label]:
             self.motorCommConnect()
-        
+                
         cmdStr = '@' + self.MotorAddress + ' ' + cmdStr
         self.sendString( cmdStr + '\r\n')
         
@@ -77,7 +77,7 @@ class MotorControl(SerialPortDevice):
         
         # Send Command and its response to the GUI
         if (self.modConfig.queue != None):
-            self.modConfig.queue.put('Command Exchange: ' + self.label + ';' + cmdStr + ';' + resplist[-1])
+            self.modConfig.queue.put('MotorControl:Command Exchange: ' + self.label + ';' + cmdStr + ';' + resplist[-1])
                 
         return respStr 
 
@@ -155,8 +155,7 @@ class MotorControl(SerialPortDevice):
                 finished = True
             elif (abs(oldPosition[1] - oldPosition[0]) < 5) and (abs(oldPosition[0] - pollPosition) < 5):
                 finished = True
-            
-        self.motorStop()
+                self.motorStop()
                           
     '''
         Check bit from the RIS command response
@@ -201,7 +200,7 @@ class MotorControl(SerialPortDevice):
     def moveMotor(self, moveMotorPos, moveMotorVelocity, waitingForStop=True, stopEnable=0, stopCondition=0):
         # Send Command and its response to the GUI
         if (self.modConfig.queue != None):
-            self.modConfig.queue.put('Motor Info: ' + self.label + ';Position ' + str(moveMotorPos) + ';Velocity ' + str(moveMotorVelocity))
+            self.modConfig.queue.put('MotorControl:Motor Info: ' + self.label + ';Position ' + str(moveMotorPos) + ';Velocity ' + str(moveMotorVelocity))
         
         self.pollMotor()
         self.clearPollStatus()
