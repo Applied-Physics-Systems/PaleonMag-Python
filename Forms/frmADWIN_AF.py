@@ -44,7 +44,8 @@ class frmADWIN_AF(wx.Frame):
         box1Length = 150
         box1Height = 130
         wx.StaticBox(panel, -1, 'Active Coil', pos=(XOri, YOri), size=(box1Length, box1Height))
-        self.axialRBtn = wx.RadioButton(panel, 11, label = 'Axial', pos = (XOri + XOffset, YOri+YOffset), style = wx.RB_GROUP) 
+        self.ActiveCoilSystem = 'Axial'
+        self.axialRBtn = wx.RadioButton(panel, 11, label = self.ActiveCoilSystem, pos = (XOri + XOffset, YOri+YOffset), style = wx.RB_GROUP) 
         self.transRBtn = wx.RadioButton(panel, 22, label = 'Transverse',pos = (XOri + XOffset, YOri+2*YOffset)) 
         self.irmRBtn = wx.RadioButton(panel, 33, label = 'IRM Axial',pos = (XOri + XOffset,YOri+3*YOffset))        
         self.Bind(wx.EVT_RADIOBUTTON, self.onCoilRGroup)
@@ -109,8 +110,8 @@ class frmADWIN_AF(wx.Frame):
         degreeTxt = chr(176) + 'C'
         wx.StaticText(panel, label=degreeTxt, pos=(XOri + txtBoxXOffset + smallTxtBoxLength + txtOffset, YOri + 2*YOffset + txtOffset))
         XOri = XOri + txtBoxXOffset + smallTxtBoxLength + txtOffset + 4*XOffset
-        labelTxt = "The AF unit is too\nhot so let's pause a\nlittle bit..."        
-        wx.StaticText(panel, label=labelTxt, pos=(XOri, YOri + 20))
+        labelTxt = ''        
+        self.warningText = wx.StaticText(panel, label=labelTxt, pos=(XOri, YOri + 20))
         btnLength = 100
         btnHeight = 30
         refreshTBtn = wx.Button(panel, label='Refresh T', pos=(XOri, YOri + 70), size=(btnLength, btnHeight))
@@ -145,7 +146,8 @@ class frmADWIN_AF(wx.Frame):
         lblList = ['Uncalibrated Ramp (use Peak Monitor Voltage)', 
                    'Calibrated Ramp (use Peak Field value)']     
         self.calibrateRBox = wx.RadioBox(panel, label = '', pos = (XOri, YOri + 7*YOffset), choices = lblList ,
-                                majorDimension = 1, style = wx.RA_SPECIFY_COLS)        
+                                majorDimension = 1, style = wx.RA_SPECIFY_COLS)
+        self.calibrateRBox.SetSelection(1)        
         self.calSlopeChkBox = wx.CheckBox(panel, label='Calculate Ramp Slopes Automatically', pos=(XOri, YOri + 9*YOffset))
         self.calSlopeChkBox.Bind(wx.EVT_CHECKBOX, self.onAutoSlope)
         wx.StaticText(panel, label='Duration\n    (ms)', pos=(XOri + txtBoxXOffset + smallTxtBoxLength, YOri + 9*YOffset + txtOffset))
@@ -337,6 +339,21 @@ class frmADWIN_AF(wx.Frame):
         
         return
         
+    '''
+    '''
+    def setActiveCoil(self, activeCoil):
+        self.ActiveCoilSystem = activeCoil
+        if 'Axial' in activeCoil:
+            self.axialRBtn.SetValue(True)
+            
+        elif 'Transverse' in activeCoil:
+            self.transRBtn.SetValue(True)
+
+        elif 'IRM Axial' in activeCoil:
+            self.irmRBtn.SetValue(True)
+            
+        return
+        
     '''--------------------------------------------------------------------------------------------
                         
                         Public API Functions
@@ -380,6 +397,17 @@ class frmADWIN_AF(wx.Frame):
                 self.rampDownLabel.SetValue(eachEntry.strip().replace('Ramp Down Duration = ', ''))
             elif 'Total Ramp Duration = ' in eachEntry:
                 self.rampTimeLabel.SetValue(eachEntry.strip().replace('Total Ramp Duration = ', ''))
+            elif 'HighTemp = ' in eachEntry:                
+                self.axialTempTBox.SetBackgroundColour((255, 165, 0))
+                self.transTempTBox.SetBackgroundColour((255, 165, 0))
+                self.warningText.SetLabel(eachEntry.strip().replace('HighTemp = ', ''))
+            elif 'Clear = ' in eachEntry:    
+                self.axialTempTBox.SetBackgroundColour((255, 255, 255))
+                self.transTempTBox.SetBackgroundColour((255, 255, 255))
+                self.warningText.SetLabel(' ')
+            elif 'Active Coil = ' in eachEntry:
+                self.setActiveCoil(eachEntry.strip().replace('Active Coil = ', ''))
+                            
                 
         return
                     
@@ -432,6 +460,7 @@ class frmADWIN_AF(wx.Frame):
     def onCoilRGroup(self, event):
         selected = event.EventObject.GetLabel()
         
+        self.ActiveCoilSystem = selected  
         if (selected == 'Axial'):
             freq = str(self.parent.modConfig.AfAxialResFreq)
             self.sineFreqTBox.SetValue(freq)
@@ -515,7 +544,78 @@ class frmADWIN_AF(wx.Frame):
     '''
     '''
     def onStartRamp(self, event):
-        self.parent.pushTaskToQueue([self.parent.devControl.AF_START_RAMP, []])
+        paramList = [self.ActiveCoilSystem]
+        if self.rampChkBox.GetValue():
+            if self.calSlopeChkBox.GetValue():
+                # Don't put in up and down slopes
+                paramList.append(self.peakRampTBox.GetValue())
+                paramList.append(self.rampRateTBox.GetValue())                
+                paramList.append(self.timePeakTBox.GetValue())
+                paramList.append(False)
+                paramList.append(True)
+                paramList.append(self.debugChkBox.GetValue())
+                paramList.append(self.recordChkBox.GetValue())
+            else:
+                # Need to put in the Ramp Up & Down slopes
+                paramList.append(self.peakRampTBox.GetValue())
+                paramList.append(self.rampUpSlopeTBox.GetValue())
+                paramList.append(self.rampDownSlopeTBox.GetValue())
+                paramList.append(self.rampRateTBox.GetValue())
+                paramList.append(self.timePeakTBox.GetValue())
+                paramList.append(False)
+                paramList.append(True)
+                paramList.append(self.debugChkBox.GetValue())
+                paramList.append(self.recordChkBox.GetValue())
+            
+        elif (self.calibrateRBox.GetSelection() == 0):
+            if self.calSlopeChkBox.GetValue():
+                # Don't put in up and down slopes
+                paramList.append(self.peakMonitorTBox.GetValue())
+                paramList.append(self.rampRateTBox.GetValue())
+                paramList.append(self.timePeakTBox.GetValue())   
+                paramList.append(False)
+                paramList.append(False)
+                paramList.append(self.debugChkBox.GetValue())
+                paramList.append(self.recordChkBox.GetValue())                
+            else:
+                # Need to put in the Ramp Up & Down slopes
+                paramList.append(self.peakMonitorTBox.GetValue())
+                paramList.append(self.rampUpSlopeTBox.GetValue())
+                paramList.append(self.rampDownSlopeTBox.GetValue())
+                paramList.append(self.rampRateTBox.GetValue())
+                paramList.append(self.timePeakTBox.GetValue())
+                paramList.append(False)
+                paramList.append(False)
+                paramList.append(self.debugChkBox.GetValue())
+                paramList.append(self.recordChkBox.GetValue())                
+            
+        elif (self.calibrateRBox.GetSelection() == 1):
+            if self.calSlopeChkBox.GetValue():
+                # Don't put in up and down slopes
+                paramList.append(self.peakFieldTBox.GetValue())
+                paramList.append(self.rampRateTBox.GetValue())
+                paramList.append(self.timePeakTBox.GetValue())   
+                paramList.append(True)
+                paramList.append(False)
+                paramList.append(self.debugChkBox.GetValue())
+                paramList.append(self.recordChkBox.GetValue())                
+            else:
+                # Need to put in the Ramp Up & Down slopes
+                paramList.append(self.peakFieldTBox.GetValue())
+                paramList.append(self.rampUpSlopeTBox.GetValue())
+                paramList.append(self.rampDownSlopeTBox.GetValue())
+                paramList.append(self.rampRateTBox.GetValue())
+                paramList.append(self.timePeakTBox.GetValue())
+                paramList.append(True)
+                paramList.append(False)
+                paramList.append(self.debugChkBox.GetValue())
+                paramList.append(self.recordChkBox.GetValue())                
+            
+        else:
+            wx.MessageBox('Whoops!')
+            return
+            
+        self.parent.pushTaskToQueue([self.parent.devControl.AF_START_RAMP, paramList])
         return
         
     '''

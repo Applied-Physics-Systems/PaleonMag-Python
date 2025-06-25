@@ -6,14 +6,14 @@ Created on Nov 8, 2024
 import numpy as np
 from Process.ProcessData import ProcessData
 
-CHANNEL = {'CH0': 0,
-           'CH1': 1,
-           'CH2': 2,
-           'CH3': 3,
-           'CH4': 4,
-           'CH5': 5,
-           'CH6': 6,
-           'CH7': 7}
+CHANNEL = {'CH0': 1,
+           'CH1': 2,
+           'CH2': 3,
+           'CH3': 4,
+           'CH4': 5,
+           'CH5': 6,
+           'CH6': 7,
+           'CH7': 8}
 
 '''
     ---------------------------------------------------------------------------------------
@@ -122,6 +122,18 @@ class ModConfig():
         except:
             return default         
 
+    def getParam_Float(self, valueStr):
+        try:
+            if (valueStr == ''):
+                value = 0.0
+            else:
+                value = float(valueStr)
+            
+        except:
+            value = 0.0
+            
+        return value
+
     '''
        Read boolean value from INI file
     '''
@@ -143,6 +155,19 @@ class ModConfig():
             dataArray[i, 1] = self.getConfig_Float(config, section, label + 'Y' + str(i), 0.0)
         
         return dataArray
+    
+    '''
+    '''
+    def getCoilSystem(self, coilLabel):
+        AFCoilSystem = self.AxialCoilSystem
+        if (coilLabel == 'Axial'):          
+            AFCoilSystem = self.AxialCoilSystem
+        elif (coilLabel == 'Transverse'):
+            AFCoilSystem = self.TransverseCoilSystem
+        elif (coilLabel == 'IRM Axial'):
+            AFCoilSystem = self.IRMAxialCoilSystem
+                                                    
+        return AFCoilSystem
         
     '''
         Set parameters from INI file
@@ -193,6 +218,7 @@ class ModConfig():
         self.TransRampUpVoltsPerSec = self.getConfig_Float(config, 'AF', 'TransRampUpVoltsPerSec', 3.3)
         self.TSlope = self.getConfig_Float(config, 'AF', 'TSlope', 53.588)
         self.Toffset = self.getConfig_Float(config, 'AF', 'Toffset', 260.62)
+        self.Thot = self.getConfig_Float(config, 'AF', 'Thot', 40.0)
         self.MinRampUpTime_ms = self.getConfig_Int(config, 'AF', 'MinRampUpTime_ms', 500)
         self.MaxRampUpTime_ms = self.getConfig_Int(config, 'AF', 'MaxRampUpTime_ms', 1500)
         self.RampDownNumPeriodsPerVolt = self.getConfig_Int(config, 'AF', 'RampDownNumPeriodsPerVolt', 200)
@@ -245,7 +271,10 @@ class ModConfig():
         self.AfTransCalDone = self.getConfig_Bool(config, 'AFTrans', 'AFTransCalDone', False)
         self.AfTrans = self.getConfig_Array(config, 'AFTrans', 'AFTrans', self.AfTransCount+1)
         
+        self.AfRampDataPath = config['AFFileSave']['ADWINDataFileSaveBackupDir'].strip() 
+        
         self.waveForms = self.getWaveForms(config)
+        return
 
     '''
     '''

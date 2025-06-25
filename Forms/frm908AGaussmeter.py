@@ -30,6 +30,27 @@ class frm908AGaussmeter(wx.Frame):
         self.Centre()
         self.Show(True)
 
+    '''
+    '''
+    @classmethod
+    def InitializeDCFieldRecord(self, InWave, RampTimeEst_msec):
+        # TODO
+        return
+    
+    '''
+    '''
+    @classmethod
+    def StartDCFieldRecord(self, InWave):
+        # TODO
+        return True
+    
+    '''
+    '''
+    @classmethod
+    def StopDCFieldRecord(self, InWave, SaveData = True):
+        # TODO
+        return True
+
 #===================================================================================================
 # Main Module
 #---------------------------------------------------------------------------------------------------

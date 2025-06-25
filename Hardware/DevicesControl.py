@@ -648,6 +648,8 @@ class DevicesControl():
                                        CalRamp = True, 
                                        ClipTest = False, 
                                        Verbose=Verbose)
+                
+                queue.put('ADWinAFControl:Active Coil = Transverse')
         
                 self.ADwin.executeRamp(self.modConfig.TransverseCoilSystem, 
                                        self.modConfig.AfTransMax, 
@@ -658,8 +660,47 @@ class DevicesControl():
 
             elif (taskID[0] == self.AF_START_RAMP):
                 deviceID = 'ADWinAFControl'
-                print('TODO: AF_START_RAMP')
-                
+                    
+                if (len(taskID[1]) == 10):
+                    AFCoilSystem = self.modConfig.getCoilSystem(taskID[1][0])
+                    PeakValue = self.modConfig.getParam_Float(taskID[1][1])
+                    UpSlope = self.modConfig.getParam_Float(taskID[1][2])
+                    DownSlope = self.modConfig.getParam_Float(taskID[1][3])
+                    IORate = self.modConfig.getParam_Float(taskID[1][4])
+                    PeakHangTime = self.modConfig.getParam_Float(taskID[1][5])
+                    CalRamp = taskID[1][6]
+                    ClipTest = taskID[1][7]
+                    Verbose = taskID[1][8]
+                    DoDCFieldRecord = taskID[1][9]
+                    self.ADwin.executeRamp(AFCoilSystem, 
+                                           PeakValue,
+                                           UpSlope = UpSlope,
+                                           DownSlope = DownSlope,
+                                           IORate = IORate, 
+                                           PeakHangTime = PeakHangTime, 
+                                           CalRamp = CalRamp, 
+                                           ClipTest = ClipTest, 
+                                           Verbose = Verbose,
+                                           DoDCFieldRecord = DoDCFieldRecord)
+                elif (len(taskID[1]) == 8):
+                    AFCoilSystem = self.modConfig.getCoilSystem(taskID[1][0])
+                    PeakValue = self.modConfig.getParam_Float(taskID[1][1].strip())
+                    IORate = self.modConfig.getParam_Float(taskID[1][2].strip())
+                    PeakHangTime = self.modConfig.getParam_Float(taskID[1][3].strip())
+                    CalRamp = taskID[1][4]
+                    ClipTest = taskID[1][5]
+                    Verbose = taskID[1][6]
+                    DoDCFieldRecord = taskID[1][7]    
+                    self.ADwin.executeRamp(AFCoilSystem, 
+                                           PeakValue,
+                                           IORate = IORate, 
+                                           PeakHangTime = PeakHangTime, 
+                                           CalRamp = CalRamp, 
+                                           ClipTest = ClipTest, 
+                                           Verbose = Verbose,
+                                           DoDCFieldRecord = DoDCFieldRecord)
+                    
+                        
         except ValueError as e:
             self.modConfig.queue.put(deviceID + ':Error: ' + str(e))
 
