@@ -30,7 +30,7 @@ from Forms.frmCalibrateCoils import frmCalibrateCoils
 from Hardware.DevicesControl import DevicesControl
 from Process.ModConfig import ModConfig
 
-VersionNumber = 'Version 0.00.16'
+VersionNumber = 'Version 0.00.19'
 
 ID_DC_MOTORS        = 0
 ID_FILE_REGISTRY    = 1

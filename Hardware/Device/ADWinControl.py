@@ -58,6 +58,7 @@ class ADWinControl():
         
         self.ActiveCoilSystem = None
         self.Verbose = False
+        self.ramp_in_progress = False
         
         try:
             # Establish connection with the ADwin system        
@@ -139,7 +140,14 @@ class ADWinControl():
     '''
     '''
     def tryGetADWIN_DigOutStatusByte(self):
-        return self.adwin_digital_word
+        status = False
+        
+        self.adwin_digital_word = self.Get_Digout()
+        
+        if ((self.adwin_digital_word >= 0) and (self.adwin_digital_word < 256)):
+            status = True
+            
+        return status
         
     '''
     '''
@@ -200,6 +208,8 @@ class ADWinControl():
             relay_byte_id = all_up_byte - ((2 ** (self.modConfig.AFTransRelay.ChanNum)) % 256)
         elif (coilLabel == 'IRM Axial'):
             relay_byte_id = all_up_byte - ((2 ** (self.modConfig.IRMRelay.ChanNum)) % 256)
+        
+        self.tryGetADWIN_DigOutStatusByte()
         
         # Intermediate State - Prior State + desired Relay set high
         intermediate_byte = all_up_byte
@@ -1135,11 +1145,11 @@ class ADWinControl():
         
         num_points = self.ramp_outputs.Total_Monitor_Points
         
-        inDataArray = self.GetAdwinData(31, 0, num_points)
+        inDataArray = self.GetAdwinData(31, 1, num_points)
         if (inDataArray.size != 0): 
             np.savetxt(self.modConfig.AfRampDataPath + "InAdwinData.csv", inDataArray, delimiter=",")
         
-        outDataArray = self.GetAdwinData(32, 0, num_points)
+        outDataArray = self.GetAdwinData(32, 1, num_points)
         if (outDataArray.size != 0):
             np.savetxt(self.modConfig.AfRampDataPath + "OutAdwinData.csv", outDataArray, delimiter=",")
                 
@@ -1324,7 +1334,7 @@ class ADWinControl():
         PeakHangTime = self.setIORate(IORate, PeakHangTime, Freq)
         
         # Set the predicted durations for the various pieces of the ramp cycle
-        ramp_in_progress, RampMode = self.setPredictedDuration(ClipTest, PeakHangTime, Verbose)
+        self.ramp_in_progress, RampMode = self.setPredictedDuration(ClipTest, PeakHangTime, Verbose)
        
         ErrorCode = self.doRampADWin(self.modConfig.waveForms['AFMONITOR'],
                                      self.modConfig.waveForms['AFRAMPUP'],
@@ -1333,13 +1343,16 @@ class ADWinControl():
                                      PeakHangTime, 
                                      RampMode,
                                      RampDownMode, 
-                                     DoDCFieldRecord) 
+                                     DoDCFieldRecord)
+         
+        if not self.TrySetAllRelaysToDefaultPosition_ADwin():
+            raise ValueError('Fail to set all relays to default position')
         
         # Unlock the coils
         respStr = 'ADWinAFControl:Coil Status = False'
         self.modConfig.queue.put(respStr)
         
-        ramp_in_progress = False
+        self.ramp_in_progress = False
         
         return 
         

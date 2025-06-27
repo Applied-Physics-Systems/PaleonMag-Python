@@ -6,15 +6,6 @@ Created on Nov 8, 2024
 import numpy as np
 from Process.ProcessData import ProcessData
 
-CHANNEL = {'CH0': 1,
-           'CH1': 2,
-           'CH2': 3,
-           'CH3': 4,
-           'CH4': 5,
-           'CH5': 6,
-           'CH6': 7,
-           'CH7': 8}
-
 '''
     ---------------------------------------------------------------------------------------
 '''
@@ -89,16 +80,27 @@ class ModConfig():
         
     '''
     '''
-    def retrieveChannel(self, dataStr):
+    def retrieveChannel(self, dataStr, config):
         dataList = dataStr.split('-')
         
-        chanName = dataStr  
-        chanNum = CHANNEL[dataList[2]]
-        chanType = dataList[0] 
+        chanStr = config['Boards'][dataStr]
+        paramList = chanStr.split(',') 
+        chanTypeStr = dataList[0]
         
-        channel = Channel(chanName, chanNum, chanType)
-        
-        return channel
+        channel = 0
+        if 'AO' in chanTypeStr:
+            channel = int(paramList[1])
+            
+        elif 'AI' in chanTypeStr:
+            channel = int(paramList[1])
+            
+        elif 'DO' in chanTypeStr:
+            channel = int(paramList[1])
+            
+        elif 'DI' in chanTypeStr:
+            channel = int(paramList[1])     
+                
+        return Channel(paramList[0], channel, chanTypeStr)
         
     '''
         Read an integer value from INI file
@@ -227,14 +229,14 @@ class ModConfig():
         self.HoldAtPeakField_NumPeriods = self.getConfig_Int(config, 'AF', 'HoldAtPeakField_NumPeriods', 300)
         self.AFRelays_UseUpPosition = self.getConfig_Bool(config, 'AF', 'AFRelays_UseUpPosition', False)
         
-        self.DegausserToggle = self.retrieveChannel(config['Channels']['DegausserToggle'])
-        self.MotorToggle = self.retrieveChannel(config['Channels']['MotorToggle'])
-        self.VacuumToggleA = self.retrieveChannel(config['Channels']['VacuumToggleA'])  
-        self.AFAxialRelay = self.retrieveChannel(config['Channels']['AFAxialRelay'])       
-        self.AFTransRelay = self.retrieveChannel(config['Channels']['AFTransRelay'])
-        self.IRMRelay = self.retrieveChannel(config['Channels']['IRMRelay'])
-        self.AnalogT1 = self.retrieveChannel(config['Channels']['AnalogT1'])
-        self.AnalogT2 = self.retrieveChannel(config['Channels']['AnalogT2'])
+        self.DegausserToggle = self.retrieveChannel(config['Channels']['DegausserToggle'], config)
+        self.MotorToggle = self.retrieveChannel(config['Channels']['MotorToggle'], config)
+        self.VacuumToggleA = self.retrieveChannel(config['Channels']['VacuumToggleA'], config)  
+        self.AFAxialRelay = self.retrieveChannel(config['Channels']['AFAxialRelay'], config)       
+        self.AFTransRelay = self.retrieveChannel(config['Channels']['AFTransRelay'], config)
+        self.IRMRelay = self.retrieveChannel(config['Channels']['IRMRelay'], config)
+        self.AnalogT1 = self.retrieveChannel(config['Channels']['AnalogT1'], config)
+        self.AnalogT2 = self.retrieveChannel(config['Channels']['AnalogT2'], config)
         
         self.EnableVacuum = self.getConfig_Bool(config, 'Modules', 'EnableVacuum', False)
         self.EnableDegausserCooler = self.getConfig_Bool(config, 'Modules', 'EnableDegausserCooler', False)
@@ -288,7 +290,7 @@ class ModConfig():
                 waveForm.WaveININum = self.getConfig_Int(config, 'WaveForms', 'WaveININum' + str(index), 0)
                 waveForm.BoardUsed = config['WaveForms']['BoardUsed' + str(index)]
                 waveForm.Chan = config['WaveForms']['Chan' + str(index)]
-                waveForm.Channel = self.retrieveChannel(waveForm.Chan) 
+                waveForm.Channel = self.retrieveChannel(waveForm.Chan, config) 
                 waveForm.WaveName = config['WaveForms']['WaveName' + str(index)]
                 waveForm.StartPoint = self.getConfig_Int(config, 'WaveForms', 'StartPoint' + str(index), 0)
                 waveForm.MemAlloc = self.getConfig_Bool(config, 'WaveForms', 'MemAlloc', False)
