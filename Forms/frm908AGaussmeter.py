@@ -15,7 +15,7 @@ class frm908AGaussmeter(wx.Frame):
         '''
         Constructor
         '''
-        super(frm908AGaussmeter, self).__init__(parent, wx.NewIdRef())
+        super(frm908AGaussmeter, self).__init__(parent, wx.NewIdRef(), style=wx.DEFAULT_FRAME_STYLE | wx.FRAME_FLOAT_ON_PARENT)
         self.parent = parent   
         
         self.InitUI()        

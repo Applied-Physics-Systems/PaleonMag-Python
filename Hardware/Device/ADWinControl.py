@@ -296,17 +296,13 @@ class ADWinControl():
         retValue = 0
         
         if (channel.ChanType == 'DO'):
-            if boolValue:
-                self.modAF_DAQ.setDIO(channel.ChanNum)
-            else:
-                self.modAF_DAQ.clearDIO(channel.ChanNum)
-            self.modConfig.processData.ADwinDO = self.adwin_digital_word
+            self.modAF_DAQ.DigitalOut(channel, boolValue, True)
             
         elif (channel.ChanType == 'DI'):
             print('TODO')
             
         elif (channel.ChanType == 'AO'):
-            print('TODO')
+            self.modAF_DAQ.AnalogOut(channel.ChanNum, channel.RangeType, numValue)
 
         elif (channel.ChanType == 'AI'):
             retValue = self.modAF_DAQ.AnalogIn(channel.ChanNum)
@@ -1413,6 +1409,12 @@ class ADWinControl():
             status = self.TrySetAllRelaysUp_ADwin()
         
         return status
+
+    '''
+    '''
+    def SwitchOff_AllRelays(self):
+        self.Set_Digout(63)
+        return
 
     '''--------------------------------------------------------------------------------------------
                         

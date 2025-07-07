@@ -125,3 +125,13 @@ class SQUIDControl(SerialPortDevice):
             
         return cmdStr, ''
     
+    '''--------------------------------------------------------------------------------------------
+                        
+                        IRM/ARM Public API Functions
+                        
+    --------------------------------------------------------------------------------------------'''                
+    def Disconnect(self):
+        self.PortOpen = False
+        return
+    
+    

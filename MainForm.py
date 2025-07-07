@@ -13,6 +13,7 @@ Libraries used in this project
 
 '''
 import wx
+import time
 import multiprocessing
 import configparser
 from datetime import datetime
@@ -30,7 +31,7 @@ from Forms.frmCalibrateCoils import frmCalibrateCoils
 from Hardware.DevicesControl import DevicesControl
 from Process.ModConfig import ModConfig
 
-VersionNumber = 'Version 0.00.19'
+VersionNumber = 'Version 0.00.20'
 
 ID_DC_MOTORS        = 0
 ID_FILE_REGISTRY    = 1
@@ -43,6 +44,10 @@ ID_VACUUM           = 7
 ID_DEMAG_AF         = 8
 
 FLASH_DISPLAY_OFF_TIME = 10
+
+END_OF_SEQUENCE     = 0xFFFF
+ENDTASK_SYSTEM_INIT = 0
+ENDTASK_MAG_INIT    = 1
 
 devControl = DevicesControl()
 
@@ -105,6 +110,7 @@ class MainForm(wx.Frame):
         Constructor
         '''
         super(MainForm, self).__init__(*args, **kw)
+        
         self.devControl = DevicesControl()
         
         self.openINIFile()
@@ -120,9 +126,8 @@ class MainForm(wx.Frame):
         self.Bind(wx.EVT_TIMER, self.OnTimer, self.timer)
         self.timer.Start(int(200))      # Checking every 200ms
 
-        tipBox = frmTip(parent=self)
-        tipBox.Show()
-
+        self.System_Initialize()
+                
     '''--------------------------------------------------------------------------------------------
                         
                         GUI Functions
@@ -267,7 +272,6 @@ class MainForm(wx.Frame):
                         
         self.messageBox = wx.TextCtrl(self, -1, style = wx.EXPAND|wx.TE_MULTILINE)
         self.messageBox.SetBackgroundColour('Cyan')         
-        self.messageBox.Bind(wx.EVT_LEFT_DOWN, self.onMouseClick)
                 
         # create status bar
         self.statusBar = self.CreateStatusBar(style = wx.BORDER_RAISED)
@@ -278,6 +282,9 @@ class MainForm(wx.Frame):
             self.statusBar.SetStatusText("NoCOMM mode on", 0)
         else:
             self.statusBar.SetStatusText("NoCOMM mode off", 0)
+                
+        # Add event handler on OnClose
+        self.Bind(wx.EVT_CLOSE, self.onClosed)
                 
         self.SetSize((1500, 1000)) 
         self.SetTitle('PaleoMagnetic Magnetometer Controller Systems - ' + VersionNumber)
@@ -291,15 +298,23 @@ class MainForm(wx.Frame):
     --------------------------------------------------------------------------------------------''' 
     '''
     '''
+    def System_Initialize(self):
+        # Initialize IRM/ARM
+        self.pushTaskToQueue([self.devControl.IRM_ARM_INIT, [None]])
+        
+        # Initialize Vacuum.
+        self.pushTaskToQueue([self.devControl.VACUUM_INIT, [None]])
+            
+        self.pushTaskToQueue([END_OF_SEQUENCE, [ENDTASK_SYSTEM_INIT]])        
+        return
+        
+    '''
+    '''
     def Magnetometer_Initialize(self):
         magControl = frmMagnetometerControl(parent=self)
         magControl.Show()
         self.panelList['MagnetometerControl'] = magControl                    
-        
-        registryControl = frmSampleIndexRegistry(parent=self)
-        registryControl.Show()
-        self.panelList['RegistryControl'] = registryControl
-        
+                
         if not self.NOCOMM_Flag:
             # Move vertical motor to top position
             self.pushTaskToQueue([self.devControl.MOTOR_HOME_TO_TOP, [None]])
@@ -308,10 +323,7 @@ class MainForm(wx.Frame):
             if (self.modConfig.UseXYTableAPS):
                 self.pushTaskToQueue([self.devControl.MOTOR_HOME_TO_CENTER, [None]])
                 
-            # Initialize Vacuum.
-            if (self.modConfig.DoVacuumReset):
-                print('TODO: DoVacuumReset')
-                
+                                
             # if EnableAxialIRM, then discharge
             if self.modConfig.EnableARM:
                 #self.pushTaskToQueue([self.devControl.IRM_SET_BIAS_FIELD, [0]])
@@ -319,6 +331,9 @@ class MainForm(wx.Frame):
                 
             if self.modConfig.EnableAxialIRM:
                 self.pushTaskToQueue([self.devControl.IRM_FIRE, [0]])
+                
+        self.pushTaskToQueue([END_OF_SEQUENCE, [ENDTASK_MAG_INIT]])
+        return
         
 
     '''--------------------------------------------------------------------------------------------
@@ -402,7 +417,21 @@ class MainForm(wx.Frame):
                 self.appendMessageBox(self.devControl.messages[taskID] + '\n')
             else:
                 runFlag = False
-                
+        
+        elif (taskID == END_OF_SEQUENCE):
+            runFlag = False
+            paramList = processFunction[1]
+            sequenceType = paramList[0]
+            if (sequenceType == ENDTASK_SYSTEM_INIT):
+                tipBox = frmTip(parent=self)
+                tipBox.Show()        
+            
+            elif (sequenceType == ENDTASK_MAG_INIT):          
+                registryControl = frmSampleIndexRegistry(parent=self)
+                registryControl.Show()
+                self.panelList['RegistryControl'] = registryControl
+            self.statusBar.SetStatusText('Tasks Completed', 1)
+        
         else:
             if (taskID in self.devControl.messages.keys()):
                 self.appendMessageBox(self.devControl.messages[taskID] + '\n')
@@ -511,7 +540,18 @@ class MainForm(wx.Frame):
                         
                         Event Handler Functions
                         
-    --------------------------------------------------------------------------------------------'''                
+    --------------------------------------------------------------------------------------------'''
+    '''
+        Close MainForm
+    '''
+    def onClosed(self, event):
+        while self.backgroundRunningFlag:
+            time.sleep(0.5)        
+        
+        self.runProcess([self.devControl.SYSTEM_DISCONNECT,[None]])
+        
+        self.Destroy()
+
     '''
         Handle selected menu Item
     '''
@@ -574,19 +614,7 @@ class MainForm(wx.Frame):
                 if (self.process != None): 
                     self.process.terminate()
             self.Close(force=False)
-                
-        # Set focus on panels
-        if (menuID != ID_QUIT_EXIT):
-            for panel in self.panelList.values():
-                panel.SetFocus()
-
-    '''
-        Re-focus all panels to display them 
-    '''
-    def onMouseClick(self, event):
-        for panel in self.panelList.values():
-            panel.SetFocus()
-                                                            
+                                                                            
     '''
         Timer event handler
     '''

@@ -33,6 +33,16 @@ class MSControl(SerialPortDevice):
         
         return respStr 
         
+    '''--------------------------------------------------------------------------------------------
+                        
+                        Vacuum Public API Functions
+                        
+    --------------------------------------------------------------------------------------------'''
+    def Disconnect(self):
+        if self.PortOpen:
+            self.PortOpen = False
+        return
+    
     '''
     '''
     def runTask(self, taskID):

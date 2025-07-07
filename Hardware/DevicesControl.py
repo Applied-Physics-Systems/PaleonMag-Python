@@ -12,6 +12,7 @@ from Hardware.Device.IrmArmControl import IrmArmControl
 from Hardware.Device.SQUIDControl import SQUIDControl
 from Hardware.Device.VacuumControl import VacuumControl
 from Hardware.Device.ADWinControl import ADWinControl
+from Hardware.Device.GaussMeterControl import GaussMeterControl
 
 from Process.ProcessData import ProcessData
 from Process.ModConfig import ModConfig
@@ -44,8 +45,9 @@ class DevicesControl():
     MOTOR_RESET             = 0x0015    
     MOTOR_STOP              = 0x0016
     
-    IRM_SET_BIAS_FIELD      = 0x1001
-    IRM_FIRE                = 0x1002
+    IRM_ARM_INIT            = 0x1001
+    IRM_SET_BIAS_FIELD      = 0x1002
+    IRM_FIRE                = 0x1003
     
     SQUID_READ_COUNT        = 0x2001
     SQUID_READ_DATA         = 0x2002
@@ -56,15 +58,18 @@ class DevicesControl():
     SQUID_SET_CFG           = 0x2007
     SQUID_READ              = 0x2008
     
-    VACUUM_SET_CONNECT      = 0x3001
-    VACUUM_SET_MOTOR        = 0x3002
-    VACUUM_RESET            = 0x3003
-    VACUUM_SET_DEGAUSSER    = 0x3004
+    VACUUM_INIT             = 0x3001
+    VACUUM_SET_CONNECT      = 0x3002
+    VACUUM_SET_MOTOR        = 0x3003
+    VACUUM_RESET            = 0x3004
+    VACUUM_SET_DEGAUSSER    = 0x3005
     
     AF_SWITCH_COIL          = 0x4001
     AF_REFRESH_T            = 0x4002
     AF_CLEAN_COIL           = 0x4003
     AF_START_RAMP           = 0x4004
+    
+    SYSTEM_DISCONNECT       = 0xF001
     
     messages = {MOTOR_HOME_TO_TOP: 'Run HomeToTop\n',
                 MOTOR_HOME_TO_CENTER: 'Run HomeToCenter\n',
@@ -88,6 +93,7 @@ class DevicesControl():
                 MOTOR_READ_HOLE: 'Read Hole',
                 MOTOR_RESET: 'Reset',
                 MOTOR_STOP: 'Stop',                
+                IRM_ARM_INIT: 'Initialize IRM/ARM',
                 IRM_FIRE: 'Discharge IRM device',
                 SQUID_READ_COUNT: 'Read count from SQUID',
                 SQUID_READ_DATA: 'Read data from SQUID',
@@ -97,6 +103,7 @@ class DevicesControl():
                 SQUID_CHANGE_RATE:'Change rate for SQUID',
                 SQUID_SET_CFG:'Set configuration for SQUID',
                 SQUID_READ:'Read from SQUID',
+                VACUUM_INIT:'Initialize vacuum',
                 VACUUM_SET_CONNECT:'Set vacuum connection on/off',
                 VACUUM_SET_MOTOR:'Set vacuum motor on/off',
                 VACUUM_RESET:'Reset vacuum',
@@ -113,6 +120,9 @@ class DevicesControl():
     apsIRM = None
     SQUID = None
     ADwin = None
+    AF2G = None
+    susceptibility = None
+    gaussMeter = None
     deviceList = []
     
     devicesAllGoodFlag = False
@@ -126,6 +136,7 @@ class DevicesControl():
         self.currentPath = os.getcwd()
         self.currentPath += '\\Hardware\\Device\\'        
         self.DCMotorHomeToTop_StopOnTrue = False
+        self.gaussMeter = GaussMeterControl()
                     
     '''
         Set parameter from INI files for each motor
@@ -141,23 +152,27 @@ class DevicesControl():
         Open UART serial communication port for IRM/ARM
     '''
     def openIrmArmComm(self, device, label, portLabel):        
-        comPort = 'COM' + self.modConfig.processData.config['COMPorts'][portLabel]
-        message = ''
-        if (device != None):
-            if (device.openDevice()):
-                message += device.label + ' opened' 
+        if (self.modConfig.EnableAxialIRM or self.modConfig.EnableTransIRM):
+            comPort = 'COM' + self.modConfig.processData.config['COMPorts'][portLabel]
+            message = ''
+            if (device != None):
+                if (device.openDevice()):
+                    message += device.label + ' opened' 
+                else:
+                    message += device.label + ' fail to open'
+                    self.devicesAllGoodFlag = False
             else:
-                message += device.label + ' fail to open'
-                self.devicesAllGoodFlag = False
-        else:
-            try:            
-                message += label + ': ' + comPort  
-                device = IrmArmControl(9600, self.currentPath, comPort, label, self.modConfig)
-            except:
-                message += ' Failed to open'
-                self.devicesAllGoodFlag = False
+                try:            
+                    message += label + ': ' + comPort  
+                    device = IrmArmControl(9600, self.currentPath, comPort, label, self.modConfig)
+                except:
+                    message += ' Failed to open'
+                    self.devicesAllGoodFlag = False
+            
+            return device, message + '\n'
         
-        return device, message + '\n'
+        else:
+            return None, '\n'
 
     '''
         Open UART serial communication port for Vacuum
@@ -282,89 +297,7 @@ class DevicesControl():
         self.modConfig.processData.ADwinDO = self.ADwin.modConfig.processData.ADwinDO
                         
         return self.modConfig.processData 
-           
-    '''--------------------------------------------------------------------------------------------
-                        
-                        IRM/ARM Control Functions
-                        
-    --------------------------------------------------------------------------------------------'''   
-    '''
-    '''
-    def FireAPS_AtCalibratedTarget(self, target):
-        if (target == 0):
-            # Discharging IRM device
-            self.apsIRM.SendZeroCommand_ToApsIRMDevice_AndWaitForReply()
-            time.sleep(1)
-            return
-        
-        else:
-            self.apsIRM.SetApsIrmPolarity_FromTargetValue(target)
-            level_in_positive_gauss = int(abs(target))
-            self.apsIRM.SetApsIrmRange_FromGaussLevel(level_in_positive_gauss)
-            
-            # Check if level is in range
-            if (level_in_positive_gauss > self.modConfig.PulseAxialMax):
-                warningMessage = 'Warning: Target IRM Peak Field (' + str(level_in_positive_gauss) + ' '
-                warningMessage += self.modConfig.AFUnits + ') is above the currently set value for the Maximum IRM Peak Field ('
-                warningMessage += str(self.modConfig.PulseAxialMax) + ' ' + self.modConfig.AFUnits
-                self.queue.put(warningMessage)
-                return 
-            
-            elif (level_in_positive_gauss < self.modConfig.PulseAxialMin):
-                warningMessage = 'Warning: Target IRM Peak Field (' + str(level_in_positive_gauss) + ' '
-                warningMessage += self.modConfig.AFUnits + ') is below the currently set value for the Minimum IRM Peak Field ('
-                warningMessage += str(self.modConfig.PulseAxialMax) + ' ' + self.modConfig.AFUnits
-                self.queue.put(warningMessage)
-                return
-                
-            target_level = str(level_in_positive_gauss)
-            
-            # Catch Flow Pause or Flow Halt
-            if (self.checkProgramHaltRequest()):
-                return
-
-            # Set IRM Field Level
-            self.apsIRM.SetApsIrmLevel(target_level)
-
-            # Catch Flow Pause or Flow Halt
-            if (self.checkProgramHaltRequest()):
-                return
-
-            # Tell APS IRM to execute pulse
-            self.apsIRM.executeApsIrmPulse()
-            
-            # Wait for Done signal
-            while True:
-                my_local_response = self.apsIRM.GetApsIrmResponse(self.apsIRM.APS_GET_RESPONSE_SERIAL_COMM_TIMEOUT_IN_SECONDS)
-                if  self.apsIRM.APS_DONE_STRING in my_local_response:
-                    return
-                
-                # Catch Flow Pause or Flow Halt
-                if (self.checkProgramHaltRequest()):
-                    return
-                
-                # Send warning message
-                warningMessage = 'Warning: Over ' + str(self.apsIRM.APS_GET_RESPONSE_SERIAL_COMM_TIMEOUT_IN_SECONDS)
-                warningMessage += ' seconds have elapsed since the IRM Fire Command was sent '
-                warningMessage += 'for an IRM Pulse at ' + target_level + ' ' + self.modConfig.AFUnits + ' and '
-                warningMessage += ' no ' + self.apsIRM.APS_DONE_STRING + ' response has been received from the APS IRM Device.'
-                self.queue.put(warningMessage)                            
-            
-    '''--------------------------------------------------------------------------------------------
-                        
-                        IRM/ARM Control Task Functions
-                        
-    --------------------------------------------------------------------------------------------'''
-    '''
-    '''
-    def FireIRM(self, voltage, CalibrationMode=False):
-        if 'ASC' in self.modConfig.IRMSystem:
-            print('TODO: Implement FireASC_IrmAtPulseVolts voltage, CalibrationMode')
-        else:
-            self.FireAPS_AtCalibratedTarget(voltage)
-
-        return
-
+                       
     '''--------------------------------------------------------------------------------------------
                         
                         Vacuum Control Task Functions
@@ -552,11 +485,17 @@ class DevicesControl():
             elif (taskID[0] == self.MOTOR_STOP):
                 deviceID = 'MotorControl'
                 self.motors.stop()
-            
+                
+            elif (taskID[0] == self.IRM_ARM_INIT):
+                deviceID = 'IRMControl'
+                if (self.apsIRM != None): 
+                    self.apsIRM.init_IrmArm(self.ADwin)
+                
             elif (taskID[0] == self.IRM_FIRE):
                 deviceID = 'IRMControl'
                 voltage = taskID[1][0] 
-                self.FireIRM(voltage)
+                if (self.apsIRM != None):
+                    self.apsIRM.FireIRM(voltage, self, queue)
 
             elif (taskID[0] == self.SQUID_READ_COUNT):
                 deviceID = 'SQUIDControl'
@@ -606,7 +545,12 @@ class DevicesControl():
                 deviceID = 'SQUIDControl'
                 cmdStr, respStr = self.SQUID.getResponse()
                 queue.put('SQUIDControl:' + cmdStr + ':' + respStr)
-            
+                
+            elif (taskID[0] == self.VACUUM_INIT):
+                deviceID = 'VacuumControl'
+                cmdStr, respStr = self.vacuum.init(self.ADwin)                        
+                queue.put('VacuumControl:' + cmdStr + ':' + respStr)
+                
             elif (taskID[0] == self.VACUUM_SET_CONNECT):
                 deviceID = 'VacuumControl'
                 mode = taskID[1][0]
@@ -700,6 +644,32 @@ class DevicesControl():
                                            Verbose = Verbose,
                                            DoDCFieldRecord = DoDCFieldRecord)
                     
+            elif (taskID[0] == self.SYSTEM_DISCONNECT):
+                deviceID = 'SystemControl'
+                
+                self.motors.MotorCommDisconnect()
+                
+                if self.SQUID.PortOpen:
+                    self.SQUID.Disconnect()
+                
+                # Added in this IF statement to make sure that the ADWIN board power
+                # to the AF / IRM relays is switched off so that the relays don't overheat
+                if (('ADWIN' in self.modConfig.AFSystem) and self.modConfig.EnableAF):
+                    self.ADwin.SwitchOff_AllRelays()
+                elif (('2G' in self.modConfig.AFSystem) and self.modConfig.EnableAF):
+                    self.ADwin.AF2GControl.Disconnect()
+                    
+                self.vacuum.init(self.ADwin)
+                self.vacuum.Disconnect()                
+    
+                if (self.susceptibility != None):
+                    self.susceptibility.Disconnect()
+                    
+                if self.gaussMeter.connectFlag:
+                    self.gaussMeter.Disconnect()
+                    
+                if (self.modConfig.EnableAxialIRM or self.modConfig.EnableTransIRM):
+                    self.ADwin.DoDAQIO(self.modConfig.IRMVoltageOut, numValue=0)
                         
         except ValueError as e:
             self.modConfig.queue.put(deviceID + ':Error: ' + str(e))

@@ -96,6 +96,34 @@ class ModAF_DAQ(DAQControl):
         
     '''
     '''
+    def AnalogOut(self, channel, rangeType, EngUnits):
+        DataValue = self.cbFromEngUnits(EngUnits)
+        self.cbAOut(channel, rangeType, DataValue)
+        
+        return
+    
+    '''
+    '''
+    def DigitalOut(self, DigOut_Chan, SetHigh, OneChanOn = True):
+        
+        status = self.cbDConfigBit(DigOut_Chan)
+        
+        if (status != 0):
+            print('Error: Failed to set Config bits')
+            return status
+        
+        # Determine from the input whether to set the
+        # port to the high value (1) or the low value (0)
+        DataValue = 0
+        if SetHigh:
+            DataValue = 1
+            
+        status = self.cbDBitOut(DigOut_Chan, DataValue)
+        
+        return status
+        
+    '''
+    '''
     def runTask(self, taskID):
         if (taskID == 0):
             data = self.Get_ADC(0)

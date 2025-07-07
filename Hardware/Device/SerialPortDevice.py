@@ -79,6 +79,9 @@ class SerialPortDevice():
                     self.serialDevice.open()
                     self.active = True
                 print(self.serialDevice.portstr)
+            else:
+                raise ValueError('Warning: Invalid Port Number')    
+            
         except:
             errorMsg = 'Error: {0} is used by other software'.format(port) 
             print(errorMsg)

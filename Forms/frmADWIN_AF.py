@@ -21,7 +21,7 @@ class frmADWIN_AF(wx.Frame):
         '''
         Constructor
         '''        
-        super(frmADWIN_AF, self).__init__(parent, wx.NewIdRef())
+        super(frmADWIN_AF, self).__init__(parent, wx.NewIdRef(), style=wx.DEFAULT_FRAME_STYLE | wx.FRAME_FLOAT_ON_PARENT)
         self.parent = parent
         
         self.IORate = 50000   
@@ -668,7 +668,7 @@ class frmADWIN_AF(wx.Frame):
         return
                               
     '''
-        Close Tip Dialog box
+        Close frmADWIN_AF form
     '''
     def onClosed(self, event):
         if (self.parent != None):

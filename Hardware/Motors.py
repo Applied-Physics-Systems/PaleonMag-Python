@@ -385,6 +385,13 @@ class Motors():
             raise ValueError(errorMessage)
             
         return
+    
+    '''
+    '''
+    def disconnectMotor(self, motorID):
+        motorID.PortOpen = False
+        motorID.clearUartBuffer()
+        return
         
     '''--------------------------------------------------------------------------------------------
                         
@@ -813,6 +820,15 @@ class Motors():
             target = startingPos - self.modConfig.TurningMotorFullRotation * speedRPS * Duration
             self.turning.moveMotor(target, abs(self.modConfig.TurningMotor1rps * speedRPS), False)
             
+        return
+    
+    '''
+    '''
+    def MotorCommDisconnect(self):
+        self.disconnectMotor(self.turning)
+        self.disconnectMotor(self.changerX)
+        self.disconnectMotor(self.changerY)
+        self.disconnectMotor(self.upDown)
         return
         
 #===================================================================================================

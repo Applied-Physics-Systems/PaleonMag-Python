@@ -14,10 +14,12 @@ class Channel():
     ChanNum = 0
     ChanType = ''
      
-    def __init__(self, chanName, chanNum, chanType):
+    def __init__(self, chanName, chanNum, chanType, rangeType, portType):
         self.ChanName = chanName
         self.ChanNum = chanNum
         self.ChanType = chanType
+        self.RangeType = rangeType
+        self.PortType = portType
 
 '''
     ---------------------------------------------------------------------------------------
@@ -98,9 +100,12 @@ class ModConfig():
             channel = int(paramList[1])
             
         elif 'DI' in chanTypeStr:
-            channel = int(paramList[1])     
-                
-        return Channel(paramList[0], channel, chanTypeStr)
+            channel = int(paramList[1])
+                 
+        rangeType = self.getConfig_Int(config, 'Boards', 'RangeType0', 100)        
+        portType = self.getConfig_Int(config, 'Boards', 'DOutPortType0', 1)
+                        
+        return Channel(paramList[0], channel, chanTypeStr, rangeType, portType)
         
     '''
         Read an integer value from INI file
@@ -213,6 +218,8 @@ class ModConfig():
         self.EnableAF = self.getConfig_Bool(config, 'Modules', 'EnableAF', False)
         self.EnableAFAnalysis = self.getConfig_Bool(config, 'Modules', 'EnableAFAnalysis', False)
         self.EnableAxialIRM = self.getConfig_Bool(config, 'Modules', 'EnableAxialIRM', False)
+        self.EnableTransIRM = self.getConfig_Bool(config, 'Modules', 'EnableTransIRM', False)
+        self.EnableIRMBackfield = self.getConfig_Bool(config, 'Modules', 'EnableIRMBackfield', False)
         
         self.AFUnits = config['AF']['AFUnits'].strip()
         self.AFSystem = config['AF']['AFSystem'].strip()
@@ -231,12 +238,18 @@ class ModConfig():
         
         self.DegausserToggle = self.retrieveChannel(config['Channels']['DegausserToggle'], config)
         self.MotorToggle = self.retrieveChannel(config['Channels']['MotorToggle'], config)
-        self.VacuumToggleA = self.retrieveChannel(config['Channels']['VacuumToggleA'], config)  
+        self.VacuumToggleA = self.retrieveChannel(config['Channels']['VacuumToggleA'], config)
+        self.VacuumToggleB = self.retrieveChannel(config['Channels']['VacuumToggleB'], config)    
         self.AFAxialRelay = self.retrieveChannel(config['Channels']['AFAxialRelay'], config)       
         self.AFTransRelay = self.retrieveChannel(config['Channels']['AFTransRelay'], config)
         self.IRMRelay = self.retrieveChannel(config['Channels']['IRMRelay'], config)
         self.AnalogT1 = self.retrieveChannel(config['Channels']['AnalogT1'], config)
         self.AnalogT2 = self.retrieveChannel(config['Channels']['AnalogT2'], config)
+        self.ARMVoltageOut = self.retrieveChannel(config['Channels']['ARMVoltageOut'], config)
+        self.IRMVoltageOut = self.retrieveChannel(config['Channels']['IRMVoltageOut'], config)
+        self.ARMSet = self.retrieveChannel(config['Channels']['ARMSet'], config)
+        self.IRMFire = self.retrieveChannel(config['Channels']['IRMFire'], config)
+        self.IRMTrim = self.retrieveChannel(config['Channels']['IRMTrim'], config)
         
         self.EnableVacuum = self.getConfig_Bool(config, 'Modules', 'EnableVacuum', False)
         self.EnableDegausserCooler = self.getConfig_Bool(config, 'Modules', 'EnableDegausserCooler', False)
@@ -245,6 +258,7 @@ class ModConfig():
         
         self.IRMSystem = config['IRMPulse']['IRMSystem']        
         self.ApsIrm_DoRangeChange = self.getConfig_Bool(config, 'IRMPulse', 'ApsIrm_DoRangeChange', False)
+        self.TrimOnTrue = self.getConfig_Bool(config, 'IRMPulse', 'TrimOnTrue', False)
         self.ApsIrm_RangeChangeLevel = self.getConfig_Int(config, 'IRMPulse', 'ApsIrm_RangeChangeLevel', 10000)   
         
         self.PulseAxialMax = self.getConfig_Int(config, 'IRMAxial', 'PulseAxialMax', 13080)

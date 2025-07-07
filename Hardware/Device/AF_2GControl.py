@@ -5,18 +5,22 @@ Created on Mar 24, 2025
 '''
 import math
 
-class AF_2GControl():
+from Hardware.Device.SerialPortDevice import SerialPortDevice
+
+class AF_2GControl(SerialPortDevice):
     '''
     classdocs
     '''
 
 
-    def __init__(self, parent = None, modConfig = None):
+    def __init__(self, baudRate=None, pathName=None, comPort=None, Label=None, parent=None, modConfig=None):
         '''
         Constructor
         '''
         self.parent = parent
         self.modConfig = modConfig
+        if (comPort != None):
+            SerialPortDevice.__init__(self, baudRate, 'AF_2GControl', pathName, comPort, Label, modConfig)
         
     '''
     ' Find X (input to AF) from field
@@ -101,4 +105,13 @@ class AF_2GControl():
                     xCalibValue = self.modConfig.AfTrans[self.modConfig.AfTransCount, 0] + Slope * (field - self.modConfig.AfTrans[self.modConfig.AfTransCount, 1])
         
         return xCalibValue
+    
+    '''
+    '''
+    def Disconnect(self):
+        if self.PortOpen:
+            self.PortOpen = False
+            
+        return
+    
     

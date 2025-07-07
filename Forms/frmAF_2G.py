@@ -15,7 +15,7 @@ class frmAF_2G(wx.Frame):
         '''
         Constructor
         '''        
-        super(frmAF_2G, self).__init__(parent, wx.NewIdRef())
+        super(frmAF_2G, self).__init__(parent, wx.NewIdRef(), style=wx.DEFAULT_FRAME_STYLE | wx.FRAME_FLOAT_ON_PARENT)
         self.parent = parent
         self.modConfig = modConfig
         
