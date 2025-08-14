@@ -56,7 +56,7 @@ class ADWinControl():
         self.ramp_inputs = AdwinAfInputParameters()
         self.ramp_status = AdwinAfRampStatus() 
         
-        self.ActiveCoilSystem = None
+        self.ActiveCoilSystem = 'Axial'
         self.Verbose = False
         self.ramp_in_progress = False
         

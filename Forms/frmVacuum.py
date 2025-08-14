@@ -15,7 +15,10 @@ class frmVacuum(wx.Frame):
         '''
         Constructor
         '''
-        super(frmVacuum, self).__init__(parent, wx.NewIdRef(), style=wx.DEFAULT_FRAME_STYLE | wx.FRAME_FLOAT_ON_PARENT)
+        if (parent != None):
+            super(frmVacuum, self).__init__(parent, wx.NewIdRef(), style=wx.DEFAULT_FRAME_STYLE | wx.FRAME_FLOAT_ON_PARENT)
+        else:
+            super(frmVacuum, self).__init__(parent, wx.NewIdRef())
         self.parent = parent   
         
         self.InitUI()        

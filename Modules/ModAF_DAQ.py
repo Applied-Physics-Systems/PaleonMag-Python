@@ -91,7 +91,6 @@ class ModAF_DAQ(DAQControl):
     def AnalogIn(self, channel):
         analogCount = self.cbAIn(channel)         
         analogValue = self.cbToEngUnits(analogCount)
-        
         return analogValue
         
     '''

@@ -3,8 +3,12 @@ Created on Oct 28, 2024
 
 @author: hd.nguyen
 '''
+import os
 import time
+import configparser
+
 from Hardware.Device.SerialPortDevice import SerialPortDevice
+from Process.ModConfig import ModConfig
 
 class MotorControl(SerialPortDevice):
     '''
@@ -155,7 +159,9 @@ class MotorControl(SerialPortDevice):
                 finished = True
             elif (abs(oldPosition[1] - oldPosition[0]) < 5) and (abs(oldPosition[0] - pollPosition) < 5):
                 finished = True
-                self.motorStop()
+                
+        self.motorStop()
+        return
                           
     '''
         Check bit from the RIS command response
@@ -195,7 +201,7 @@ class MotorControl(SerialPortDevice):
         return position
            
     '''
-        Move motor at absolute value
+        Move motor at absolute value, velocity base
     '''
     def moveMotor(self, moveMotorPos, moveMotorVelocity, waitingForStop=True, stopEnable=0, stopCondition=0):
         # Send Command and its response to the GUI
@@ -212,6 +218,29 @@ class MotorControl(SerialPortDevice):
         else:
             cmdStr += " 96637 "  
         cmdStr += str(moveMotorVelocity)
+        cmdStr += " " + str(stopEnable) 
+        cmdStr += " " + str(stopCondition)
+        self.sendMotorCommand(cmdStr)
+        
+        if waitingForStop:
+            self.waitForMotorStop()
+            
+        return
+
+    '''
+        Move motor at absolute value, time base
+    '''
+    def moveMotorOnTime(self, moveMotorPos, moveMotorAcceleration, waitingForStop=True, stopEnable=0, stopCondition=0):
+        # Send Command and its response to the GUI
+        if (self.modConfig.queue != None):
+            self.modConfig.queue.put('MotorControl:Motor Info: ' + self.label + ';Position ' + str(moveMotorPos) + ';Acceleration ' + str(moveMotorAcceleration))
+        
+        self.pollMotor()
+        self.clearPollStatus()
+        
+        # Set MAV(Move Absolute, Velocity Base) command
+        cmdStr = "176 " + str(moveMotorPos) + " "
+        cmdStr += str(moveMotorAcceleration) + " 8333 "
         cmdStr += " " + str(stopEnable) 
         cmdStr += " " + str(stopCondition)
         self.sendMotorCommand(cmdStr)
@@ -254,5 +283,86 @@ class MotorControl(SerialPortDevice):
             
         return 
     
+    '''
+    '''
+    def runTask(self, taskID):
+        
+        # Test read current position
+        if (taskID == 0):
+            position = self.readPosition()
+            print(position)
+            
+        # Test move to absolute position on time base
+        elif (taskID == 1):
+            position = 8000
+            moveMotorVelocity = 83      # 0.1 second acceleration
+            self.moveMotorOnTime(position, moveMotorVelocity)
+            
+        # Search for the top switch
+        elif (taskID == 2):
+            relativePosition = 8000
+            motorID = self.label
+            if 'UpDown' in motorID:
+                speed = speed = self.modConfig.LiftSpeedNormal
+                switch = 4
+            elif 'ChangerX' in motorID:
+                speed = self.modConfig.ChangerSpeed
+                centerSwitch = 3
+                cornerSwitch = 2
+                switch = cornerSwitch
+            elif 'ChangerY' in motorID:
+                speed = self.modConfig.ChangerSpeed
+                centerSwitch = 5
+                cornerSwitch = 6
+                switch = cornerSwitch
+            
+            searchFlag = True
+            self.moveMotorRelative(relativePosition, speed, False, 0, 0)
+            while searchFlag: 
+                if (self.checkInternalStatus(switch) == False):
+                    self.motorStop()
+                    currentPosition = self.readPosition()
+                    print(currentPosition)                    
+                    searchFlag = False
+            
+        elif (taskID == 3):
+            self.motorStop()
+            
+        elif (taskID == 4):
+            searchFlag = True
+            switch = 5
+            while searchFlag: 
+                if (self.checkInternalStatus(switch) == False):
+                    currentPosition = self.readPosition()
+                    print(currentPosition)                    
+                    searchFlag = False
+                            
+'''
+'''    
+if __name__=='__main__':
+    try:    
+        pathName = os.getcwd() + '\\'
+        config = configparser.ConfigParser()
+        config.read('C:\\Users\\hd.nguyen.APPLIEDPHYSICS\\workspace\\SVN\\Windows\\Rock Magnetometer\\Paleomag_v3_Hung.INI')
+        modConfig = ModConfig(config=config)          
+        motorID = 'ChangerY'         
+        if 'ChangerX' in motorID:
+            comPort = 'COM7'
+        elif 'ChangerY' in motorID:
+            comPort = 'COM8'
+        elif 'UpDown' in motorID:
+            comPort = 'COM9'
+        elif 'Turning' in motorID:
+            comPort = 'COM10'
+        motorControl = MotorControl(57600, pathName, comPort, motorID, modConfig)
+        
+        motorControl.runTask(2)
+                
+        motorControl.closeDevice()
+        print('Done !!!')
+        
+    except Exception as e:
+        print('Error!! ' + str(e))
+
     
             

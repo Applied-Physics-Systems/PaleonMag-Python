@@ -109,7 +109,10 @@ class TabsPanel(wx.Panel):
 '''---------------------------------------------------------------------------------------------'''
 class frmSettings(wx.Frame):
     def __init__(self, parent):
-        wx.Frame.__init__(self, parent, wx.NewIdRef(), style=wx.DEFAULT_FRAME_STYLE | wx.FRAME_FLOAT_ON_PARENT)
+        if (parent != None):
+            wx.Frame.__init__(self, parent, wx.NewIdRef(), style=wx.DEFAULT_FRAME_STYLE | wx.FRAME_FLOAT_ON_PARENT)
+        else:
+            wx.Frame.__init__(self, parent, wx.NewIdRef())
         self.parent = parent   
         
         self.InitUI()        

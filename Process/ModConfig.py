@@ -152,10 +152,27 @@ class ModConfig():
             return value 
         
         except:
-            return default         
+            return default
+                 
     '''
     '''
-    def getConfig_Array(self, config, section, label, rows):
+    def getConfig_IntArray(self, config, section, label, rows):
+        if (rows <= 0):
+            return np.array([])
+            
+        dataArray = np.zeros((rows, 2))
+        for i in range(1, rows):
+            dataArray[i, 0] = self.getConfig_Int(config, section, label + 'X' + str(i), 0.0) 
+            dataArray[i, 1] = self.getConfig_Int(config, section, label + 'Y' + str(i), 0.0)
+        
+        return dataArray
+
+    '''
+    '''
+    def getConfig_FloatArray(self, config, section, label, rows):
+        if (rows <= 0):
+            return np.array([])
+            
         dataArray = np.zeros((rows, 2))
         for i in range(1, rows):
             dataArray[i, 0] = self.getConfig_Float(config, section, label + 'X' + str(i), 0.0) 
@@ -222,6 +239,7 @@ class ModConfig():
         self.EnableIRMBackfield = self.getConfig_Bool(config, 'Modules', 'EnableIRMBackfield', False)
         
         self.AFUnits = config['AF']['AFUnits'].strip()
+        self.Tunits = config['AF']['Tunits'].strip()
         self.AFSystem = config['AF']['AFSystem'].strip()
         self.AxialRampUpVoltsPerSec = self.getConfig_Float(config, 'AF', 'AxialRampUpVoltsPerSec', 3.3)
         self.TransRampUpVoltsPerSec = self.getConfig_Float(config, 'AF', 'TransRampUpVoltsPerSec', 3.3)
@@ -247,6 +265,7 @@ class ModConfig():
         self.AnalogT2 = self.retrieveChannel(config['Channels']['AnalogT2'], config)
         self.ARMVoltageOut = self.retrieveChannel(config['Channels']['ARMVoltageOut'], config)
         self.IRMVoltageOut = self.retrieveChannel(config['Channels']['IRMVoltageOut'], config)
+        self.IRMCapacitorVoltageIn = self.retrieveChannel(config['Channels']['IRMCapacitorVoltageIn'], config)
         self.ARMSet = self.retrieveChannel(config['Channels']['ARMSet'], config)
         self.IRMFire = self.retrieveChannel(config['Channels']['IRMFire'], config)
         self.IRMTrim = self.retrieveChannel(config['Channels']['IRMTrim'], config)
@@ -257,12 +276,26 @@ class ModConfig():
         self.EnableT2 = self.getConfig_Bool(config, 'Modules', 'EnableT2', False)
         
         self.IRMSystem = config['IRMPulse']['IRMSystem']        
+        self.PulseMCCVoltConversion = self.getConfig_Float(config, 'IRMPulse', 'PulseMCCVoltConversion', 0.0237)
+        self.PulseReturnMCCVoltConversion = self.getConfig_Float(config, 'IRMPulse', 'PulseReturnMCCVoltConversion', 0.02505)
+        self.PulseVoltMax = self.getConfig_Int(config, 'IRMPulse', 'PulseVoltMax', 9)
         self.ApsIrm_DoRangeChange = self.getConfig_Bool(config, 'IRMPulse', 'ApsIrm_DoRangeChange', False)
         self.TrimOnTrue = self.getConfig_Bool(config, 'IRMPulse', 'TrimOnTrue', False)
         self.ApsIrm_RangeChangeLevel = self.getConfig_Int(config, 'IRMPulse', 'ApsIrm_RangeChangeLevel', 10000)   
+        self.AscIrmMaxFireAtZeroGaussReadVoltage = self.getConfig_Int(config, 'IRMPulse', 'AscIrmMaxFireAtZeroGaussReadVoltage', 50)
+        self.AscSetVoltageMaxBoostMultiplier = self.getConfig_Float(config, 'IRMPulse', 'AscSetVoltageMaxBoostMultiplier', 1.0)
+        self.AscSetVoltageMinBoostMultiplier = self.getConfig_Float(config, 'IRMPulse', 'AscSetVoltageMinBoostMultiplier', 1.0)
         
+        self.IRMAxialVoltMax = self.getConfig_Int(config, 'IRMAxial', 'IRMAxialVoltMax', 450)
         self.PulseAxialMax = self.getConfig_Int(config, 'IRMAxial', 'PulseAxialMax', 13080)
         self.PulseAxialMin = self.getConfig_Int(config, 'IRMAxial', 'PulseAxialMin', 50)
+        self.PulseAxialCount = self.getConfig_Int(config, 'IRMAxial', 'PulseAxialCount', 8)
+        self.PulseAxial = self.getConfig_IntArray(config, 'IRMAxial', 'PulseAxial', self.PulseAxialCount+1)
+       
+        self.PulseTransMax = self.getConfig_Int(config, 'IRMTrans', 'PulseTransMax', 10)
+        self.PulseTransMin = self.getConfig_Int(config, 'IRMTrans', 'PulseTransMin', 10)
+        self.PulseTransCount = self.getConfig_Int(config, 'IRMTrans', 'PulseTransCount', 0)
+        self.PulseTrans = self.getConfig_IntArray(config, 'IRMAxial', 'PulseTrans', self.PulseTransCount+1)
        
         self.MotorIDUpDown = config['MotorPrograms']['MotorIDUpDown']
         self.MotorIDChangerX = config['MotorPrograms']['MotorIDChanger']
@@ -276,7 +309,7 @@ class ModConfig():
         self.AfAxialRampMax = self.getConfig_Float(config, 'AFAxial', 'AFAxialRampMax', 5.5) 
         self.AfAxialMonMax = self.getConfig_Float(config, 'AFAxial', 'AFAxialMonMax', 5.5)
         self.AFAxialCalDone = self.getConfig_Bool(config, 'AFAxial', 'AFAxialCalDone', False)
-        self.AFAxial = self.getConfig_Array(config, 'AFAxial', 'AFAxial', self.AFAxialCount+1)
+        self.AFAxial = self.getConfig_FloatArray(config, 'AFAxial', 'AFAxial', self.AFAxialCount+1)
         
         self.AfTransMax = self.getConfig_Int(config, 'AFTrans', 'AFTransMax', 850)
         self.AfTransMin = self.getConfig_Int(config, 'AFTrans', 'AFTransMin', 10)
@@ -285,9 +318,14 @@ class ModConfig():
         self.AfTransRampMax = self.getConfig_Float(config, 'AFTrans', 'AFTransRampMax', 5.3)
         self.AfTransMonMax = self.getConfig_Float(config, 'AFTrans', 'AFTransMonMax', 5.3)
         self.AfTransCalDone = self.getConfig_Bool(config, 'AFTrans', 'AFTransCalDone', False)
-        self.AfTrans = self.getConfig_Array(config, 'AFTrans', 'AFTrans', self.AfTransCount+1)
+        self.AfTrans = self.getConfig_FloatArray(config, 'AFTrans', 'AFTrans', self.AfTransCount+1)
         
         self.AfRampDataPath = config['AFFileSave']['ADWINDataFileSaveBackupDir'].strip() 
+        
+        self.ARMMax = self.getConfig_Int(config, 'ARM', 'ARMMax', 11)
+        self.ARMVoltGauss = self.getConfig_Float(config, 'ARM', 'ARMVoltGauss', 0.19)
+        self.ARMVoltMax = self.getConfig_Int(config, 'ARM', 'ARMVoltMax', 11)
+        self.ARMTimeMax = self.getConfig_Int(config, 'ARM', 'ARMTimeMax', 600)
         
         self.waveForms = self.getWaveForms(config)
         return

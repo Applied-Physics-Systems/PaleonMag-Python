@@ -21,8 +21,11 @@ class frmADWIN_AF(wx.Frame):
         '''
         Constructor
         '''        
-        super(frmADWIN_AF, self).__init__(parent, wx.NewIdRef(), style=wx.DEFAULT_FRAME_STYLE | wx.FRAME_FLOAT_ON_PARENT)
         self.parent = parent
+        if (parent != None):
+            super(frmADWIN_AF, self).__init__(parent, wx.NewIdRef(), style=wx.DEFAULT_FRAME_STYLE | wx.FRAME_FLOAT_ON_PARENT)
+        else:
+            super(frmADWIN_AF, self).__init__(parent, wx.NewIdRef())
         
         self.IORate = 50000   
         
@@ -677,6 +680,7 @@ class frmADWIN_AF(wx.Frame):
                     del self.parent.panelList['ADWinAFControl']
                 
         self.Destroy()
+        
 
 #===================================================================================================
 # Main Module

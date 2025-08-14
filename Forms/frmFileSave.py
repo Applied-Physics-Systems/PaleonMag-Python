@@ -15,7 +15,10 @@ class frmFileSave(wx.Frame):
         '''
         Constructor
         '''
-        super(frmFileSave, self).__init__(parent, wx.NewIdRef(), style=wx.DEFAULT_FRAME_STYLE | wx.FRAME_FLOAT_ON_PARENT)
+        if (parent != None):
+            super(frmFileSave, self).__init__(parent, wx.NewIdRef(), style=wx.DEFAULT_FRAME_STYLE | wx.FRAME_FLOAT_ON_PARENT)
+        else:
+            super(frmFileSave, self).__init__(parent, wx.NewIdRef())
         self.parent = parent   
         
         self.InitUI()        

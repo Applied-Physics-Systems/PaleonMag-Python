@@ -80,22 +80,22 @@ class SQUIDControl(SerialPortDevice):
     '''
     '''
     def configure(self, activeAxis):
-        time.sleep(0.05)
+        time.sleep(0.5)
         cmdStr = activeAxis + 'CR1\r'
         self.sendString(cmdStr)
-        time.sleep(0.012)
+        time.sleep(0.12)
         cmdStr = activeAxis + 'CLC\r'
         self.sendString(cmdStr)
-        time.sleep(0.012)
+        time.sleep(0.12)
         cmdStr = activeAxis + 'CSE\r'
         self.sendString(cmdStr)
-        time.sleep(0.012)
+        time.sleep(0.12)
         cmdStr = activeAxis + 'CF1\r'
         self.sendString(cmdStr)
-        time.sleep(0.012)
+        time.sleep(0.12)
         cmdStr = activeAxis + 'CLP\r'
         self.sendString(cmdStr)
-        time.sleep(0.012)        
+        time.sleep(0.12)        
                 
         return cmdStr, '' 
         

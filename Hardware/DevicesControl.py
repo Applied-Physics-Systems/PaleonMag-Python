@@ -18,6 +18,13 @@ from Process.ProcessData import ProcessData
 from Process.ModConfig import ModConfig
 from Process.ModChanger import ModChanger
 
+DEVICE_MOTORS               = 0x0
+DEVICE_IRM                  = 0x1
+DEVICE_SQUID                = 0x2
+DEVICE_VACUUM               = 0x3
+DEVICE_AF                   = 0x4
+DEVICE_SYSTEM               = 0xF
+
 class DevicesControl():
     '''
     classdocs
@@ -47,7 +54,9 @@ class DevicesControl():
     
     IRM_ARM_INIT            = 0x1001
     IRM_SET_BIAS_FIELD      = 0x1002
-    IRM_FIRE                = 0x1003
+    IRM_REFRESH_TEMP        = 0x1003
+    IRM_FIRE                = 0x1004
+    IRM_FIRE_AT_FIELD       = 0x1005
     
     SQUID_READ_COUNT        = 0x2001
     SQUID_READ_DATA         = 0x2002
@@ -68,6 +77,7 @@ class DevicesControl():
     AF_REFRESH_T            = 0x4002
     AF_CLEAN_COIL           = 0x4003
     AF_START_RAMP           = 0x4004
+    AF_SET_RELAYS_DEFAULT   = 0x4005
     
     SYSTEM_DISCONNECT       = 0xF001
     
@@ -94,7 +104,9 @@ class DevicesControl():
                 MOTOR_RESET: 'Reset',
                 MOTOR_STOP: 'Stop',                
                 IRM_ARM_INIT: 'Initialize IRM/ARM',
+                IRM_SET_BIAS_FIELD: 'Set ARM Bias Field',
                 IRM_FIRE: 'Discharge IRM device',
+                IRM_FIRE_AT_FIELD: 'Discharge IRM at field',
                 SQUID_READ_COUNT: 'Read count from SQUID',
                 SQUID_READ_DATA: 'Read data from SQUID',
                 SQUID_READ_RANGE: 'Read range from SQUID',
@@ -272,18 +284,30 @@ class DevicesControl():
     '''
     def checkProgramHaltRequest(self):
         try:
-            if self.programHaltedFlag:
+            message = self.modConfig.queue.get(timeout=0.001)
+            if 'Program_Halted' in message:
+                self.Flow_Pause()
                 return True
-            else:
-                message = self.modConfig.queue.get(timeout=0.1)
-                if 'Program_Halted' in message:
-                    self.programHaltedFlag = True
-                    return True
                 
             return False
             
         except:
             return False
+        
+    '''
+    '''
+    def Flow_Pause(self):
+        self.modConfig.queue.put('Flow Pause')
+        pauseFlag = True
+        while pauseFlag:
+            try:
+                message = self.modConfig.queue.get(timeout=0.1)
+                if 'Continue Flow' in message:
+                    pauseFlag = False
+            except:
+                time.sleep(0.01)
+                
+        return
       
     '''
         Update data for process that has been changed 
@@ -298,53 +322,333 @@ class DevicesControl():
                         
         return self.modConfig.processData 
                        
-    '''--------------------------------------------------------------------------------------------
-                        
-                        Vacuum Control Task Functions
-                        
-    --------------------------------------------------------------------------------------------'''
     '''
     '''
-    def Vacuum_valveConnect(self, mode):
-        if not self.modConfig.EnableVacuum:
-            return
+    def runMotorTask(self, queue, taskID):
+        
+        if (taskID[0] == self.MOTOR_HOME_TO_TOP):
+            self.motors.HomeToTop()
+                
+        elif (taskID[0] == self.MOTOR_HOME_TO_CENTER):
+            xPos, yPos = self.motors.HomeToCenter()
+            self.modConfig.queue.put('MotorControl:Data: xPos: ' + str(xPos))
+            self.modConfig.queue.put('MotorControl:Data: yPos: ' + str(yPos))
 
-        if 'On' in mode:
-            cmdStr, respStr = self.vacuum.setValveConnect()
-            self.ADwin.DoDAQIO(self.modConfig.VacuumToggleA, boolValue=True)
-        else:
-            cmdStr, respStr = self.vacuum.clearValveConnect()
-            self.ADwin.DoDAQIO(self.modConfig.VacuumToggleA, boolValue=False)
+        elif (taskID[0] == self.MOTOR_MOVE):
+            motorStr = taskID[1][0]
+            activeMotor = self.motors.getActiveMotor(motorStr)
+            if (activeMotor != None):
+                targetPos = taskID[1][1]
+                velocity = taskID[1][2]
+                activeMotor.moveMotor(targetPos, velocity)
+        
+        elif (taskID[0] == self.MOTOR_SAMPLE_PICKUP):
+            self.motors.DoSamplePickup()
+
+        elif (taskID[0] == self.MOTOR_SAMPLE_DROPOFF):
+            SampleHeight = taskID[1][0] 
+            self.motors.DoSampleDropoff(SampleHeight)
             
-        return cmdStr, respStr
+        elif (taskID[0] == self.MOTOR_ZERO_TP):
+            motorStr = taskID[1][0]
+            activeMotor = self.motors.getActiveMotor(motorStr)
+            if (activeMotor != None):
+                activeMotor.zeroTargetPos()
+
+        elif (taskID[0] == self.MOTOR_POLL):
+            motorStr = taskID[1][0]
+            activeMotor = self.motors.getActiveMotor(motorStr)
+            if (activeMotor != None):
+                activeMotor.pollMotor()
+
+        elif (taskID[0] == self.MOTOR_CLEAR_POLL):
+            motorStr = taskID[1][0]
+            activeMotor = self.motors.getActiveMotor(motorStr)
+            if (activeMotor != None):
+                activeMotor.clearPollStatus()
+
+        elif (taskID[0] == self.MOTOR_RELABEL_POSITION):
+            motorStr = taskID[1][0]
+            activeMotor = self.motors.getActiveMotor(motorStr)                
+            targetPosition = taskID[1][1]
+            if (activeMotor != None):
+                activeMotor.relabelPos(targetPosition)
+
+        elif (taskID[0] == self.MOTOR_SET_CURRENT_HOLE):
+            currentHole = taskID[1][0]
+            self.motors.setChangerHole(currentHole)
+
+        elif (taskID[0] == self.MOTOR_CHANGE_HOLE):
+            currentHole = taskID[1][0]
+            self.motors.changerMotortoHole(currentHole)
         
+        elif (taskID[0] == self.MOTOR_GO_TO_X):
+            moveMotorPos = taskID[1][0]
+            if not self.modConfig.processData.HasXYTableBeenHomed:
+                self.motors.HomeToTop()                    # MotorUPDN_TopReset
+                self.motors.MotorXYTable_CenterReset()
+                
+            self.motors.moveMotorXY(self.motors.changerX, moveMotorPos, self.modConfig.ChangerSpeed, False)
+
+        elif (taskID[0] == self.MOTOR_GO_TO_Y):
+            moveMotorPos = taskID[1][0]
+            if not self.modConfig.processData.HasXYTableBeenHomed:
+                self.motors.HomeToTop()                    # MotorUPDN_TopReset
+                self.motors.MotorXYTable_CenterReset()
+                
+            self.motors.moveMotorAbsoluteXY(self.motors.changerY, moveMotorPos, self.modConfig.ChangerSpeed, False)
+
+        elif (taskID[0] == self.MOTOR_SPIN_SAMPLE):
+            spinRPS = taskID[1][0]
+            self.motors.turningMotorSpin(spinRPS)
+
+        elif (taskID[0] == self.MOTOR_CHANGE_TURN_ANGLE):
+            angle = taskID[1][0]
+            self.motors.turningMotorRotate(angle)
+
+        elif (taskID[0] == self.MOTOR_CHANGE_HEIGHT):
+            height = taskID[1][0]
+            self.motors.upDownMove(height, 0)
+            
+        elif (taskID[0] == self.MOTOR_LOAD):
+            self.motors.MoveToCorner()
+
+        elif (taskID[0] == self.MOTOR_READ_POSITION):
+            motorStr = taskID[1][0]
+            activeMotor = self.motors.getActiveMotor(motorStr)
+            if (activeMotor != None):
+                activeMotor.readPosition()
+
+        elif (taskID[0] == self.MOTOR_READ_ANGLE):
+            angle = self.motors.turningMotorAngle()
+            self.modConfig.queue.put('MotorControl:Data: TurningAngle: ' + str(angle))
+
+        elif (taskID[0] == self.MOTOR_READ_HOLE):
+            self.motors.changerHole()
+
+        elif (taskID[0] == self.MOTOR_RESET):
+            self.motors.reset()
+
+        elif (taskID[0] == self.MOTOR_STOP):
+            self.motors.stop()
+                
+        return 'MotorControl'
+
     '''
     '''
-    def Vacuum_motorPower(self, mode):
-        if not self.modConfig.EnableVacuum:
-            return
-        
-        if 'On' in mode:
-            cmdStr, respStr = self.vacuum.setVacuumOn()
-            self.ADwin.DoDAQIO(self.modConfig.MotorToggle, boolValue=True)
-        else:
-            cmdStr, respStr = self.vacuum.setVacuumOff()
-            self.ADwin.DoDAQIO(self.modConfig.MotorToggle, boolValue=False)
-        
-        return cmdStr, respStr
-        
+    def runIRMTask(self, queue, taskID):
+                
+        if (self.apsIRM != None):
+            self.apsIRM.parent = self
+            self.apsIRM.queue = queue
+             
+            if (taskID[0] == self.IRM_ARM_INIT):
+                self.apsIRM.init_IrmArm()
+                    
+            elif (taskID[0] == self.IRM_SET_BIAS_FIELD):
+                Gauss = taskID[1][0]
+                self.apsIRM.SetBiasField(Gauss)                  
+                
+            elif (taskID[0] == self.IRM_FIRE):
+                voltage = taskID[1][0] 
+                self.apsIRM.FireIRM(voltage)
+
+            elif (taskID[0] == self.IRM_FIRE_AT_FIELD):
+                field = taskID[1][0]
+                self.apsIRM.coilLabel = taskID[1][1]  
+                self.apsIRM.FireIRMAtField(field)
+                            
+            elif (taskID[0] == self.IRM_REFRESH_TEMP):
+                self.apsIRM.RefreshTemp()
+                
+        return 'IRMControl'
+
     '''
     '''
-    def Vacuum_degausserCooler(self, mode):
-        if not self.modConfig.EnableDegausserCooler:
-            return
+    def runSquidTask(self, queue, taskID):
+
+        if (taskID[0] == self.SQUID_READ_COUNT):
+            activeAxis = taskID[1][0]
+            cmdStr, respStr = self.SQUID.readCount(activeAxis)
+            queue.put('SQUIDControl:' + cmdStr + ':' + respStr)
+
+        elif (taskID[0] == self.SQUID_READ_DATA):
+            activeAxis = taskID[1][0]
+            cmdStr, respStr = self.SQUID.readData(activeAxis)
+            queue.put('SQUIDControl:' + cmdStr + ':' + respStr)
+            
+        elif (taskID[0] == self.SQUID_READ_RANGE):
+            activeAxis = taskID[1][0]
+            cmdStr, respStr = self.SQUID.readRange(activeAxis)
+            queue.put('SQUIDControl:' + cmdStr + ':' + respStr)
+
+        elif (taskID[0] == self.SQUID_RESET_COUNT):
+            activeAxis = taskID[1][0]
+            cmdStr, respStr = self.SQUID.resetCount(activeAxis)
+            queue.put('SQUIDControl:' + cmdStr + ':' + respStr)
+
+        elif (taskID[0] == self.SQUID_CONFIGURE):
+            activeAxis = taskID[1][0]
+            cmdStr, respStr = self.SQUID.configure(activeAxis)
+            queue.put('SQUIDControl:' + cmdStr + ':' + respStr)
+            
+        elif (taskID[0] == self.SQUID_CHANGE_RATE):
+            activeAxis = taskID[1][0]
+            rateLabel = taskID[1][1]
+            cmdStr, respStr = self.SQUID.changeRate(activeAxis, rateLabel)
+            queue.put('SQUIDControl:' + cmdStr + ':' + respStr)
+
+        elif (taskID[0] == self.SQUID_SET_CFG):
+            activeAxis = taskID[1][0]
+            cfgLabel = taskID[1][1]
+            cmdStr, respStr = self.SQUID.setCfg(activeAxis, cfgLabel)
+            queue.put('SQUIDControl:' + cmdStr + ':' + respStr)
+            
+        elif (taskID[0] == self.SQUID_READ):
+            cmdStr, respStr = self.SQUID.getResponse()
+            queue.put('SQUIDControl:' + cmdStr + ':' + respStr)
+                
+        return 'SQUIDControl'
+
+    '''
+    '''
+    def runVacuumTask(self, queue, taskID):
+
+        if (taskID[0] == self.VACUUM_INIT):
+            cmdStr, respStr = self.vacuum.init(self.ADwin)                        
+            queue.put('VacuumControl:' + cmdStr + ':' + respStr)
+            
+        elif (taskID[0] == self.VACUUM_SET_CONNECT):
+            mode = taskID[1][0]
+            switch = False
+            if 'On' in mode:
+                switch = True
+            cmdStr, respStr = self.vacuum.valveConnect(switch)
+            queue.put('VacuumControl:' + cmdStr + ':' + respStr)
+
+        elif (taskID[0] == self.VACUUM_SET_MOTOR):
+            mode = taskID[1][0]
+            switch = False
+            if 'On' in mode:
+                switch = True
+            cmdStr, respStr = self.vacuum.motorPower(self.ADwin, switch)
+            queue.put('VacuumControl:' + cmdStr + ':' + respStr)
+            
+        elif (taskID[0] == self.VACUUM_RESET):
+            cmdStr, respStr = self.vacuum.reset()        
+            queue.put('VacuumControl:' + cmdStr + ':' + respStr)
+
+        elif (taskID[0] == self.VACUUM_SET_DEGAUSSER):
+            mode = taskID[1][0]
+            self.vacuum.degausserCooler(mode)
         
-        if 'On' in mode:
-            self.ADwin.DoDAQIO(self.modConfig.DegausserToggle, boolValue=True)
-        else:
-            self.ADwin.DoDAQIO(self.modConfig.DegausserToggle, boolValue=False)
+        return 'VacuumControl'
+
+    '''
+    '''
+    def runAFTask(self, queue, taskID):
         
-        return
+        if (taskID[0] == self.AF_SWITCH_COIL):
+            activeCoil = taskID[1][0]
+            self.ADwin.trySetRelays_ADwin(activeCoil)
+            
+        elif (taskID[0] == self.AF_REFRESH_T):
+            temp1, temp2 = self.ADwin.refreshTs()
+            queue.put('ADWinAFControl:' + temp1 + ':' + temp2)
+            
+        elif (taskID[0] == self.AF_SET_RELAYS_DEFAULT):
+            self.ADwin.TrySetAllRelaysToDefaultPosition_ADwin()
+            
+        elif (taskID[0] == self.AF_CLEAN_COIL):
+            Verbose = taskID[1][0]        
+            self.ADwin.executeRamp(self.modConfig.AxialCoilSystem, 
+                                   self.modConfig.AfAxialMax, 
+                                   PeakHangTime = 0, 
+                                   CalRamp = True, 
+                                   ClipTest = False, 
+                                   Verbose=Verbose)
+            
+            queue.put('ADWinAFControl:Active Coil = Transverse')
+    
+            self.ADwin.executeRamp(self.modConfig.TransverseCoilSystem, 
+                                   self.modConfig.AfTransMax, 
+                                   PeakHangTime = 0, 
+                                   CalRamp = True, 
+                                   ClipTest = False, 
+                                   Verbose=Verbose)                
+
+        elif (taskID[0] == self.AF_START_RAMP):
+            if (len(taskID[1]) == 10):
+                AFCoilSystem = self.modConfig.getCoilSystem(taskID[1][0])
+                PeakValue = self.modConfig.getParam_Float(taskID[1][1])
+                UpSlope = self.modConfig.getParam_Float(taskID[1][2])
+                DownSlope = self.modConfig.getParam_Float(taskID[1][3])
+                IORate = self.modConfig.getParam_Float(taskID[1][4])
+                PeakHangTime = self.modConfig.getParam_Float(taskID[1][5])
+                CalRamp = taskID[1][6]
+                ClipTest = taskID[1][7]
+                Verbose = taskID[1][8]
+                DoDCFieldRecord = taskID[1][9]
+                self.ADwin.executeRamp(AFCoilSystem, 
+                                       PeakValue,
+                                       UpSlope = UpSlope,
+                                       DownSlope = DownSlope,
+                                       IORate = IORate, 
+                                       PeakHangTime = PeakHangTime, 
+                                       CalRamp = CalRamp, 
+                                       ClipTest = ClipTest, 
+                                       Verbose = Verbose,
+                                       DoDCFieldRecord = DoDCFieldRecord)
+            elif (len(taskID[1]) == 8):
+                AFCoilSystem = self.modConfig.getCoilSystem(taskID[1][0])
+                PeakValue = self.modConfig.getParam_Float(taskID[1][1].strip())
+                IORate = self.modConfig.getParam_Float(taskID[1][2].strip())
+                PeakHangTime = self.modConfig.getParam_Float(taskID[1][3].strip())
+                CalRamp = taskID[1][4]
+                ClipTest = taskID[1][5]
+                Verbose = taskID[1][6]
+                DoDCFieldRecord = taskID[1][7]    
+                self.ADwin.executeRamp(AFCoilSystem, 
+                                       PeakValue,
+                                       IORate = IORate, 
+                                       PeakHangTime = PeakHangTime, 
+                                       CalRamp = CalRamp, 
+                                       ClipTest = ClipTest, 
+                                       Verbose = Verbose,
+                                       DoDCFieldRecord = DoDCFieldRecord)
+
+        return 'ADWinAFControl'
+
+    '''
+    '''
+    def runSystemTask(self, queue, taskID):
+        
+        if (taskID[0] == self.SYSTEM_DISCONNECT):            
+            self.motors.MotorCommDisconnect()
+            
+            if self.SQUID.PortOpen:
+                self.SQUID.Disconnect()
+            
+            # Added in this IF statement to make sure that the ADWIN board power
+            # to the AF / IRM relays is switched off so that the relays don't overheat
+            if (('ADWIN' in self.modConfig.AFSystem) and self.modConfig.EnableAF):
+                self.ADwin.SwitchOff_AllRelays()
+            elif (('2G' in self.modConfig.AFSystem) and self.modConfig.EnableAF):
+                self.ADwin.AF2GControl.Disconnect()
+                
+            self.vacuum.init(self.ADwin)
+            self.vacuum.Disconnect()                
+
+            if (self.susceptibility != None):
+                self.susceptibility.Disconnect()
+                
+            if self.gaussMeter.connectFlag:
+                self.gaussMeter.Disconnect()
+                
+            if (self.modConfig.EnableAxialIRM or self.modConfig.EnableTransIRM):
+                self.ADwin.DoDAQIO(self.modConfig.IRMVoltageOut, numValue=0)
+        
+        return 'SystemControl'
 
     '''--------------------------------------------------------------------------------------------
                         
@@ -356,328 +660,34 @@ class DevicesControl():
     '''
     def runTask(self, queue, taskID):
         self.queue = queue
-        deviceID = 'None'
-        try:            
-            if (taskID[0] == self.MOTOR_HOME_TO_TOP):
-                deviceID = 'MotorControl'
-                self.motors.HomeToTop()
-                    
-            elif (taskID[0] == self.MOTOR_HOME_TO_CENTER):
-                deviceID = 'MotorControl'
-                xPos, yPos = self.motors.HomeToCenter()
-                self.modConfig.queue.put('MotorControl:Data: xPos: ' + str(xPos))
-                self.modConfig.queue.put('MotorControl:Data: yPos: ' + str(yPos))
-
-            elif (taskID[0] == self.MOTOR_MOVE):
-                deviceID = 'MotorControl'
-                motorStr = taskID[1][0]
-                activeMotor = self.motors.getActiveMotor(motorStr)
-                if (activeMotor != None):
-                    targetPos = taskID[1][1]
-                    velocity = taskID[1][2]
-                    activeMotor.moveMotor(targetPos, velocity)
-            
-            elif (taskID[0] == self.MOTOR_SAMPLE_PICKUP):
-                deviceID = 'MotorControl'
-                self.motors.DoSamplePickup()
-
-            elif (taskID[0] == self.MOTOR_SAMPLE_DROPOFF):
-                deviceID = 'MotorControl'
-                SampleHeight = taskID[1][0] 
-                self.motors.DoSampleDropoff(SampleHeight)
+        deviceStr = 'None'
+        try:   
+            deviceID = ((taskID[0] & 0xF000) >> 12)          
+            if (deviceID == DEVICE_MOTORS):
+                deviceStr = self.runMotorTask(queue, taskID)
                 
-            elif (taskID[0] == self.MOTOR_ZERO_TP):
-                deviceID = 'MotorControl'
-                motorStr = taskID[1][0]
-                activeMotor = self.motors.getActiveMotor(motorStr)
-                if (activeMotor != None):
-                    activeMotor.zeroTargetPos()
-
-            elif (taskID[0] == self.MOTOR_POLL):
-                deviceID = 'MotorControl'
-                motorStr = taskID[1][0]
-                activeMotor = self.motors.getActiveMotor(motorStr)
-                if (activeMotor != None):
-                    activeMotor.pollMotor()
-
-            elif (taskID[0] == self.MOTOR_CLEAR_POLL):
-                deviceID = 'MotorControl'
-                motorStr = taskID[1][0]
-                activeMotor = self.motors.getActiveMotor(motorStr)
-                if (activeMotor != None):
-                    activeMotor.clearPollStatus()
-
-            elif (taskID[0] == self.MOTOR_RELABEL_POSITION):
-                deviceID = 'MotorControl'
-                motorStr = taskID[1][0]
-                activeMotor = self.motors.getActiveMotor(motorStr)                
-                targetPosition = taskID[1][1]
-                if (activeMotor != None):
-                    activeMotor.relabelPos(targetPosition)
-
-            elif (taskID[0] == self.MOTOR_SET_CURRENT_HOLE):
-                deviceID = 'MotorControl'
-                currentHole = taskID[1][0]
-                self.motors.setChangerHole(currentHole)
-
-            elif (taskID[0] == self.MOTOR_CHANGE_HOLE):
-                deviceID = 'MotorControl'
-                currentHole = taskID[1][0]
-                self.motors.changerMotortoHole(currentHole)
-            
-            elif (taskID[0] == self.MOTOR_GO_TO_X):
-                deviceID = 'MotorControl'
-                moveMotorPos = taskID[1][0]
-                if not self.modConfig.processData.HasXYTableBeenHomed:
-                    self.motors.HomeToTop()                    # MotorUPDN_TopReset
-                    self.motors.MotorXYTable_CenterReset()
-                    
-                self.motors.moveMotorXY(self.motors.changerX, moveMotorPos, self.modConfig.ChangerSpeed, False)
-
-            elif (taskID[0] == self.MOTOR_GO_TO_Y):
-                deviceID = 'MotorControl'
-                moveMotorPos = taskID[1][0]
-                if not self.modConfig.processData.HasXYTableBeenHomed:
-                    self.motors.HomeToTop()                    # MotorUPDN_TopReset
-                    self.motors.MotorXYTable_CenterReset()
-                    
-                self.motors.moveMotorAbsoluteXY(self.motors.changerY, moveMotorPos, self.modConfig.ChangerSpeed, False)
-
-            elif (taskID[0] == self.MOTOR_SPIN_SAMPLE):
-                deviceID = 'MotorControl'
-                spinRPS = taskID[1][0]
-                self.motors.turningMotorSpin(spinRPS)
-
-            elif (taskID[0] == self.MOTOR_CHANGE_TURN_ANGLE):
-                deviceID = 'MotorControl'
-                angle = taskID[1][0]
-                self.motors.turningMotorRotate(angle)
-
-            elif (taskID[0] == self.MOTOR_CHANGE_HEIGHT):
-                deviceID = 'MotorControl'
-                height = taskID[1][0]
-                self.motors.upDownMove(height, 0)
+            elif (deviceID == DEVICE_IRM):
+                deviceStr = self.runIRMTask(queue, taskID)
                 
-            elif (taskID[0] == self.MOTOR_LOAD):
-                deviceID = 'MotorControl'
-                self.motors.MoveToCorner()
+            elif (deviceID == DEVICE_SQUID):
+                deviceStr = self.runSquidTask(queue, taskID)
 
-            elif (taskID[0] == self.MOTOR_READ_POSITION):
-                deviceID = 'MotorControl'
-                motorStr = taskID[1][0]
-                activeMotor = self.motors.getActiveMotor(motorStr)
-                if (activeMotor != None):
-                    activeMotor.readPosition()
+            elif (deviceID == DEVICE_VACUUM):
+                deviceStr = self.runVacuumTask(queue, taskID)
 
-            elif (taskID[0] == self.MOTOR_READ_ANGLE):
-                deviceID = 'MotorControl'
-                angle = self.motors.turningMotorAngle()
-                self.modConfig.queue.put('MotorControl:Data: TurningAngle: ' + str(angle))
-
-            elif (taskID[0] == self.MOTOR_READ_HOLE):
-                deviceID = 'MotorControl'
-                self.motors.changerHole()
-
-            elif (taskID[0] == self.MOTOR_RESET):
-                deviceID = 'MotorControl'
-                self.motors.reset()
-
-            elif (taskID[0] == self.MOTOR_STOP):
-                deviceID = 'MotorControl'
-                self.motors.stop()
+            elif (deviceID == DEVICE_AF):
+                deviceStr = self.runAFTask(queue, taskID)
                 
-            elif (taskID[0] == self.IRM_ARM_INIT):
-                deviceID = 'IRMControl'
-                if (self.apsIRM != None): 
-                    self.apsIRM.init_IrmArm(self.ADwin)
-                
-            elif (taskID[0] == self.IRM_FIRE):
-                deviceID = 'IRMControl'
-                voltage = taskID[1][0] 
-                if (self.apsIRM != None):
-                    self.apsIRM.FireIRM(voltage, self, queue)
-
-            elif (taskID[0] == self.SQUID_READ_COUNT):
-                deviceID = 'SQUIDControl'
-                activeAxis = taskID[1][0]
-                cmdStr, respStr = self.SQUID.readCount(activeAxis)
-                queue.put('SQUIDControl:' + cmdStr + ':' + respStr)
-
-            elif (taskID[0] == self.SQUID_READ_DATA):
-                deviceID = 'SQUIDControl'
-                activeAxis = taskID[1][0]
-                cmdStr, respStr = self.SQUID.readData(activeAxis)
-                queue.put('SQUIDControl:' + cmdStr + ':' + respStr)
-                
-            elif (taskID[0] == self.SQUID_READ_RANGE):
-                deviceID = 'SQUIDControl'
-                activeAxis = taskID[1][0]
-                cmdStr, respStr = self.SQUID.readRange(activeAxis)
-                queue.put('SQUIDControl:' + cmdStr + ':' + respStr)
-
-            elif (taskID[0] == self.SQUID_RESET_COUNT):
-                deviceID = 'SQUIDControl'
-                activeAxis = taskID[1][0]
-                cmdStr, respStr = self.SQUID.resetCount(activeAxis)
-                queue.put('SQUIDControl:' + cmdStr + ':' + respStr)
-
-            elif (taskID[0] == self.SQUID_CONFIGURE):
-                deviceID = 'SQUIDControl'
-                activeAxis = taskID[1][0]
-                cmdStr, respStr = self.SQUID.configure(activeAxis)
-                queue.put('SQUIDControl:' + cmdStr + ':' + respStr)
-                
-            elif (taskID[0] == self.SQUID_CHANGE_RATE):
-                deviceID = 'SQUIDControl'
-                activeAxis = taskID[1][0]
-                rateLabel = taskID[1][1]
-                cmdStr, respStr = self.SQUID.changeRate(activeAxis, rateLabel)
-                queue.put('SQUIDControl:' + cmdStr + ':' + respStr)
-
-            elif (taskID[0] == self.SQUID_SET_CFG):
-                deviceID = 'SQUIDControl'
-                activeAxis = taskID[1][0]
-                cfgLabel = taskID[1][1]
-                cmdStr, respStr = self.SQUID.setCfg(activeAxis, cfgLabel)
-                queue.put('SQUIDControl:' + cmdStr + ':' + respStr)
-                
-            elif (taskID[0] == self.SQUID_READ):
-                deviceID = 'SQUIDControl'
-                cmdStr, respStr = self.SQUID.getResponse()
-                queue.put('SQUIDControl:' + cmdStr + ':' + respStr)
-                
-            elif (taskID[0] == self.VACUUM_INIT):
-                deviceID = 'VacuumControl'
-                cmdStr, respStr = self.vacuum.init(self.ADwin)                        
-                queue.put('VacuumControl:' + cmdStr + ':' + respStr)
-                
-            elif (taskID[0] == self.VACUUM_SET_CONNECT):
-                deviceID = 'VacuumControl'
-                mode = taskID[1][0]
-                cmdStr, respStr = self.Vacuum_valveConnect(mode)
-                queue.put('VacuumControl:' + cmdStr + ':' + respStr)
-
-            elif (taskID[0] == self.VACUUM_SET_MOTOR):
-                deviceID = 'VacuumControl'
-                mode = taskID[1][0]
-                cmdStr, respStr = self.Vacuum_motorPower(mode)
-                queue.put('VacuumControl:' + cmdStr + ':' + respStr)
-                
-            elif (taskID[0] == self.VACUUM_RESET):
-                deviceID = 'VacuumControl'        
-                cmdStr, respStr = self.vacuum.reset()        
-                queue.put('VacuumControl:' + cmdStr + ':' + respStr)
-
-            elif (taskID[0] == self.VACUUM_SET_DEGAUSSER):
-                deviceID = 'VacuumControl'                
-                mode = taskID[1][0]
-                self.Vacuum_degausserCooler(mode)
-                
-            elif (taskID[0] == self.AF_SWITCH_COIL):
-                deviceID = 'ADWinAFControl'
-                activeCoil = taskID[1][0]
-                self.ADwin.trySetRelays_ADwin(activeCoil)
-                
-            elif (taskID[0] == self.AF_REFRESH_T):
-                deviceID = 'ADWinAFControl'                
-                temp1, temp2 = self.ADwin.refreshTs()
-                queue.put('ADWinAFControl:' + temp1 + ':' + temp2)
-                
-            elif (taskID[0] == self.AF_CLEAN_COIL):
-                deviceID = 'ADWinAFControl'
-                Verbose = taskID[1][0]        
-                self.ADwin.executeRamp(self.modConfig.AxialCoilSystem, 
-                                       self.modConfig.AfAxialMax, 
-                                       PeakHangTime = 0, 
-                                       CalRamp = True, 
-                                       ClipTest = False, 
-                                       Verbose=Verbose)
-                
-                queue.put('ADWinAFControl:Active Coil = Transverse')
-        
-                self.ADwin.executeRamp(self.modConfig.TransverseCoilSystem, 
-                                       self.modConfig.AfTransMax, 
-                                       PeakHangTime = 0, 
-                                       CalRamp = True, 
-                                       ClipTest = False, 
-                                       Verbose=Verbose)                
-
-            elif (taskID[0] == self.AF_START_RAMP):
-                deviceID = 'ADWinAFControl'
-                    
-                if (len(taskID[1]) == 10):
-                    AFCoilSystem = self.modConfig.getCoilSystem(taskID[1][0])
-                    PeakValue = self.modConfig.getParam_Float(taskID[1][1])
-                    UpSlope = self.modConfig.getParam_Float(taskID[1][2])
-                    DownSlope = self.modConfig.getParam_Float(taskID[1][3])
-                    IORate = self.modConfig.getParam_Float(taskID[1][4])
-                    PeakHangTime = self.modConfig.getParam_Float(taskID[1][5])
-                    CalRamp = taskID[1][6]
-                    ClipTest = taskID[1][7]
-                    Verbose = taskID[1][8]
-                    DoDCFieldRecord = taskID[1][9]
-                    self.ADwin.executeRamp(AFCoilSystem, 
-                                           PeakValue,
-                                           UpSlope = UpSlope,
-                                           DownSlope = DownSlope,
-                                           IORate = IORate, 
-                                           PeakHangTime = PeakHangTime, 
-                                           CalRamp = CalRamp, 
-                                           ClipTest = ClipTest, 
-                                           Verbose = Verbose,
-                                           DoDCFieldRecord = DoDCFieldRecord)
-                elif (len(taskID[1]) == 8):
-                    AFCoilSystem = self.modConfig.getCoilSystem(taskID[1][0])
-                    PeakValue = self.modConfig.getParam_Float(taskID[1][1].strip())
-                    IORate = self.modConfig.getParam_Float(taskID[1][2].strip())
-                    PeakHangTime = self.modConfig.getParam_Float(taskID[1][3].strip())
-                    CalRamp = taskID[1][4]
-                    ClipTest = taskID[1][5]
-                    Verbose = taskID[1][6]
-                    DoDCFieldRecord = taskID[1][7]    
-                    self.ADwin.executeRamp(AFCoilSystem, 
-                                           PeakValue,
-                                           IORate = IORate, 
-                                           PeakHangTime = PeakHangTime, 
-                                           CalRamp = CalRamp, 
-                                           ClipTest = ClipTest, 
-                                           Verbose = Verbose,
-                                           DoDCFieldRecord = DoDCFieldRecord)
-                    
-            elif (taskID[0] == self.SYSTEM_DISCONNECT):
-                deviceID = 'SystemControl'
-                
-                self.motors.MotorCommDisconnect()
-                
-                if self.SQUID.PortOpen:
-                    self.SQUID.Disconnect()
-                
-                # Added in this IF statement to make sure that the ADWIN board power
-                # to the AF / IRM relays is switched off so that the relays don't overheat
-                if (('ADWIN' in self.modConfig.AFSystem) and self.modConfig.EnableAF):
-                    self.ADwin.SwitchOff_AllRelays()
-                elif (('2G' in self.modConfig.AFSystem) and self.modConfig.EnableAF):
-                    self.ADwin.AF2GControl.Disconnect()
-                    
-                self.vacuum.init(self.ADwin)
-                self.vacuum.Disconnect()                
-    
-                if (self.susceptibility != None):
-                    self.susceptibility.Disconnect()
-                    
-                if self.gaussMeter.connectFlag:
-                    self.gaussMeter.Disconnect()
-                    
-                if (self.modConfig.EnableAxialIRM or self.modConfig.EnableTransIRM):
-                    self.ADwin.DoDAQIO(self.modConfig.IRMVoltageOut, numValue=0)
-                        
+            elif (deviceID == DEVICE_SYSTEM):
+                deviceStr = self.runSystemTask(queue, taskID)
+                                            
         except ValueError as e:
             self.modConfig.queue.put(deviceID + ':Error: ' + str(e))
 
         except IOError as e:
             self.modConfig.queue.put(deviceID + ':MessageBox: ' + str(e))
         
-        return deviceID
+        return deviceStr
 
 #===================================================================================================
 # Test Queue

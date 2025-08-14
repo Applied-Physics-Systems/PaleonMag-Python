@@ -27,11 +27,12 @@ from Forms.frmSQUID import frmSQUID
 from Forms.frmVacuum import frmVacuum
 from Forms.frmADWIN_AF import frmADWIN_AF
 from Forms.frmCalibrateCoils import frmCalibrateCoils
+from Forms.frmIRMARM import frmIRMARM
 
 from Hardware.DevicesControl import DevicesControl
 from Process.ModConfig import ModConfig
 
-VersionNumber = 'Version 0.00.20'
+VersionNumber = 'Version 0.00.21'
 
 ID_DC_MOTORS        = 0
 ID_FILE_REGISTRY    = 1
@@ -42,6 +43,7 @@ ID_QUIT_EXIT        = 5
 ID_SQUID            = 6
 ID_VACUUM           = 7
 ID_DEMAG_AF         = 8
+ID_IRM_ARM          = 9
 
 FLASH_DISPLAY_OFF_TIME = 10
 
@@ -100,6 +102,7 @@ class MainForm(wx.Frame):
     backgroundRunningFlag = False
     messageStr = ''
     NOCOMM_Flag = False
+    progressColor = 'None'
     flashingCount = FLASH_DISPLAY_OFF_TIME
     flashingMessage = ''
     panelList = {}
@@ -178,7 +181,7 @@ class MainForm(wx.Frame):
         diagMenu.AppendSubMenu(subDemagMenu, "AF Demagnetizer")
 
         irmSubMenu = wx.Menu()
-        irmWindowItem = wx.MenuItem(diagMenu, wx.ID_NEW, text = "IRM / ARM Window", kind = wx.ITEM_NORMAL)
+        irmWindowItem = wx.MenuItem(diagMenu, ID_IRM_ARM, text = "IRM / ARM Window", kind = wx.ITEM_NORMAL)
         irmSubMenu.Append(irmWindowItem)
         diagMenu.AppendSubMenu(irmSubMenu, "IRM/ARM")
 
@@ -275,13 +278,19 @@ class MainForm(wx.Frame):
                 
         # create status bar
         self.statusBar = self.CreateStatusBar(style = wx.BORDER_RAISED)
-        self.statusBar.SetFieldsCount(4)
-        self.statusBar.SetStatusWidths([-8, -8, -3, -1])
+        self.statusBar.SetFieldsCount(5)        
+        self.statusBar.SetStatusWidths([-8, -8, -4, -2, -2])        
+        # Create a font object with a larger size (e.g., 12 points)
+        font = wx.Font(wx.FontInfo(12).Family(wx.FONTFAMILY_SWISS))  # You can customize other font attributes
+        # Set the font for the status bar
+        self.statusBar.SetFont(font)        
         # set text to status bar
         if self.NOCOMM_Flag:
             self.statusBar.SetStatusText("NoCOMM mode on", 0)
         else:
             self.statusBar.SetStatusText("NoCOMM mode off", 0)
+        self.setStatusColor('Green')
+        self.Bind(wx.EVT_SIZE, self.OnSize)         # Bind the OnSize event to handle resizing
                 
         # Add event handler on OnClose
         self.Bind(wx.EVT_CLOSE, self.onClosed)
@@ -316,18 +325,26 @@ class MainForm(wx.Frame):
         self.panelList['MagnetometerControl'] = magControl                    
                 
         if not self.NOCOMM_Flag:
+            # Configure SQUID
+            self.pushTaskToQueue([self.devControl.SQUID_CONFIGURE, ['A']])
+            
             # Move vertical motor to top position
             self.pushTaskToQueue([self.devControl.MOTOR_HOME_TO_TOP, [None]])
             
+            if 'ADWIN' in self.modConfig.AFSystem:
+                self.pushTaskToQueue([self.devControl.AF_SET_RELAYS_DEFAULT, [None]])
+            
             # Move XY Table To Center Position
-            if (self.modConfig.UseXYTableAPS):
+            if self.modConfig.UseXYTableAPS:
                 self.pushTaskToQueue([self.devControl.MOTOR_HOME_TO_CENTER, [None]])
                 
-                                
+            # Initialize Vacuum.
+            if self.modConfig.DoVacuumReset:
+                self.pushTaskToQueue([self.devControl.VACUUM_RESET, [None]])
+                                            
             # if EnableAxialIRM, then discharge
             if self.modConfig.EnableARM:
-                #self.pushTaskToQueue([self.devControl.IRM_SET_BIAS_FIELD, [0]])
-                print('TODO: Set bias field with DAQ board')
+                self.pushTaskToQueue([self.devControl.IRM_SET_BIAS_FIELD, [0]])
                 
             if self.modConfig.EnableAxialIRM:
                 self.pushTaskToQueue([self.devControl.IRM_FIRE, [0]])
@@ -386,7 +403,22 @@ class MainForm(wx.Frame):
     def sendErrorMessage(self, errorMessage):
         self.statusBar.SetBackgroundColour(wx.Colour(255, 0, 0))
         self.statusBar.SetStatusText(errorMessage, 1)
-        
+            
+    '''
+    '''
+    def setStatusColor(self, imgColor):
+        if (self.progressColor != imgColor):
+            self.progressColor = imgColor
+            # Load the image
+            img = wx.Bitmap('.\\Resources\\' + imgColor + '.png', wx.BITMAP_TYPE_PNG)
+            
+            # Get the rectangle of the second status bar field
+            rect = self.statusBar.GetFieldRect(3)
+            
+            # Create a StaticBitmap control with the image and position it
+            self.image_control = wx.StaticBitmap(self.statusBar, -1, img, pos=rect.GetTopLeft())
+                
+        return
 
     '''--------------------------------------------------------------------------------------------
                         
@@ -431,6 +463,7 @@ class MainForm(wx.Frame):
                 registryControl.Show()
                 self.panelList['RegistryControl'] = registryControl
             self.statusBar.SetStatusText('Tasks Completed', 1)
+            self.setStatusColor('Green')
         
         else:
             if (taskID in self.devControl.messages.keys()):
@@ -474,6 +507,7 @@ class MainForm(wx.Frame):
                     else:
                         self.appendMessageBox('Tasks Completed\n')
                         self.statusBar.SetStatusText('Tasks Completed', 1)
+                        self.setStatusColor('Green')
                         self.timer.Stop()
                                                 
                 elif ('Error:' in endMessage):
@@ -494,6 +528,12 @@ class MainForm(wx.Frame):
                     messageList = endMessage.split(':')
                     if (len(messageList) > 2):
                         self.statusBar.SetStatusText(messageList[2], 1)     
+                    else:
+                        wx.MessageBox(messageList[1], style=wx.OK|wx.CENTER, caption='Warning!')
+                        
+                elif ('Program Status:' in endMessage):
+                    messageList = endMessage.split(':')
+                    self.statusBar.SetStatusText(messageList[1], 2)
                         
                 else:
                     '''
@@ -527,6 +567,7 @@ class MainForm(wx.Frame):
     def pushTaskToQueue(self, taskFunction):
         if not self.NOCOMM_Flag:
             self.statusBar.SetBackgroundColour(wx.NullColour)
+            self.setStatusColor('Red')
             self.statusBar.SetStatusText("Task running ...", 1)
             self.taskQueue.append(taskFunction)
             # if no background process running, start one
@@ -540,15 +581,21 @@ class MainForm(wx.Frame):
                         
                         Event Handler Functions
                         
-    --------------------------------------------------------------------------------------------'''
+    --------------------------------------------------------------------------------------------''' 
+    '''
+    '''
+    def OnSize(self, event):
+        # Reposition the image when the frame is resized
+        rect = self.statusBar.GetFieldRect(3)
+        self.image_control.SetPosition(rect.GetTopLeft())
+        event.Skip()
+            
     '''
         Close MainForm
     '''
     def onClosed(self, event):
-        while self.backgroundRunningFlag:
-            time.sleep(0.5)        
-        
-        self.runProcess([self.devControl.SYSTEM_DISCONNECT,[None]])
+        if not self.backgroundRunningFlag:        
+            self.runProcess([self.devControl.SYSTEM_DISCONNECT,[None]])
         
         self.Destroy()
 
@@ -606,7 +653,13 @@ class MainForm(wx.Frame):
             if not 'ADWinAFControl' in self.panelList.keys():
                 demagAfControl = frmADWIN_AF(parent=self)
                 demagAfControl.Show()
-                self.panelList['ADWinAFControl'] = demagAfControl                    
+                self.panelList['ADWinAFControl'] = demagAfControl
+                
+        elif (menuID == ID_IRM_ARM):
+            if not 'IRM_ARM_Control' in self.panelList.keys():
+                irmARMControl = frmIRMARM(parent=self)
+                irmARMControl.Show()
+                self.panelList['IRMControl'] = irmARMControl
             
             
         elif (menuID == ID_QUIT_EXIT):
@@ -623,7 +676,7 @@ class MainForm(wx.Frame):
         # Format the time as HH:MM
         formatted_time = now.strftime("%H:%M %p")
         self.statusBar.SetBackgroundColour(wx.NullColour)
-        self.statusBar.SetStatusText(formatted_time, 3)
+        self.statusBar.SetStatusText(formatted_time, 4)
         
         if self.backgroundRunningFlag:
             self.checkProcess()

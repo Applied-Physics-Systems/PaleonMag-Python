@@ -3,10 +3,13 @@ Created on Feb 11, 2025
 
 @author: hd.nguyen
 '''
+import os
 import time
+import configparser
 import numpy as np
 
 from Hardware.Device.MotorControl import MotorControl
+from Process.ModConfig import ModConfig
 
 class Motors():
     '''
@@ -145,8 +148,7 @@ class Motors():
         Move the UpDown motor
     '''
     def upDownMove(self, position, speed, waitingForStop=True):
-        if self.parent.checkProgramHaltRequest():
-            return
+        self.parent.checkProgramHaltRequest()
                 
         movementSign = 1
         startingPos = self.upDown.readPosition()
@@ -400,11 +402,12 @@ class Motors():
     --------------------------------------------------------------------------------------------'''
     '''
         Move UpDown Motor to the top
+        
+        Move the UpDown motor to MeasPos, then wait until it cannot move any more.
     '''
     def HomeToTop(self):        
         # No homing to top if the program has been halted
-        if self.parent.checkProgramHaltRequest():
-            return
+        self.parent.checkProgramHaltRequest()
         
         stop_state = False
         if self.modConfig.DCMotorHomeToTop_StopOnTrue:
@@ -816,7 +819,7 @@ class Motors():
             CurAngle = self.turningMotorAngle()
         else:
             startingPos = self.turning.readPosition()
-            startingangle = self.turningMotorAngle()
+            self.turningMotorAngle()
             target = startingPos - self.modConfig.TurningMotorFullRotation * speedRPS * Duration
             self.turning.moveMotor(target, abs(self.modConfig.TurningMotor1rps * speedRPS), False)
             
@@ -830,13 +833,27 @@ class Motors():
         self.disconnectMotor(self.changerY)
         self.disconnectMotor(self.upDown)
         return
+    
+    '''
+    '''
+    def runTask(self, taskID):
+        if (taskID == 0):
+            self.HomeToTop()
         
 #===================================================================================================
 # Main Module
 #---------------------------------------------------------------------------------------------------
 if __name__=='__main__':
     try:    
-        devControl = Motors()
+        devicePath = os.getcwd()
+        config = configparser.ConfigParser()
+        config.read('C:\\Users\\hd.nguyen.APPLIEDPHYSICS\\workspace\\SVN\\Windows\\Rock Magnetometer\\Paleomag_v3_Hung.INI')
+        modConfig = ModConfig(config=config)          
+        
+        devControl = Motors(devicePath, modConfig =modConfig)        
+        devControl.openMotors()        
+        
+        devControl.runTask(0)
         
         print('Done !!!')
         
