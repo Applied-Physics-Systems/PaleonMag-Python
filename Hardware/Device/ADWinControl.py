@@ -299,7 +299,7 @@ class ADWinControl():
             self.modAF_DAQ.DigitalOut(channel, boolValue, True)
             
         elif (channel.ChanType == 'DI'):
-            print('TODO')
+            retValue = self.modAF_DAQ.DigialIn(channel.ChanNum)
             
         elif (channel.ChanType == 'AO'):
             self.modAF_DAQ.AnalogOut(channel.ChanNum, channel.RangeType, numValue)

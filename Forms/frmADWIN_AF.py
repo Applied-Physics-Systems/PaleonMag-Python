@@ -651,6 +651,9 @@ class frmADWIN_AF(wx.Frame):
     '''
     '''
     def onShow(self, event):
+        self.parent.NOCOMM_Flag = False
+        self.parent.modConfig.processData.adwinEnable = True
+        
         if (self.parent != None):
             coilSelection = self.getCoilRBtnSelection() 
             if (coilSelection == 'Axial'):

@@ -164,6 +164,9 @@ class frmVacuum(wx.Frame):
     '''
     '''
     def onShow(self, event):
+        self.parent.NOCOMM_Flag = False
+        self.parent.modConfig.processData.vacuumEnable = True
+                
         if (self.parent != None):
             if (self.parent.devControl.vacuum == None):
                 self.connectBtn.SetLabel('Connect')

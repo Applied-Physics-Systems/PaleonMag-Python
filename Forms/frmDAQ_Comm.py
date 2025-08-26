@@ -1,11 +1,11 @@
 '''
-Created on Feb 7, 2025
+Created on Aug 22, 2025
 
 @author: hd.nguyen
 '''
 import wx
 
-class frmAFTuner(wx.Frame):
+class frmDAQ_Comm(wx.Frame):
     '''
     classdocs
     '''
@@ -16,9 +16,9 @@ class frmAFTuner(wx.Frame):
         Constructor
         '''
         if (parent != None):
-            super(frmAFTuner, self).__init__(parent, wx.NewIdRef(), style=wx.DEFAULT_FRAME_STYLE | wx.FRAME_FLOAT_ON_PARENT)
+            super(frmDAQ_Comm, self).__init__(parent, wx.NewIdRef(), style=wx.DEFAULT_FRAME_STYLE | wx.FRAME_FLOAT_ON_PARENT)
         else:
-            super(frmAFTuner, self).__init__(parent, wx.NewIdRef())
+            super(frmDAQ_Comm, self).__init__(parent, wx.NewIdRef())
         self.parent = parent   
         
         self.InitUI()        
@@ -29,7 +29,7 @@ class frmAFTuner(wx.Frame):
         panel = wx.Panel(self)
         
         self.SetSize((400, 305))
-        self.SetTitle('MCC AF Tuner')
+        self.SetTitle('DAQ Boards Comm Controller')
         self.Centre()
         self.Show(True)
 
@@ -39,9 +39,10 @@ class frmAFTuner(wx.Frame):
 if __name__=='__main__':
     try:    
         app = wx.App(False)
-        frame = frmAFTuner(parent=None)
+        frame = frmDAQ_Comm(parent=None)
         app.MainLoop()    
         
     except Exception as e:
-        print(e)
-                
+        print(e)        
+        
+        

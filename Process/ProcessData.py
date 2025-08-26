@@ -24,6 +24,11 @@ class ProcessData():
         self.ADwin_rampPeakVoltage = 0.0
         self.ADwin_rampUpSlope = 0
         self.ADwin_rampDownSlope = 0
+        self.motorsEnable = False
+        self.vacuumEnable = False
+        self.irmArmEnable = False
+        self.squidEnable = False
+        self.adwinEnable = False
         
         self.PortOpen = {'UpDown': False,
                          'Turning': False,

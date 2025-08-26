@@ -148,7 +148,8 @@ class Motors():
         Move the UpDown motor
     '''
     def upDownMove(self, position, speed, waitingForStop=True):
-        self.parent.checkProgramHaltRequest()
+        if (self.parent != None): 
+            self.parent.checkProgramHaltRequest()
                 
         movementSign = 1
         startingPos = self.upDown.readPosition()
@@ -407,7 +408,8 @@ class Motors():
     '''
     def HomeToTop(self):        
         # No homing to top if the program has been halted
-        self.parent.checkProgramHaltRequest()
+        if (self.parent != None):
+            self.parent.checkProgramHaltRequest()
         
         stop_state = False
         if self.modConfig.DCMotorHomeToTop_StopOnTrue:
@@ -476,11 +478,12 @@ class Motors():
         xStatus = self.changerX.checkInternalStatus(4)
         yStatus = self.changerY.checkInternalStatus(5) 
         while ((xStatus or yStatus) and
-               (not self.parent.checkProgramHaltRequest()) and
                (not self.hasMoveToXYLimit_Timedout(startTime))):
             time.sleep(0.1)
             xStatus = self.changerX.checkInternalStatus(4)
-            yStatus = self.changerY.checkInternalStatus(5) 
+            yStatus = self.changerY.checkInternalStatus(5)
+            if (self.parent != None):
+                self.parent.checkProgramHaltRequest()
                         
         # At this point, if not hit the limit switches for XY yet, set error
         xStatus = self.changerX.checkInternalStatus(4)
@@ -514,15 +517,16 @@ class Motors():
         # Wait for limit switches or timeout
         xStatus = self.changerX.checkInternalStatus(5)
         yStatus = self.changerY.checkInternalStatus(6) 
-        while ((xStatus and yStatus) and
-               (not self.parent.checkProgramHaltRequest()) and
+        while ((xStatus or yStatus) and
                (not self.hasMoveToXYLimit_Timedout(startTime))):
             time.sleep(0.1)
             xStatus = self.changerX.checkInternalStatus(5)
             yStatus = self.changerY.checkInternalStatus(6) 
-            
+            if (self.parent != None):
+                self.parent.checkProgramHaltRequest()
+        
         xStatus = self.changerX.checkInternalStatus(5)
-        yStatus = self.changerY.checkInternalStatus(6) 
+        yStatus = self.changerY.checkInternalStatus(6)
         if not ((xStatus == False) and (yStatus == False)):
             if self.hasMoveToXYLimit_Timedout(startTime):
                 errorMessage = 'Home XY Stage, move motors to Center limit switches timed-out after '
@@ -845,13 +849,15 @@ class Motors():
 #---------------------------------------------------------------------------------------------------
 if __name__=='__main__':
     try:    
-        devicePath = os.getcwd()
+        devicePath = os.getcwd() + '\\Device\\'
         config = configparser.ConfigParser()
         config.read('C:\\Users\\hd.nguyen.APPLIEDPHYSICS\\workspace\\SVN\\Windows\\Rock Magnetometer\\Paleomag_v3_Hung.INI')
         modConfig = ModConfig(config=config)          
         
-        devControl = Motors(devicePath, modConfig =modConfig)        
-        devControl.openMotors()        
+        devControl = Motors(devicePath, modConfig=modConfig)
+        devControl.openMotors()
+                
+        devControl.HomeToCenter()    
         
         devControl.runTask(0)
         

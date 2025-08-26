@@ -3,6 +3,7 @@ Created on Jan 27, 2025
 
 @author: hd.nguyen
 '''
+import os
 import time
 
 from Hardware.Device.SerialPortDevice import SerialPortDevice
@@ -13,7 +14,7 @@ class VacuumControl(SerialPortDevice):
     '''
 
 
-    def __init__(self, baudRate, pathName, comPort, Label, modConfig):
+    def __init__(self, baudRate, pathName, comPort, Label, modConfig=None):
         '''
         Constructor
         '''        
@@ -177,3 +178,14 @@ class VacuumControl(SerialPortDevice):
         if self.PortOpen:
             self.PortOpen = False
         return
+
+'''
+'''    
+if __name__=='__main__':
+    try:    
+        pathName = os.getcwd() + '\\'
+        vacuumControl = VacuumControl(9600, pathName, 'COM11', 'vacuum')
+        print('Done !!!')
+        
+    except Exception as e:
+        print('Error!! ' + str(e))

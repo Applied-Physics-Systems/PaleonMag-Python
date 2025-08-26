@@ -294,27 +294,46 @@ class MotorControl(SerialPortDevice):
             
         # Test move to absolute position on time base
         elif (taskID == 1):
-            position = 8000
+            position = -8000
             moveMotorVelocity = 83      # 0.1 second acceleration
             self.moveMotorOnTime(position, moveMotorVelocity)
             
-        # Search for the top switch
+        # Search for the corner switch
         elif (taskID == 2):
-            relativePosition = 8000
+            relativePosition = 50000
             motorID = self.label
             if 'UpDown' in motorID:
                 speed = speed = self.modConfig.LiftSpeedNormal
                 switch = 4
             elif 'ChangerX' in motorID:
                 speed = self.modConfig.ChangerSpeed
-                centerSwitch = 3
-                cornerSwitch = 2
-                switch = cornerSwitch
+                switch = 4
             elif 'ChangerY' in motorID:
                 speed = self.modConfig.ChangerSpeed
-                centerSwitch = 5
-                cornerSwitch = 6
-                switch = cornerSwitch
+                switch = 5
+            
+            searchFlag = True
+            self.moveMotorRelative(relativePosition, speed, False, 0, 0)
+            while searchFlag: 
+                if (self.checkInternalStatus(switch) == False):
+                    self.motorStop()
+                    currentPosition = self.readPosition()
+                    print(currentPosition)                    
+                    searchFlag = False
+                    
+        # Search for the center switch
+        elif (taskID == 3):
+            relativePosition = -50000
+            motorID = self.label
+            if 'UpDown' in motorID:
+                speed = speed = self.modConfig.LiftSpeedNormal
+                switch = 4
+            elif 'ChangerX' in motorID:
+                speed = self.modConfig.ChangerSpeed
+                switch = 5
+            elif 'ChangerY' in motorID:
+                speed = self.modConfig.ChangerSpeed
+                switch = 6
             
             searchFlag = True
             self.moveMotorRelative(relativePosition, speed, False, 0, 0)
@@ -325,10 +344,10 @@ class MotorControl(SerialPortDevice):
                     print(currentPosition)                    
                     searchFlag = False
             
-        elif (taskID == 3):
+        elif (taskID == 4):
             self.motorStop()
             
-        elif (taskID == 4):
+        elif (taskID == 5):
             searchFlag = True
             switch = 5
             while searchFlag: 
@@ -336,6 +355,11 @@ class MotorControl(SerialPortDevice):
                     currentPosition = self.readPosition()
                     print(currentPosition)                    
                     searchFlag = False
+                    
+        # print limit switch
+        elif (taskID == 6):
+            switch = 6
+            print(self.checkInternalStatus(switch))
                             
 '''
 '''    
@@ -356,7 +380,7 @@ if __name__=='__main__':
             comPort = 'COM10'
         motorControl = MotorControl(57600, pathName, comPort, motorID, modConfig)
         
-        motorControl.runTask(2)
+        motorControl.runTask(6)
                 
         motorControl.closeDevice()
         print('Done !!!')

@@ -6,6 +6,7 @@ Created on Oct 28, 2024
 import os
 import time
 import configparser
+import subprocess
 
 from Hardware.Motors import Motors
 from Hardware.Device.IrmArmControl import IrmArmControl
@@ -57,6 +58,14 @@ class DevicesControl():
     IRM_REFRESH_TEMP        = 0x1003
     IRM_FIRE                = 0x1004
     IRM_FIRE_AT_FIELD       = 0x1005
+    IRM_ARM_VOLTAGE_OUT     = 0x1006
+    IRM_TOGGLE_ARMSET       = 0x1007
+    IRM_IRM_VOLTAGE_OUT     = 0x1008
+    IRM_IRM_VOLTAGE_IN      = 0x1009
+    IRM_TOGGLE_IRMFIRE      = 0x100A
+    IRM_TOGGLE_IRMTRIM      = 0x100B
+    IRM_READ_IRM_POWER      = 0x100C
+    IRM_AVERAGE_VOLTAGE     = 0x100D
     
     SQUID_READ_COUNT        = 0x2001
     SQUID_READ_DATA         = 0x2002
@@ -105,8 +114,15 @@ class DevicesControl():
                 MOTOR_STOP: 'Stop',                
                 IRM_ARM_INIT: 'Initialize IRM/ARM',
                 IRM_SET_BIAS_FIELD: 'Set ARM Bias Field',
-                IRM_FIRE: 'Discharge IRM device',
+                IRM_FIRE: 'Discharge IRM device',                
                 IRM_FIRE_AT_FIELD: 'Discharge IRM at field',
+                IRM_ARM_VOLTAGE_OUT: 'ARM Voltage out',
+                IRM_IRM_VOLTAGE_OUT: 'IRM Voltage out',
+                IRM_IRM_VOLTAGE_IN: 'IRM Voltage in',
+                IRM_TOGGLE_IRMFIRE: 'Toggle IRM Fire',
+                IRM_TOGGLE_IRMTRIM: 'Toggle IRM Trim',
+                IRM_READ_IRM_POWER: 'Read IRM Power',
+                IRM_AVERAGE_VOLTAGE: 'Read average IRM voltage',
                 SQUID_READ_COUNT: 'Read count from SQUID',
                 SQUID_READ_DATA: 'Read data from SQUID',
                 SQUID_READ_RANGE: 'Read range from SQUID',
@@ -237,30 +253,37 @@ class DevicesControl():
                         
         self.deviceList = []
         
-        self.motors = Motors(self.currentPath, self, self.modConfig)
-        deviceList, message = self.motors.openMotors()
-        self.deviceList.extend(deviceList) 
-        
-        self.vacuum, respStr = self.openVacuumComm(self.vacuum, 'Vacuum', 'COMPortVacuum')
-        message += respStr    
-        if (self.vacuum != None):
-            self.deviceList.append(self.vacuum)
+        message = ''
+        if (self.modConfig.processData.motorsEnable):
+            self.motors = Motors(self.currentPath, self, self.modConfig)
+            deviceList, message = self.motors.openMotors()
+            self.deviceList.extend(deviceList) 
 
-        self.apsIRM, respStr = self.openIrmArmComm(self.apsIRM, 'IrmArm', 'COMPortApsIrm')
-        message += respStr    
-        if (self.apsIRM != None):
-            self.deviceList.append(self.apsIRM)
+        if (self.modConfig.processData.vacuumEnable):                
+            self.vacuum, respStr = self.openVacuumComm(self.vacuum, 'Vacuum', 'COMPortVacuum')
+            message += respStr    
+            if (self.vacuum != None):
+                self.deviceList.append(self.vacuum)
 
-        self.SQUID, respStr = self.openSQUIDComm(self.SQUID, 'SQUID', 'COMPortSquids')
-        message += respStr    
-        if (self.SQUID != None):
-            self.deviceList.append(self.SQUID)
-        
-        try:
-            self.ADwin = ADWinControl(self.currentPath, modConfig=self.modConfig)
-        except Exception as e:
-            print('Error: Initializing ADWinControl; ' + str(e))
-            self.ADwin = None
+        if (self.modConfig.processData.irmArmEnable):
+            self.apsIRM, respStr = self.openIrmArmComm(self.apsIRM, 'IrmArm', 'COMPortApsIrm')
+            message += respStr    
+            if (self.apsIRM != None):
+                self.deviceList.append(self.apsIRM)
+
+        if (self.modConfig.processData.squidEnable):
+            self.SQUID, respStr = self.openSQUIDComm(self.SQUID, 'SQUID', 'COMPortSquids')
+            message += respStr    
+            if (self.SQUID != None):
+                self.deviceList.append(self.SQUID)
+                
+        if (self.modConfig.processData.adwinEnable): 
+            try:
+                self.ADwin = ADWinControl(self.currentPath, modConfig=self.modConfig)
+                
+            except Exception as e:
+                print('Error: Initializing ADWinControl; ' + str(e))
+                self.ADwin = None
         
         return message 
 
@@ -276,6 +299,22 @@ class DevicesControl():
     def closeDevices(self):
         for device in self.deviceList:
             self.closeDevice(device)
+
+    '''
+        Check for message from the MainForm
+        If Program_Halt request is sent, exit.
+        Otherwise, continue
+    '''
+    def checkInterruptRequest(self):
+        try:
+            message = self.modConfig.queue.get(timeout=0.001)
+            if 'Program_Interrupt' in message:
+                return True
+                
+            return False
+            
+        except:
+            return False
 
     '''
         Check for message from the MainForm
@@ -314,11 +353,14 @@ class DevicesControl():
         These are the data that are exchanged between processes.
     '''
     def updateProcessData(self):
-        self.modConfig.processData.PortOpen['UpDown'] = self.motors.upDown.modConfig.processData.PortOpen['UpDown']
-        self.modConfig.processData.PortOpen['Turning'] = self.motors.turning.modConfig.processData.PortOpen['Turning']
-        self.modConfig.processData.PortOpen['ChangerX'] = self.motors.changerX.modConfig.processData.PortOpen['ChangerX']
-        self.modConfig.processData.PortOpen['ChangerY'] = self.motors.changerY.modConfig.processData.PortOpen['ChangerY']
-        self.modConfig.processData.ADwinDO = self.ADwin.modConfig.processData.ADwinDO
+        if (self.motors != None):
+            self.modConfig.processData.PortOpen['UpDown'] = self.motors.upDown.modConfig.processData.PortOpen['UpDown']
+            self.modConfig.processData.PortOpen['Turning'] = self.motors.turning.modConfig.processData.PortOpen['Turning']
+            self.modConfig.processData.PortOpen['ChangerX'] = self.motors.changerX.modConfig.processData.PortOpen['ChangerX']
+            self.modConfig.processData.PortOpen['ChangerY'] = self.motors.changerY.modConfig.processData.PortOpen['ChangerY']
+        
+        if (self.ADwin != None):
+            self.modConfig.processData.ADwinDO = self.ADwin.modConfig.processData.ADwinDO
                         
         return self.modConfig.processData 
                        
@@ -460,6 +502,38 @@ class DevicesControl():
                             
             elif (taskID[0] == self.IRM_REFRESH_TEMP):
                 self.apsIRM.RefreshTemp()
+                
+            elif (taskID[0] == self.IRM_ARM_VOLTAGE_OUT):
+                outVoltage = taskID[1][0]
+                self.apsIRM.outVoltage(self.modConfig.ARMVoltageOut, outVoltage)
+                
+            elif (taskID[0] == self.IRM_TOGGLE_ARMSET):
+                mode = taskID[1][0]
+                self.apsIRM.toggleTTLRelays(self.modConfig.ARMSet, mode)
+                
+            elif (taskID[0] == self.IRM_IRM_VOLTAGE_OUT):
+                outVoltage = taskID[1][0]
+                self.apsIRM.outVoltage(self.modConfig.IRMVoltageOut, outVoltage)
+                            
+            elif (taskID[0] == self.IRM_IRM_VOLTAGE_IN):
+                inVoltage = self.apsIRM.inVoltage(self.modConfig.IRMCapacitorVoltageIn)
+                self.queue.put('IRMControl:IRM Voltage Read = ' + "{:.2f}".format(inVoltage))
+                
+            elif (taskID[0] == self.IRM_TOGGLE_IRMFIRE):
+                mode = taskID[1][0]
+                self.apsIRM.toggleTTLRelays(self.modConfig.IRMFire, mode)
+                            
+            elif (taskID[0] == self.IRM_TOGGLE_IRMTRIM):
+                mode = taskID[1][0]
+                mode = self.apsIRM.TrimOnOff(mode) 
+                self.apsIRM.toggleTTLRelays(self.modConfig.IRMTrim, mode)
+                            
+            elif (taskID[0] == self.IRM_READ_IRM_POWER):
+                inVoltage = self.apsIRM.inVoltage(self.modConfig.IRMPowerAmpVoltageIn)
+                self.queue.put('IRMControl:IRM Read Power = ' + "{:.2f}".format(inVoltage))
+                            
+            elif (taskID[0] == self.IRM_AVERAGE_VOLTAGE):
+                self.apsIRM.IRMAverageVoltageIn()
                 
         return 'IRMControl'
 
@@ -623,30 +697,36 @@ class DevicesControl():
     '''
     def runSystemTask(self, queue, taskID):
         
-        if (taskID[0] == self.SYSTEM_DISCONNECT):            
-            self.motors.MotorCommDisconnect()
+        if (taskID[0] == self.SYSTEM_DISCONNECT):
+            if (self.motors != None):            
+                self.motors.MotorCommDisconnect()
             
-            if self.SQUID.PortOpen:
-                self.SQUID.Disconnect()
+            if (self.SQUID != None):
+                if self.SQUID.PortOpen:
+                    self.SQUID.Disconnect()
             
-            # Added in this IF statement to make sure that the ADWIN board power
-            # to the AF / IRM relays is switched off so that the relays don't overheat
-            if (('ADWIN' in self.modConfig.AFSystem) and self.modConfig.EnableAF):
-                self.ADwin.SwitchOff_AllRelays()
-            elif (('2G' in self.modConfig.AFSystem) and self.modConfig.EnableAF):
-                self.ADwin.AF2GControl.Disconnect()
+            if (self.ADwin != None):
+                # Added in this IF statement to make sure that the ADWIN board power
+                # to the AF / IRM relays is switched off so that the relays don't overheat
+                if (('ADWIN' in self.modConfig.AFSystem) and self.modConfig.EnableAF):
+                    self.ADwin.SwitchOff_AllRelays()
+                elif (('2G' in self.modConfig.AFSystem) and self.modConfig.EnableAF):
+                    self.ADwin.AF2GControl.Disconnect()
                 
-            self.vacuum.init(self.ADwin)
-            self.vacuum.Disconnect()                
+            if (self.vacuum != None):                
+                self.vacuum.init(self.ADwin)
+                self.vacuum.Disconnect()                
 
             if (self.susceptibility != None):
                 self.susceptibility.Disconnect()
+
+            if (self.gaussMeter != None):                
+                if self.gaussMeter.connectFlag:
+                    self.gaussMeter.Disconnect()
                 
-            if self.gaussMeter.connectFlag:
-                self.gaussMeter.Disconnect()
-                
-            if (self.modConfig.EnableAxialIRM or self.modConfig.EnableTransIRM):
-                self.ADwin.DoDAQIO(self.modConfig.IRMVoltageOut, numValue=0)
+            if (self.ADwin != None):                
+                if (self.modConfig.EnableAxialIRM or self.modConfig.EnableTransIRM):
+                    self.ADwin.DoDAQIO(self.modConfig.IRMVoltageOut, numValue=0)
         
         return 'SystemControl'
 
@@ -682,10 +762,10 @@ class DevicesControl():
                 deviceStr = self.runSystemTask(queue, taskID)
                                             
         except ValueError as e:
-            self.modConfig.queue.put(deviceID + ':Error: ' + str(e))
+            self.modConfig.queue.put(deviceStr + ':Error: ' + str(e))
 
         except IOError as e:
-            self.modConfig.queue.put(deviceID + ':MessageBox: ' + str(e))
+            self.modConfig.queue.put(deviceStr + ':MessageBox: ' + str(e))
         
         return deviceStr
 
@@ -711,7 +791,7 @@ class Queue():
 #---------------------------------------------------------------------------------------------------    
 '''
 '''                    
-def runAllMotorsFunctions(devControl):
+def runAllMotorsFunctions(queue, devControl):
 
         print('MOTOR_HOME_TO_TOP')
         devControl.runTask(queue, [devControl.MOTOR_HOME_TO_TOP, [None]])
@@ -805,31 +885,35 @@ def runAllMotorsFunctions(devControl):
     
 '''
 '''    
-if __name__=='__main__':
+'''
+'''
+def runRegressionTest():
+    devControl = DevicesControl()
+    queue = Queue()
+
+    config = configparser.ConfigParser()
+    config.read('C:\\Users\\hd.nguyen.APPLIEDPHYSICS\\workspace\\SVN\\Windows\\Rock Magnetometer\\Paleomag_v3_Hung.INI')
+    processData = ProcessData()
+    processData.config = config 
+
+    modConfig = ModConfig(process=processData, queue=queue)
+    devControl.setDevicesConfig(modConfig)
+
+    start_time = time.perf_counter()
+    runAllMotorsFunctions(queue, devControl)
+    devControl.updateProcessData()
+                    
+    end_time = time.perf_counter()
+    elapsed_time = end_time - start_time
+    print(f"Elapsed time: {elapsed_time:.4f} seconds")
+            
+    print('Done !!!')
+    return
+   
+if __name__=='__main__':    
     try:    
-        devControl = DevicesControl()
-        queue = Queue()
-
-        config = configparser.ConfigParser()
-        config.read('C:\\Users\\hd.nguyen.APPLIEDPHYSICS\\workspace\\SVN\\Windows\\Rock Magnetometer\\Paleomag_v3_Hung.INI')
-        processData = ProcessData()
-        processData.config = config 
-
-        modConfig = ModConfig(process=processData, queue=queue)
-        devControl.setDevicesConfig(modConfig)
-
-        start_time = time.perf_counter()
-        #runAllMotorsFunctions(devControl)
-        print('AF_CLEAN_COIL')
-        devControl.runTask(queue, [devControl.AF_CLEAN_COIL, [True]])
-        devControl.updateProcessData()
+        runRegressionTest()
                         
-        end_time = time.perf_counter()
-        elapsed_time = end_time - start_time
-        print(f"Elapsed time: {elapsed_time:.4f} seconds")
-                
-        print('Done !!!')
-        
     except Exception as e:
         print('Error!! ' + str(e))
 

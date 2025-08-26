@@ -266,6 +266,7 @@ class ModConfig():
         self.ARMVoltageOut = self.retrieveChannel(config['Channels']['ARMVoltageOut'], config)
         self.IRMVoltageOut = self.retrieveChannel(config['Channels']['IRMVoltageOut'], config)
         self.IRMCapacitorVoltageIn = self.retrieveChannel(config['Channels']['IRMCapacitorVoltageIn'], config)
+        self.IRMPowerAmpVoltageIn = self.retrieveChannel(config['Channels']['IRMPowerAmpVoltageIn'], config)
         self.ARMSet = self.retrieveChannel(config['Channels']['ARMSet'], config)
         self.IRMFire = self.retrieveChannel(config['Channels']['IRMFire'], config)
         self.IRMTrim = self.retrieveChannel(config['Channels']['IRMTrim'], config)

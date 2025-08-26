@@ -103,6 +103,12 @@ class ModAF_DAQ(DAQControl):
     
     '''
     '''
+    def DigitalIn(self, channel):
+        print('TODO')
+        return 0
+    
+    '''
+    '''
     def DigitalOut(self, DigOut_Chan, SetHigh, OneChanOn = True):
         
         status = self.cbDConfigBit(DigOut_Chan)

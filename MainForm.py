@@ -32,7 +32,7 @@ from Forms.frmIRMARM import frmIRMARM
 from Hardware.DevicesControl import DevicesControl
 from Process.ModConfig import ModConfig
 
-VersionNumber = 'Version 0.00.21'
+VersionNumber = 'Version 0.00.22'
 
 ID_DC_MOTORS        = 0
 ID_FILE_REGISTRY    = 1
@@ -308,13 +308,20 @@ class MainForm(wx.Frame):
     '''
     '''
     def System_Initialize(self):
-        # Initialize IRM/ARM
-        self.pushTaskToQueue([self.devControl.IRM_ARM_INIT, [None]])
-        
-        # Initialize Vacuum.
-        self.pushTaskToQueue([self.devControl.VACUUM_INIT, [None]])
+        if not self.NOCOMM_Flag:
+            self.modConfig.processData.motorsEnable = True
+            self.modConfig.processData.vacuumEnable = True
+            self.modConfig.processData.irmArmEnable = True
+            self.modConfig.processData.squidEnable = True
+            self.modConfig.processData.adwinEnable = True
             
-        self.pushTaskToQueue([END_OF_SEQUENCE, [ENDTASK_SYSTEM_INIT]])        
+            # Initialize IRM/ARM
+            self.pushTaskToQueue([self.devControl.IRM_ARM_INIT, [None]])
+            
+            # Initialize Vacuum.
+            self.pushTaskToQueue([self.devControl.VACUUM_INIT, [None]])
+                
+            self.pushTaskToQueue([END_OF_SEQUENCE, [ENDTASK_SYSTEM_INIT]])        
         return
         
     '''
@@ -363,7 +370,7 @@ class MainForm(wx.Frame):
     '''
     def openINIFile(self):
         dlg = wx.FileDialog(self, "Open", "", "",
-                            "All files (*.*)|*.*",
+                            "INI files (*.INI)|*.INI",
                             wx.FD_OPEN | wx.FD_FILE_MUST_EXIST)
         
         if dlg.ShowModal() == wx.ID_OK:

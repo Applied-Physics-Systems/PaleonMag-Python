@@ -11,7 +11,7 @@ class frmCalibrateCoils(wx.Frame):
     '''
 
 
-    def __init__(self, parent):
+    def __init__(self, parent, InAFMode=False):
         '''
         Constructor
         '''
@@ -20,6 +20,7 @@ class frmCalibrateCoils(wx.Frame):
         else:
             super(frmCalibrateCoils, self).__init__(parent, wx.NewIdRef())
         self.parent = parent   
+        self.inAFMode = InAFMode
         
         self.InitUI()        
         
@@ -32,6 +33,12 @@ class frmCalibrateCoils(wx.Frame):
         self.SetTitle('AF Coil Calibration')
         self.Centre()
         self.Show(True)
+        
+    '''
+    '''
+    def ZOrder(self, value):
+        print('TODO')
+        return 
 
 #===================================================================================================
 # Main Module

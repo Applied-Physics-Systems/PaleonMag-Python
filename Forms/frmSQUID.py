@@ -223,6 +223,9 @@ class frmSQUID(wx.Frame):
     '''
     '''
     def onShow(self, event):
+        self.parent.NOCOMM_Flag = False
+        self.parent.modConfig.processData.squidEnable = True
+        
         if (self.parent.devControl.SQUID != None):
             self.connectBtn.SetLabel('Disconnect')
         else:

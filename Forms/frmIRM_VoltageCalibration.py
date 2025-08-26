@@ -25,6 +25,24 @@ class frmIRM_VoltageCalibration(wx.Frame):
         except Exception as e:
             print(e)
                 
+        self.InitUI()        
+        
+    '''
+    '''
+    def InitUI(self):
+        panel = wx.Panel(self)
+        
+        self.SetSize((400, 305))
+        self.SetTitle('Voltage Calibration')
+        self.Centre()
+        self.Show(True)
+                
+    '''
+    '''
+    def ZOrder(self, value):
+        print('TODO')
+        return 
+                
 #===================================================================================================
 # Main Module
 #---------------------------------------------------------------------------------------------------

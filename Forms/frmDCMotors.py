@@ -186,6 +186,8 @@ class frmDCMotors(wx.Frame):
 
         # Add event handler on OnClose
         self.Bind(wx.EVT_CLOSE, self.onClosed)
+        # Add event handler on OnShow
+        self.Bind(wx.EVT_SHOW, self.onShow)
         
         self.SetSize((800, 500))
         self.SetTitle('Motor Control')
@@ -464,6 +466,13 @@ class frmDCMotors(wx.Frame):
                 del self.parent.panelList['MotorControl']
                 
         self.Destroy()
+        return
+    
+    '''
+    '''
+    def onShow(self, event):
+        self.parent.NOCOMM_Flag = False
+        self.parent.modConfig.processData.motorsEnable = True
         return
         
 #===================================================================================================

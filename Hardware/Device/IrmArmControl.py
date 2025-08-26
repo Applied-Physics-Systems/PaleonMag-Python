@@ -473,9 +473,7 @@ class IrmArmControl(SerialPortDevice):
         
         if (outVoltage < 0):
             outVoltage = 0.0
-            
-        self.queue.put('IRMControl:IRM Fire = ' + "{:.2f}".format(outVoltage))
-            
+                        
         return outVoltage
 
     '''
@@ -660,8 +658,10 @@ class IrmArmControl(SerialPortDevice):
             
         if enabling:
             self.IRMBackfieldMode = True
+            self.queue.put('IRMControl:Back Field Mode = True')
         else:
             self.IRMBackfieldMode = False
+            self.queue.put('IRMControl:Back Field Mode = False')
         
         return
     
@@ -750,6 +750,7 @@ class IrmArmControl(SerialPortDevice):
                 self.CalMode_updateDirectionDisplay()
             
             # Same for either system
+            self.IRMInterrupt = self.parent.checkInterruptRequest()
             if self.IRMInterrupt:                
                 self.IRMInterrupt = False
                 
@@ -810,6 +811,7 @@ class IrmArmControl(SerialPortDevice):
             self.queue.put("IRMControl:IRM Status = " + lblIRMStatus + txtMCCIRMPowerAmpVoltageIn)
             
             # Same for either system
+            self.IRMInterrupt = self.parent.checkInterruptRequest()
             if self.IRMInterrupt:                
                 self.IRMInterrupt = False
                                                                                
@@ -970,7 +972,7 @@ class IrmArmControl(SerialPortDevice):
                     
         # Close the TTL switch to connect the IRM circuit
         self.parent.ADwin.DoDAQIO(self.modConfig.IRMFire, boolValue=False)
-        self.queue.put('IRMControl:IRM Fire = On!')
+        self.queue.put('IRMControl:IRM Fire = On')
         
         # Pause while the IRM pulse
         # goes through the AF Coil
@@ -1168,3 +1170,23 @@ class IrmArmControl(SerialPortDevice):
             self.queue.put('IRMControl' + txtTemp)
         
         return
+    
+    '''
+    '''
+    def outVoltage(self, channelConfig, outVoltage):
+        self.parent.ADwin.DoDAQIO(channelConfig, numValue=outVoltage)
+        return
+
+    '''
+    '''
+    def inVoltage(self, channelConfig):
+        inVoltage = self.parent.ADwin.DoDAQIO(channelConfig)
+        return inVoltage
+    
+    '''
+    '''
+    def toggleTTLRelays(self, channelConfig, mode):
+        self.parent.ADwin.DoDAQIO(channelConfig, boolValue=mode)
+        return
+    
+    

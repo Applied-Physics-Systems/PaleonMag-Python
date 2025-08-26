@@ -5,6 +5,11 @@ Created on Jul 7, 2025
 '''
 import wx
 
+from Forms.frmDAQ_Comm import frmDAQ_Comm
+from Forms.frmCalibrateCoils import frmCalibrateCoils
+from Forms.frmIRM_VoltageCalibration import frmIRM_VoltageCalibration
+from Forms.frmSettings import frmSettings
+
 class frmIRMARM(wx.Frame):
     '''
     classdocs
@@ -104,6 +109,7 @@ class frmIRMARM(wx.Frame):
         irmVBtn = wx.Button(panel, label='IRM V', pos=(XOri, YOri), size=(btnLength, btnHeight))
         irmVBtn.Bind(wx.EVT_BUTTON, self.onIRMV)
         self.irmVTBox = wx.TextCtrl(panel, pos=(XOri + XOffset, YOri), size=(txtBoxLength, txtBoxHeight))
+        self.irmVTBox.SetValue('0.0')
 
         YOffset = btnHeight + 7 
         readIRMVBtn = wx.Button(panel, label='Read IRM V in', pos=(XOri, YOri + YOffset), size=(btnLength, btnHeight))
@@ -113,16 +119,20 @@ class frmIRMARM(wx.Frame):
         irmFireBtn = wx.Button(panel, label='IRM Fire', pos=(XOri, YOri + 2*YOffset), size=(btnLength, btnHeight))
         irmFireBtn.Bind(wx.EVT_BUTTON, self.onIRMFire)
         self.irmFireTBox = wx.TextCtrl(panel, pos=(XOri + XOffset, YOri + 2*YOffset), size=(txtBoxLength, txtBoxHeight))
+        self.irmFireTBox.SetValue('Off')
+        self.irmFireTBox.SetBackgroundColour(wx.RED)
 
         irmTrimBtn = wx.Button(panel, label='IRM Trim', pos=(XOri, YOri + 3*YOffset), size=(btnLength, btnHeight))
         irmTrimBtn.Bind(wx.EVT_BUTTON, self.onIRMTrim)
         self.irmTrimTBox = wx.TextCtrl(panel, pos=(XOri + XOffset, YOri + 3*YOffset), size=(txtBoxLength, txtBoxHeight))
+        self.irmTrimTBox.SetValue('Off')
+        self.irmTrimTBox.SetBackgroundColour(wx.RED)
 
         btnHeight = 40
         yTxtOffset = 8 
-        readIRMBtn = wx.Button(panel, label='Read IRM\nPower Amp V in', pos=(XOri, YOri + 4*YOffset), size=(btnLength, btnHeight))
-        readIRMBtn.Bind(wx.EVT_BUTTON, self.onReadIRM)
-        self.readIrmTBox = wx.TextCtrl(panel, pos=(XOri + XOffset, YOri + 4*YOffset + yTxtOffset), size=(txtBoxLength, txtBoxHeight))
+        readIRMPowerBtn = wx.Button(panel, label='Read IRM\nPower Amp V in', pos=(XOri, YOri + 4*YOffset), size=(btnLength, btnHeight))
+        readIRMPowerBtn.Bind(wx.EVT_BUTTON, self.onReadIRM)
+        self.readIrmPowerTBox = wx.TextCtrl(panel, pos=(XOri + XOffset, YOri + 4*YOffset + yTxtOffset), size=(txtBoxLength, txtBoxHeight))
         return
         
     '''
@@ -143,7 +153,7 @@ class frmIRMARM(wx.Frame):
         armVBtn = wx.Button(panel, label='ARM V', pos=(XOri, YOri + YOffset), size=(btnLength, btnHeight))
         armVBtn.Bind(wx.EVT_BUTTON, self.onARMV)
         self.armVTBox = wx.TextCtrl(panel, pos=(XOri + XOffset, YOri + YOffset), size=(txtBoxLength, txtBoxHeight))
-        self.armVTBox.SetValue('0')
+        self.armVTBox.SetValue('0.0')
 
         armSetBtn = wx.Button(panel, label='ARM Set', pos=(XOri, YOri + 2*YOffset), size=(btnLength, btnHeight))
         armSetBtn.Bind(wx.EVT_BUTTON, self.onARMSet)
@@ -198,7 +208,6 @@ class frmIRMARM(wx.Frame):
         YOri += YOffset  + txtOffset
         self.axialRBtn = wx.RadioButton(panel, 11, label = 'Axial', pos = (XOri, YOri + YOffset), style = wx.RB_GROUP) 
         self.transRBtn = wx.RadioButton(panel, 22, label = 'Transverse',pos = (XOri, YOri + 2*YOffset)) 
-        self.Bind(wx.EVT_RADIOBUTTON, self.onCoilGroup)
         XOffset = 110
         txtOffset = 5
         btnLength = 70
@@ -281,87 +290,129 @@ class frmIRMARM(wx.Frame):
     '''
     '''
     def onReadIRM(self, event):
-        # TODO
+        self.parent.pushTaskToQueue([self.parent.devControl.IRM_READ_IRM_POWER, []])
         return
     
     '''
     '''
     def onIRMTrim(self, event):
-        # TODO
+        currentState = self.irmTrimTBox.GetValue()
+        if 'Off' in currentState:
+            # Need to toggle TTL for IRM Trim shut
+            self.parent.pushTaskToQueue([self.parent.devControl.IRM_TOGGLE_IRMTRIM, [True]])
+            self.irmTrimTBox.SetValue('On')
+            self.irmTrimTBox.SetBackgroundColour(wx.GREEN)
+            
+        elif 'On' in currentState:
+            # Need to toggle TTL for IRM Trim open            
+            self.parent.pushTaskToQueue([self.parent.devControl.IRM_TOGGLE_IRMTRIM, [False]])
+            self.irmTrimTBox.SetValue('Off')
+            self.irmTrimTBox.SetBackgroundColour(wx.RED)
+            
         return
     
     '''
     '''
     def onIRMFire(self, event):
-        # TODO
+        currentState = self.irmFireTBox.GetValue()
+        if 'Off' in currentState:
+            # Need to toggle TTL for IRM Fire shut
+            self.parent.pushTaskToQueue([self.parent.devControl.IRM_TOGGLE_IRMFIRE, [False]])
+            self.irmFireTBox.SetValue('On')
+            self.irmFireTBox.SetBackgroundColour(wx.GREEN)
+            
+        elif 'On' in currentState:
+            # Need to toggle TTL for IRM Fire open            
+            self.parent.pushTaskToQueue([self.parent.devControl.IRM_TOGGLE_IRMFIRE, [True]])
+            self.irmFireTBox.SetValue('Off')
+            self.irmFireTBox.SetBackgroundColour(wx.RED)
+            
         return
     
     '''
     '''
-    def onReadIRMV(self, event):
-        # TODO
+    def onReadIRMV(self, event):        
+        self.parent.pushTaskToQueue([self.parent.devControl.IRM_IRM_VOLTAGE_IN, []])
         return
     
     '''
     '''
     def onIRMV(self, event):
-        # TODO
+        try:
+            voltageOut = float(self.irmVTBox.GetValue())
+        except:
+            voltageOut = 0.0
+        self.parent.pushTaskToQueue([self.parent.devControl.IRM_IRM_VOLTAGE_OUT, [voltageOut]])
         return
     
     '''
     '''
     def onARMSet(self, event):
-        # TODO
+        currentState = self.armSetTBox.GetValue()
+        if 'Off' in currentState:
+            # Need to toggle TTL for ARM shut
+            self.parent.pushTaskToQueue([self.parent.devControl.IRM_TOGGLE_ARMSET, [False]])
+            self.armSetTBox.SetValue('On')
+            self.armSetTBox.SetBackgroundColour(wx.GREEN)
+            
+        elif 'On' in currentState:
+            # Need to toggle TTL for ARM open            
+            self.parent.pushTaskToQueue([self.parent.devControl.IRM_TOGGLE_ARMSET, [True]])
+            self.armSetTBox.SetValue('Off')
+            self.armSetTBox.SetBackgroundColour(wx.RED)
+            
         return
     
     '''
     '''
     def onARMV(self, event):
-        # TODO
+        try:
+            voltageOut = float(self.armVTBox.GetValue())
+        except:
+            voltageOut = 0.0
+        self.parent.pushTaskToQueue([self.parent.devControl.IRM_ARM_VOLTAGE_OUT, [voltageOut]])
         return
     
     '''
     '''
     def onShowARM(self, event):
-        # TODO
+        frmDAQ_Comm(self.parent)
         return
     
     '''
     '''
     def onChangeSettings(self, event):
-        # TODO
+        settingPanel = frmSettings(self.parent)
+        settingPanel.tabs.notebook.SetSelection(6)
+        settingPanel.Show()
         return
     
     '''
     '''
     def onCalibrateVolts(self, event):
-        # TODO
+        calibrationVoltage = frmIRM_VoltageCalibration(self.parent)
+        calibrationVoltage.ZOrder(0)
         return
         
     '''
     '''
     def onCalibrateField(self, event):
-        # TODO
+        calibrationCoils = frmCalibrateCoils(self.parent, InAFMode=False)
+        calibrationCoils.ZOrder(0)
         return
     
     '''
     '''
     def onReadVoltage(self, event):
-        # TODO
+        self.parent.pushTaskToQueue([self.parent.devControl.IRM_AVERAGE_VOLTAGE, []])
         return
    
     '''
     '''
     def onInterrupt(self, event):
-        # TODO
+        self.parent.mainQueue.put('Program_Interrupt')
         return
-   
-    '''
-    '''
-    def onCoilGroup(self, event):
-        # TODO
-        return
-    
+       
     '''
     '''
     def onPeakField(self, event):
@@ -408,15 +459,19 @@ class frmIRMARM(wx.Frame):
     '''
     '''
     def onShow(self, event):
-        if not self.parent.modConfig.EnableAxialIRM:
-            self.axialRBtn.Enable(enable=False)
-
-        if not self.parent.modConfig.EnableTransIRM:
-            self.transRBtn.Enable(enable=False)
-            
-        if ((not self.parent.modConfig.EnableAxialIRM) and (not self.parent.modConfig.EnableTransIRM)):
-            warningMessage = "The IRM Axial & Transverse modules are currently disabled.\nNo IRM's can be performed right now until those settings are changed."
-            wx.MessageBox(warningMessage, style=wx.OK|wx.CENTER, caption='Warning')
+        if (self.parent != None):
+            self.parent.NOCOMM_Flag = False
+            self.parent.modConfig.processData.irmArmEnable = True
+        
+            if not self.parent.modConfig.EnableAxialIRM:
+                self.axialRBtn.Enable(enable=False)
+    
+            if not self.parent.modConfig.EnableTransIRM:
+                self.transRBtn.Enable(enable=False)
+                
+            if ((not self.parent.modConfig.EnableAxialIRM) and (not self.parent.modConfig.EnableTransIRM)):
+                warningMessage = "The IRM Axial & Transverse modules are currently disabled.\nNo IRM's can be performed right now until those settings are changed."
+                wx.MessageBox(warningMessage, style=wx.OK|wx.CENTER, caption='Warning')
               
         return
     
@@ -487,6 +542,19 @@ class frmIRMARM(wx.Frame):
 
             elif 'IRM Status = ' in eachEntry:
                 self.lblIRMStatus.SetLabel(eachEntry.strip().replace('IRM Status = ', ''))
+                
+            elif 'IRM Voltage Read = ' in eachEntry:
+                self.ReadIrmVTBox.SetValue(eachEntry.strip().replace('IRM Voltage Read = ', ''))
+
+            elif 'IRM Read Power = ' in eachEntry:
+                self.readIrmPowerTBox.SetValue(eachEntry.strip().replace('IRM Read Power = ', ''))
+                
+            elif 'Back Field Mode = ' in eachEntry:
+                backFieldMode = eachEntry.strip().replace('Back Field Mode = ', '')
+                if 'True' in backFieldMode:
+                    self.polarityChkBox.SetValue(True)
+                else:
+                    self.polarityChkBox.SetValue(False)                
                             
         return
 
