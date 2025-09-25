@@ -230,10 +230,12 @@ class ModConfig():
         self.UseXYTableAPS = self.getConfig_Bool(config, 'XYTable', 'UseXYTableAPS', False)        
 
         self.DoVacuumReset = self.getConfig_Bool(config, 'Vacuum', 'DoVacuumReset', False)
+        self.DoDegausserCooling = self.getConfig_Bool(config, 'Vacuum', 'DoDegausserCooling', False)
 
         self.EnableARM = self.getConfig_Bool(config, 'Modules', 'EnableARM', False)
         self.EnableAF = self.getConfig_Bool(config, 'Modules', 'EnableAF', False)
         self.EnableAFAnalysis = self.getConfig_Bool(config, 'Modules', 'EnableAFAnalysis', False)
+        self.EnableSusceptibility = self.getConfig_Bool(config, 'Modules', 'EnableSusceptibility', False)
         self.EnableAxialIRM = self.getConfig_Bool(config, 'Modules', 'EnableAxialIRM', False)
         self.EnableTransIRM = self.getConfig_Bool(config, 'Modules', 'EnableTransIRM', False)
         self.EnableIRMBackfield = self.getConfig_Bool(config, 'Modules', 'EnableIRMBackfield', False)

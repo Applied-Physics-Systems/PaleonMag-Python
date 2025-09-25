@@ -19,9 +19,9 @@ from Forms.frm908AGaussmeter import frm908AGaussmeter
 from Hardware.Device.AF_2GControl import AF_2GControl
 from ADwin import ADwin, ADwinError
 from Process.ProcessData import ProcessData
-from Process.ModConfig import ModConfig
-from Process.ModConfig import WaveForm
-from Modules.ModAF_DAQ import ModAF_DAQ
+from Modules.modConfig import ModConfig
+from Modules.modConfig import WaveForm
+from Modules.modAF_DAQ import ModAF_DAQ
 
 MsecsBetweenBootAndInit = 300/1000
 MsecsBetweenInitAndRun = 300/1000

@@ -6,7 +6,6 @@ Created on Oct 28, 2024
 import os
 import time
 import configparser
-import subprocess
 
 from Hardware.Motors import Motors
 from Hardware.Device.IrmArmControl import IrmArmControl
@@ -16,8 +15,9 @@ from Hardware.Device.ADWinControl import ADWinControl
 from Hardware.Device.GaussMeterControl import GaussMeterControl
 
 from Process.ProcessData import ProcessData
-from Process.ModConfig import ModConfig
-from Process.ModChanger import ModChanger
+from Modules.modConfig import ModConfig
+
+from Modules.modChanger import ModChanger
 
 DEVICE_MOTORS               = 0x0
 DEVICE_IRM                  = 0x1

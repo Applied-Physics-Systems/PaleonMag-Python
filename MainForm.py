@@ -13,26 +13,31 @@ Libraries used in this project
 
 '''
 import wx
-import time
-import multiprocessing
 import configparser
 from datetime import datetime
 
 from Forms.frmDCMotors import frmDCMotors
-from Forms.frmTip import frmTip
-from Forms.frmFlashingStatus import frmFlashingStatus
 from Forms.frmMagnetometerControl import frmMagnetometerControl
 from Forms.frmSampleIndexRegistry import frmSampleIndexRegistry
 from Forms.frmSQUID import frmSQUID
 from Forms.frmVacuum import frmVacuum
 from Forms.frmADWIN_AF import frmADWIN_AF
-from Forms.frmCalibrateCoils import frmCalibrateCoils
 from Forms.frmIRMARM import frmIRMARM
+from Forms.frmMeasure import frmMeasure
+from Forms.frmChanger import frmChanger
 
 from Hardware.DevicesControl import DevicesControl
-from Process.ModConfig import ModConfig
 
-VersionNumber = 'Version 0.00.22'
+from ClassModules.SampleIndexRegistration import SampleIndexRegistrations
+from ClassModules.SampleCommand import SampleCommands
+
+from Modules.modMeasure import modMeasure
+from Modules.modFlow import modFlow
+from Modules.modConfig import ModConfig
+
+from Process.PaleoThread import PaleoThread
+
+VersionNumber = 'Version 0.00.23'
 
 ID_DC_MOTORS        = 0
 ID_FILE_REGISTRY    = 1
@@ -45,49 +50,6 @@ ID_VACUUM           = 7
 ID_DEMAG_AF         = 8
 ID_IRM_ARM          = 9
 
-FLASH_DISPLAY_OFF_TIME = 10
-
-END_OF_SEQUENCE     = 0xFFFF
-ENDTASK_SYSTEM_INIT = 0
-ENDTASK_MAG_INIT    = 1
-
-devControl = DevicesControl()
-
-'''
-    Flashing message panel to show working in progress
-'''
-def flashingFunction(flashingMessage):
-    app = wx.App(False)
-    frmFlashingStatus(parent=None, message=flashingMessage)
-    app.MainLoop()
-    
-
-'''
-    Background task processing
-'''
-def workerFunction(processData, mainQueue, taskID):
-    try:
-        if isinstance(processData, str):
-            mainQueue.put('None:Task Completed')
-            mainQueue.put(processData)
-            return
-        modConfig = ModConfig(process=processData, queue=mainQueue)
-        devControl.setDevicesConfig(modConfig)
-        
-        deviceID = devControl.runTask(mainQueue, taskID)
-        
-        processData = devControl.updateProcessData()
-                
-        mainQueue.put(deviceID + ':Task Completed')    
-        mainQueue.put(processData)
-                
-        devControl.closeDevices()
-                
-    except Exception as e:
-        print(processData)
-        print(e)
-    
-    return
 
 '''
     Main form for PaleonMag software
@@ -96,15 +58,9 @@ class MainForm(wx.Frame):
     '''
     classdocs
     '''
-    mainQueue = None
-    process = None
-    taskQueue = []
-    backgroundRunningFlag = False
     messageStr = ''
     NOCOMM_Flag = False
     progressColor = 'None'
-    flashingCount = FLASH_DISPLAY_OFF_TIME
-    flashingMessage = ''
     panelList = {}
     config = None
     
@@ -115,11 +71,23 @@ class MainForm(wx.Frame):
         super(MainForm, self).__init__(*args, **kw)
         
         self.devControl = DevicesControl()
-        
         self.openINIFile()
         
         self.InitUI()
         self.messageBox.SetValue(self.messageStr)
+
+        self.registryControl = frmSampleIndexRegistry(parent=self)
+        self.magControl = frmMagnetometerControl(parent=self)
+        self.vacuumControl = frmVacuum(parent=self)
+        self.frmMeasure = frmMeasure(parent=self)
+        self.MainChanger = frmChanger(parent=self)
+
+        self.SampleIndexRegistry = SampleIndexRegistrations(parent=self)
+        self.SampQueue = SampleCommands()
+        
+        self.modMeasure = modMeasure()
+        self.modFlow = modFlow(parent=self)
+        self.paleoThread = PaleoThread(parent=self)
 
         self.checkDevicesComm()
 
@@ -295,6 +263,7 @@ class MainForm(wx.Frame):
         # Add event handler on OnClose
         self.Bind(wx.EVT_CLOSE, self.onClosed)
                 
+        # Set the frame to fullscreen
         self.SetSize((1500, 1000)) 
         self.SetTitle('PaleoMagnetic Magnetometer Controller Systems - ' + VersionNumber)
         self.Centre() 
@@ -321,15 +290,14 @@ class MainForm(wx.Frame):
             # Initialize Vacuum.
             self.pushTaskToQueue([self.devControl.VACUUM_INIT, [None]])
                 
-            self.pushTaskToQueue([END_OF_SEQUENCE, [ENDTASK_SYSTEM_INIT]])        
+            self.pushTaskToQueue([self.paleoThread.END_OF_SEQUENCE, [self.paleoThread.ENDTASK_SYSTEM_INIT]])        
         return
         
     '''
     '''
     def Magnetometer_Initialize(self):
-        magControl = frmMagnetometerControl(parent=self)
-        magControl.Show()
-        self.panelList['MagnetometerControl'] = magControl                    
+        self.magControl.Show()
+        self.panelList['MagnetometerControl'] = self.magControl                    
                 
         if not self.NOCOMM_Flag:
             # Configure SQUID
@@ -356,7 +324,7 @@ class MainForm(wx.Frame):
             if self.modConfig.EnableAxialIRM:
                 self.pushTaskToQueue([self.devControl.IRM_FIRE, [0]])
                 
-        self.pushTaskToQueue([END_OF_SEQUENCE, [ENDTASK_MAG_INIT]])
+        self.pushTaskToQueue([self.paleoThread.END_OF_SEQUENCE, [self.paleoThread.ENDTASK_MAG_INIT]])
         return
         
 
@@ -426,147 +394,6 @@ class MainForm(wx.Frame):
             self.image_control = wx.StaticBitmap(self.statusBar, -1, img, pos=rect.GetTopLeft())
                 
         return
-
-    '''--------------------------------------------------------------------------------------------
-                        
-                        Multiprocessing Functions
-                        
-    --------------------------------------------------------------------------------------------''' 
-    '''
-        Before running process in a different thread, do the neccessaries in GUI thread 
-    '''
-    def startProcess(self):
-        runFlag = True
-        
-        processFunction = self.taskQueue.pop(0)
-        taskID = processFunction[0] 
-        if (taskID == self.devControl.MOTOR_HOME_TO_TOP):
-            self.appendMessageBox(self.devControl.messages[taskID] + '\n')
-            self.flashingMessage = 'Please Wait, Homing To The Top'
-            
-        elif (taskID == self.devControl.MOTOR_HOME_TO_CENTER):
-            self.flashingMessage = 'Please Wait, Homing XY Table'
-            noCommStr = 'The XY Stage needs to be homed to the center, now\n\n'
-            noCommStr += 'The code will home the Up/Down glass tube to the top limit switch'
-            noCommStr += '  before moving the XY stage. HOWEVER, if there are cables or other'
-            noCommStr += ' impediments in the way, the XY Stage should not be homed.\n\n'
-            noCommStr += 'Do you want the XY stage to be homed to the center position, now?'
-            dlg = wx.MessageBox(noCommStr, style=wx.YES_NO|wx.CENTER, caption='Warning: XY State Homing!')
-            if (dlg == wx.YES):
-                self.appendMessageBox(self.devControl.messages[taskID] + '\n')
-            else:
-                runFlag = False
-        
-        elif (taskID == END_OF_SEQUENCE):
-            runFlag = False
-            paramList = processFunction[1]
-            sequenceType = paramList[0]
-            if (sequenceType == ENDTASK_SYSTEM_INIT):
-                tipBox = frmTip(parent=self)
-                tipBox.Show()        
-            
-            elif (sequenceType == ENDTASK_MAG_INIT):          
-                registryControl = frmSampleIndexRegistry(parent=self)
-                registryControl.Show()
-                self.panelList['RegistryControl'] = registryControl
-            self.statusBar.SetStatusText('Tasks Completed', 1)
-            self.setStatusColor('Green')
-        
-        else:
-            if (taskID in self.devControl.messages.keys()):
-                self.appendMessageBox(self.devControl.messages[taskID] + '\n')
-            self.flashingMessage = None
-        
-        if runFlag:
-            self.backgroundRunningFlag = True
-            self.runProcess(processFunction)
-        
-    '''
-        Start a new process which can run concurrently on another CPU core to avoid GUI hangup
-    '''
-    def runProcess(self, taskID):
-        self.timer.Stop()
-        self.mainQueue = multiprocessing.Queue()
-        self.process = multiprocessing.Process(target=workerFunction, args=(self.modConfig.processData, self.mainQueue, taskID))
-        self.process.start()
-        self.timer.Start(int(200))      # Checking every 200ms 
-                
-    '''
-        Check for task completion
-    '''
-    def checkProcess(self):
-        if (self.process != None):
-            try:
-                endMessage = self.mainQueue.get(timeout=0.01)
-                if ('Task Completed' in endMessage):
-                    self.modConfig.processData = self.mainQueue.get()                    
-                                                                                                            
-                    # Clean up end of task
-                    messageList = endMessage.split(':')
-                    if messageList[0] in self.panelList.keys():
-                        self.panelList[messageList[0]].runEndTask()  
-                                        
-                    # Start new process
-                    self.backgroundRunningFlag = False
-                    if (len(self.taskQueue) > 0):
-                        self.startProcess()
-                            
-                    else:
-                        self.appendMessageBox('Tasks Completed\n')
-                        self.statusBar.SetStatusText('Tasks Completed', 1)
-                        self.setStatusColor('Green')
-                        self.timer.Stop()
-                                                
-                elif ('Error:' in endMessage):
-                    self.taskQueue = []
-                    messageList = endMessage.split(':')
-                    if (len(messageList) > 2):    
-                        self.messageBox.SetBackgroundColour('Red')           
-                        wx.MessageBox(messageList[2], caption='PaleonMag')
-                        self.messageBox.SetBackgroundColour('Cyan')
-                        
-                elif ('MessageBox:' in endMessage):
-                    messageList = endMessage.split(':')
-                    dlg = wx.MessageBox(messageList[2], style=wx.YES_NO|wx.CENTER, caption=messageList[0])
-                    if (dlg == wx.YES):
-                        frmCalibrateCoils(self)
-                
-                elif ('Warning:' in endMessage):
-                    messageList = endMessage.split(':')
-                    if (len(messageList) > 2):
-                        self.statusBar.SetStatusText(messageList[2], 1)     
-                    else:
-                        wx.MessageBox(messageList[1], style=wx.OK|wx.CENTER, caption='Warning!')
-                        
-                elif ('Program Status:' in endMessage):
-                    messageList = endMessage.split(':')
-                    self.statusBar.SetStatusText(messageList[1], 2)
-                        
-                else:
-                    '''
-                        string format
-                            message_0:message_1: ... :message_n
-                        message_x format
-                            label = value
-                    '''
-                    messageList = endMessage.split(':')
-                    if (len(messageList) > 1):
-                        if messageList[0] in self.panelList.keys():
-                            self.panelList[messageList[0]].updateGUI(messageList[1:])
-                                                                                        
-                return
-                    
-            except:
-                if (self.backgroundRunningFlag):
-                    self.flashingCount += 1
-                    if ((self.flashingCount > FLASH_DISPLAY_OFF_TIME) and (self.flashingMessage != None)): 
-                        flashingProcess = multiprocessing.Process(target=flashingFunction, args=(self.flashingMessage,))
-                        flashingProcess.start()
-                        self.flashingCount = 0
-                else:
-                    self.flashingCount = 0
-                    
-                return
             
     '''
         
@@ -576,13 +403,12 @@ class MainForm(wx.Frame):
             self.statusBar.SetBackgroundColour(wx.NullColour)
             self.setStatusColor('Red')
             self.statusBar.SetStatusText("Task running ...", 1)
-            self.taskQueue.append(taskFunction)
-            # if no background process running, start one
-            if not self.backgroundRunningFlag:
-                if (len(self.taskQueue) > 0):
-                    self.startProcess()
+            self.paleoThread.pushTaskToQueue(taskFunction)
+            
         else:
             self.sendErrorMessage("Error: Cannot execute due to NoCOMM on");
+            
+        return
 
     '''--------------------------------------------------------------------------------------------
                         
@@ -601,8 +427,8 @@ class MainForm(wx.Frame):
         Close MainForm
     '''
     def onClosed(self, event):
-        if not self.backgroundRunningFlag:        
-            self.runProcess([self.devControl.SYSTEM_DISCONNECT,[None]])
+        if not self.paleoThread.backgroundRunningFlag:        
+            self.paleoThread.runProcess([self.devControl.SYSTEM_DISCONNECT,[None]])
         
         self.Destroy()
 
@@ -629,9 +455,8 @@ class MainForm(wx.Frame):
 
         elif (menuID == ID_VACUUM):
             if not 'VacuumControl' in self.panelList.keys():
-                vacuumControl = frmVacuum(parent=self)
-                vacuumControl.Show()
-                self.panelList['VacuumControl'] = vacuumControl
+                self.vacuumControl.Show()
+                self.panelList['VacuumControl'] = self.vacuumControl
             
         elif (menuID == ID_NOCOMM_OFF):
             self.statusBar.SetBackgroundColour(wx.NullColour)
@@ -671,8 +496,8 @@ class MainForm(wx.Frame):
             
         elif (menuID == ID_QUIT_EXIT):
             if not self.NOCOMM_Flag:
-                if (self.process != None): 
-                    self.process.terminate()
+                if (self.paleoThread.process != None): 
+                    self.paleoThread.process.terminate()
             self.Close(force=False)
                                                                             
     '''
@@ -685,8 +510,8 @@ class MainForm(wx.Frame):
         self.statusBar.SetBackgroundColour(wx.NullColour)
         self.statusBar.SetStatusText(formatted_time, 4)
         
-        if self.backgroundRunningFlag:
-            self.checkProcess()
+        if self.paleoThread.backgroundRunningFlag:
+            self.paleoThread.checkProcess()
         
 #===================================================================================================
 # Main Module

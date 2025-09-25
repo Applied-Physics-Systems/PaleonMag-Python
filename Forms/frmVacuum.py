@@ -92,7 +92,6 @@ class frmVacuum(wx.Frame):
         self.SetSize((400, 310))
         self.SetTitle('Vacuum Control')
         self.Centre()
-        self.Show(True)
 
     '''--------------------------------------------------------------------------------------------
                         
@@ -164,10 +163,10 @@ class frmVacuum(wx.Frame):
     '''
     '''
     def onShow(self, event):
-        self.parent.NOCOMM_Flag = False
-        self.parent.modConfig.processData.vacuumEnable = True
-                
         if (self.parent != None):
+            self.parent.NOCOMM_Flag = False
+            self.parent.modConfig.processData.vacuumEnable = True
+                
             if (self.parent.devControl.vacuum == None):
                 self.connectBtn.SetLabel('Connect')
             else:
@@ -190,6 +189,20 @@ class frmVacuum(wx.Frame):
         self.Destroy()
         return
 
+    '''--------------------------------------------------------------------------------------------
+                        
+                        Public API Functions
+                        
+    --------------------------------------------------------------------------------------------'''
+    '''
+    '''
+    def DegausserCooler(self, switch):
+        if self.parent.NOCOMM_MODE:
+            return
+        
+        self.parent.pushTaskToQueue([self.parent.devControl.VACUUM_SET_DEGAUSSER, [switch]])
+        return
+
 #===================================================================================================
 # Main Module
 #---------------------------------------------------------------------------------------------------
@@ -197,6 +210,7 @@ if __name__=='__main__':
     try:    
         app = wx.App(False)
         frame = frmVacuum(parent=None)
+        frame.Show(True)
         app.MainLoop()    
         
     except Exception as e:

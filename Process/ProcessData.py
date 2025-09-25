@@ -3,6 +3,7 @@ Created on Oct 31, 2024
 
 @author: hd.nguyen
 '''
+from ClassModules.Sample import Sample
 
 class ProcessData():
     '''
@@ -29,6 +30,8 @@ class ProcessData():
         self.irmArmEnable = False
         self.squidEnable = False
         self.adwinEnable = False
+        
+        self.SampleHolder = Sample()
         
         self.PortOpen = {'UpDown': False,
                          'Turning': False,

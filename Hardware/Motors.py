@@ -9,7 +9,7 @@ import configparser
 import numpy as np
 
 from Hardware.Device.MotorControl import MotorControl
-from Process.ModConfig import ModConfig
+from Modules.modConfig import ModConfig
 
 class Motors():
     '''

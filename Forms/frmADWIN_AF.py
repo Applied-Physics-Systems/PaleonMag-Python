@@ -37,98 +37,64 @@ class frmADWIN_AF(wx.Frame):
         panel = wx.Panel(self)
         
         XOri = 10
-        XOffset = 10
-        YOri = 10
-        YOffset = 20
-        smallBtnLength = 50
-        btnHeight = 20
-        
+        YOri = 10        
         # First Column, First box
         box1Length = 150
         box1Height = 130
         wx.StaticBox(panel, -1, 'Active Coil', pos=(XOri, YOri), size=(box1Length, box1Height))
-        self.ActiveCoilSystem = 'Axial'
-        self.axialRBtn = wx.RadioButton(panel, 11, label = self.ActiveCoilSystem, pos = (XOri + XOffset, YOri+YOffset), style = wx.RB_GROUP) 
-        self.transRBtn = wx.RadioButton(panel, 22, label = 'Transverse',pos = (XOri + XOffset, YOri+2*YOffset)) 
-        self.irmRBtn = wx.RadioButton(panel, 33, label = 'IRM Axial',pos = (XOri + XOffset,YOri+3*YOffset))        
-        self.Bind(wx.EVT_RADIOBUTTON, self.onCoilRGroup)
-        
-        switchBtn = wx.Button(panel, label='Switch', pos=(XOri + 90, YOri+2*YOffset-2), size=(smallBtnLength, btnHeight))
-        switchBtn.Bind(wx.EVT_BUTTON, self.onSwitch)
-        self.lockCoilChkBox = wx.CheckBox(panel, label='Lock Coil Selection', pos=(XOri + XOffset, YOri+5*YOffset))
-        self.lockCoilChkBox.Bind(wx.EVT_CHECKBOX, self.onLockCoil)
+        self.GUI_ActiveCoil(panel, XOri, YOri)
         
         # First Column, Second box
-        btnLength = 130
-        btnHeight = 30
         box2Height = 165
-        YOri = YOri + YOffset + box1Height
-        YOffset = 30
+        YOri = YOri + box1Height + 20
         wx.StaticBox(panel, -1, 'AF Ramp Mode', pos=(XOri, YOri), size=(box1Length, box2Height))
-        self.rampChkBox = wx.CheckBox(panel, label='Unmonitored Ramp', pos=(XOri + XOffset, YOri+YOffset))
-        self.rampChkBox.Bind(wx.EVT_CHECKBOX, self.onUnmonitoredRamp)
-        self.debugChkBox = wx.CheckBox(panel, label='Debug Mode?', pos=(XOri + XOffset, YOri+2*YOffset))
-        self.recordChkBox = wx.CheckBox(panel, label='Record DC Field', pos=(XOri + XOffset, YOri+3*YOffset))
-        cleanCoilBtn = wx.Button(panel, label='Clean Coils', pos=(XOri + XOffset, YOri+4*YOffset), size=(btnLength, btnHeight))
-        cleanCoilBtn.Bind(wx.EVT_BUTTON, self.onCleanCoil)
-        
+        self.GUI_AFRampMode(panel, XOri, YOri)
+                
         # First Column, Third box
         box3Height = 215
-        YOffset = 20
-        YOri = YOri + YOffset + box2Height
+        YOri = YOri + box2Height + 20
         wx.StaticBox(panel, -1, 'Shiny Buttons', pos=(XOri, YOri), size=(box1Length, box3Height))
-        YOri = YOri+YOffset
-        afSettingsBtn = wx.Button(panel, label='Open AF Settings', pos=(XOri + XOffset, YOri), size=(btnLength, btnHeight))
-        afSettingsBtn.Bind(wx.EVT_BUTTON, self.onAFOpenSettings)
-        YOffset = 35
-        afFileBtn = wx.Button(panel, label='Open AF File Settings', pos=(XOri + XOffset, YOri+YOffset), size=(btnLength, btnHeight))
-        afFileBtn.Bind(wx.EVT_BUTTON, self.onFileSave)
-        tuneAfBtn = wx.Button(panel, label='Tune AF Coils', pos=(XOri + XOffset, YOri+2*YOffset), size=(btnLength, btnHeight))
-        tuneAfBtn.Bind(wx.EVT_BUTTON, self.onAFTuner)
-        calibrateAfBtn = wx.Button(panel, label='Calibrate AF Coils', pos=(XOri + XOffset, YOri+3*YOffset), size=(btnLength, btnHeight))
-        calibrateAfBtn.Bind(wx.EVT_BUTTON, self.onCoilCalibration)
-        btnHeight = 40
-        gaussmeterBtn = wx.Button(panel, label='908A Gaussmeter\nControl', pos=(XOri + XOffset, YOri + 4*YOffset), size=(btnLength, btnHeight))
-        gaussmeterBtn.Bind(wx.EVT_BUTTON, self.onGaussmeterControl)
-        closeBtn = wx.Button(panel, label='Close', pos=(XOri + XOffset, YOri + 6*YOffset + 5), size=(btnLength, btnHeight))
-        closeBtn.Bind(wx.EVT_BUTTON, self.onClose)
+        self.GUI_ShinyButtons(panel, XOri, YOri)
                 
         # Second Column, First box
-        XOri = XOri + XOffset + box1Length
         YOri = 10
-        txtOffset = 5
+        XOri = XOri + box1Length + 10
         box2Length = 2*box1Length
         box4Height = 110 
         wx.StaticBox(panel, -1, 'AF Coil Temperature', pos=(XOri, YOri), size=(box2Length, box4Height))
-        XOri = XOri + XOffset
-        txtBoxXOffset = 70
-        smallTxtBoxLength = 60
-        txtBoxHeight = 25
-        wx.StaticText(panel, label='Axial Coil', pos=(XOri, YOri + YOffset + txtOffset))
-        self.axialTempTBox = wx.TextCtrl(panel, pos=(XOri + txtBoxXOffset, YOri + YOffset), size=(smallTxtBoxLength, txtBoxHeight))
-        degreeTxt = chr(176) + 'C'
-        wx.StaticText(panel, label=degreeTxt, pos=(XOri + txtBoxXOffset + smallTxtBoxLength + txtOffset, YOri + YOffset + txtOffset))        
-        wx.StaticText(panel, label='Transver Coil', pos=(XOri, YOri + 2*YOffset + txtOffset))
-        self.transTempTBox = wx.TextCtrl(panel, pos=(XOri + txtBoxXOffset, YOri + 2*YOffset), size=(smallTxtBoxLength, txtBoxHeight))
-        degreeTxt = chr(176) + 'C'
-        wx.StaticText(panel, label=degreeTxt, pos=(XOri + txtBoxXOffset + smallTxtBoxLength + txtOffset, YOri + 2*YOffset + txtOffset))
-        XOri = XOri + txtBoxXOffset + smallTxtBoxLength + txtOffset + 4*XOffset
-        labelTxt = ''        
-        self.warningText = wx.StaticText(panel, label=labelTxt, pos=(XOri, YOri + 20))
-        btnLength = 100
-        btnHeight = 30
-        refreshTBtn = wx.Button(panel, label='Refresh T', pos=(XOri, YOri + 70), size=(btnLength, btnHeight))
-        refreshTBtn.Bind(wx.EVT_BUTTON, self.onRefreshT)
+        self.GUI_AFCoilTemperature(panel, XOri, YOri)
         
-        # Second Column, Second box        
+        # Second Column, Second box                
+        XOri = box1Length + 20
+        YOri += box4Height + 20
         box5Height = 500
-        XOri = 10 + XOffset + box1Length
-        YOri = 20 + box4Height
         wx.StaticBox(panel, -1, 'AF Ramp Setup', pos=(XOri, YOri), size=(box2Length, box5Height))
+        self.GUI_AFRampSetup(panel, XOri, YOri)
+        
+        # Add event handler on OnClose
+        self.Bind(wx.EVT_CLOSE, self.onClosed)
+
+        # Add event handler on OnShow
+        self.Bind(wx.EVT_SHOW, self.onShow)
+                                
+        self.SetSize((500, 690))
+        self.SetTitle('ADWIN AF Ramp')
+        self.Centre()
+        self.Show(True)
+    
+    '''
+    '''
+    def GUI_AFRampSetup(self, panel, XOri, YOri):
+        XOri += 10
+        btnLength = 130
+        btnHeight = 30
+        txtOffset = 5
+        txtBoxHeight = 25
+        
         YOffset = 35
         txtBoxXOffset = 160
         smallTxtBoxLength = 70
-        XOri = XOri + XOffset        
+                
         wx.StaticText(panel, label='Sine Freq. (Hz)', pos=(XOri, YOri + YOffset + txtOffset))
         self.sineFreqTBox = wx.TextCtrl(panel, pos=(XOri + txtBoxXOffset, YOri + YOffset), size=(smallTxtBoxLength, txtBoxHeight))
         self.sineFreqTBox.Bind(wx.EVT_TEXT, self.onFreqChanged)
@@ -167,19 +133,100 @@ class frmADWIN_AF(wx.Frame):
         
         wx.StaticText(panel, label='Total Ramp Time (ms)', pos=(XOri, YOri + 12*YOffset + txtOffset))        
         self.rampTimeLabel = wx.StaticText(panel, label='', pos=(XOri + txtBoxXOffset, YOri + 12*YOffset + txtOffset))
-        startRampBtn = wx.Button(panel, label='Start Ramp', pos=(XOri + 40, YOri + 13*YOffset), size=(btnLength*2, btnHeight))
+        startRampBtn = wx.Button(panel, label='Start Ramp', pos=(XOri + 10, YOri + 13*YOffset), size=(btnLength*2, btnHeight))
         startRampBtn.Bind(wx.EVT_BUTTON, self.onStartRamp)
+        return
+    
+    '''
+    '''
+    def GUI_AFCoilTemperature(self, panel, XOri, YOri):
+        XOri += 10
+        YOri += 10
+        XOffset = 10
+        YOffset = 20
+        txtOffset = 5        
+        txtBoxXOffset = 70
+        smallTxtBoxLength = 60
+        txtBoxHeight = 25
         
-        # Add event handler on OnClose
-        self.Bind(wx.EVT_CLOSE, self.onClosed)
-
-        # Add event handler on OnShow
-        self.Bind(wx.EVT_SHOW, self.onShow)
-                                
-        self.SetSize((500, 690))
-        self.SetTitle('ADWIN AF Ramp')
-        self.Centre()
-        self.Show(True)
+        wx.StaticText(panel, label='Axial Coil', pos=(XOri, YOri + YOffset + txtOffset))
+        self.axialTempTBox = wx.TextCtrl(panel, pos=(XOri + txtBoxXOffset, YOri + YOffset), size=(smallTxtBoxLength, txtBoxHeight))
+        degreeTxt = chr(176) + 'C'
+        wx.StaticText(panel, label=degreeTxt, pos=(XOri + txtBoxXOffset + smallTxtBoxLength + txtOffset, YOri + YOffset + txtOffset))        
+        wx.StaticText(panel, label='Transver Coil', pos=(XOri, YOri + 3*YOffset + txtOffset))
+        self.transTempTBox = wx.TextCtrl(panel, pos=(XOri + txtBoxXOffset, YOri + 3*YOffset), size=(smallTxtBoxLength, txtBoxHeight))
+        degreeTxt = chr(176) + 'C'
+        wx.StaticText(panel, label=degreeTxt, pos=(XOri + txtBoxXOffset + smallTxtBoxLength + txtOffset, YOri + 3*YOffset + txtOffset))
+        XOri = XOri + txtBoxXOffset + smallTxtBoxLength + txtOffset + 4*XOffset
+        labelTxt = ''        
+        self.warningText = wx.StaticText(panel, label=labelTxt, pos=(XOri, YOri + 20))
+        btnLength = 100
+        btnHeight = 30
+        refreshTBtn = wx.Button(panel, label='Refresh T', pos=(XOri, YOri + 3*YOffset), size=(btnLength, btnHeight))
+        refreshTBtn.Bind(wx.EVT_BUTTON, self.onRefreshT)
+        return
+    
+    '''
+    '''
+    def GUI_ShinyButtons(self, panel, XOri, YOri):
+        XOffset = 10
+        btnLength = 130
+        btnHeight = 30
+        YOffset = 20
+        YOri = YOri+YOffset
+        
+        afSettingsBtn = wx.Button(panel, label='Open AF Settings', pos=(XOri + XOffset, YOri), size=(btnLength, btnHeight))
+        afSettingsBtn.Bind(wx.EVT_BUTTON, self.onAFOpenSettings)
+        YOffset = 35
+        afFileBtn = wx.Button(panel, label='Open AF File Settings', pos=(XOri + XOffset, YOri+YOffset), size=(btnLength, btnHeight))
+        afFileBtn.Bind(wx.EVT_BUTTON, self.onFileSave)
+        tuneAfBtn = wx.Button(panel, label='Tune AF Coils', pos=(XOri + XOffset, YOri+2*YOffset), size=(btnLength, btnHeight))
+        tuneAfBtn.Bind(wx.EVT_BUTTON, self.onAFTuner)
+        calibrateAfBtn = wx.Button(panel, label='Calibrate AF Coils', pos=(XOri + XOffset, YOri+3*YOffset), size=(btnLength, btnHeight))
+        calibrateAfBtn.Bind(wx.EVT_BUTTON, self.onCoilCalibration)
+        btnHeight = 40
+        gaussmeterBtn = wx.Button(panel, label='908A Gaussmeter\nControl', pos=(XOri + XOffset, YOri + 4*YOffset), size=(btnLength, btnHeight))
+        gaussmeterBtn.Bind(wx.EVT_BUTTON, self.onGaussmeterControl)
+        closeBtn = wx.Button(panel, label='Close', pos=(XOri + XOffset, YOri + 6*YOffset + 5), size=(btnLength, btnHeight))
+        closeBtn.Bind(wx.EVT_BUTTON, self.onClose)
+        return    
+    
+    '''
+    '''
+    def GUI_AFRampMode(self, panel, XOri, YOri):
+        XOffset = 10
+        YOffset = 30
+        btnLength = 130
+        btnHeight = 30        
+        
+        self.rampChkBox = wx.CheckBox(panel, label='Unmonitored Ramp', pos=(XOri + XOffset, YOri+YOffset))
+        self.rampChkBox.Bind(wx.EVT_CHECKBOX, self.onUnmonitoredRamp)
+        self.debugChkBox = wx.CheckBox(panel, label='Debug Mode?', pos=(XOri + XOffset, YOri+2*YOffset))
+        self.recordChkBox = wx.CheckBox(panel, label='Record DC Field', pos=(XOri + XOffset, YOri+3*YOffset))
+        cleanCoilBtn = wx.Button(panel, label='Clean Coils', pos=(XOri + XOffset, YOri+4*YOffset), size=(btnLength, btnHeight))
+        cleanCoilBtn.Bind(wx.EVT_BUTTON, self.onCleanCoil)
+        return
+        
+    '''
+    '''
+    def GUI_ActiveCoil(self, panel, XOri, YOri):
+        XOffset = 10
+        YOffset = 20
+        smallBtnLength = 50
+        btnHeight = 20
+        
+        self.ActiveCoilSystem = 'Axial'
+        self.axialRBtn = wx.RadioButton(panel, 11, label = self.ActiveCoilSystem, pos = (XOri + XOffset, YOri+YOffset), style = wx.RB_GROUP) 
+        self.transRBtn = wx.RadioButton(panel, 22, label = 'Transverse',pos = (XOri + XOffset, YOri+2*YOffset)) 
+        self.irmRBtn = wx.RadioButton(panel, 33, label = 'IRM Axial',pos = (XOri + XOffset,YOri+3*YOffset))        
+        self.Bind(wx.EVT_RADIOBUTTON, self.onCoilRGroup)
+        
+        switchBtn = wx.Button(panel, label='Switch', pos=(XOri + 90, YOri+2*YOffset-2), size=(smallBtnLength, btnHeight))
+        switchBtn.Bind(wx.EVT_BUTTON, self.onSwitch)
+        self.lockCoilChkBox = wx.CheckBox(panel, label='Lock Coil Selection', pos=(XOri + XOffset, YOri+5*YOffset))
+        self.lockCoilChkBox.Bind(wx.EVT_CHECKBOX, self.onLockCoil)
+        
+        return
 
     '''--------------------------------------------------------------------------------------------
                         
@@ -651,10 +698,11 @@ class frmADWIN_AF(wx.Frame):
     '''
     '''
     def onShow(self, event):
-        self.parent.NOCOMM_Flag = False
-        self.parent.modConfig.processData.adwinEnable = True
-        
+                
         if (self.parent != None):
+            self.parent.NOCOMM_Flag = False
+            self.parent.modConfig.processData.adwinEnable = True
+
             coilSelection = self.getCoilRBtnSelection() 
             if (coilSelection == 'Axial'):
                 self.sineFreqTBox.SetValue(str(self.parent.modConfig.AfAxialResFreq))

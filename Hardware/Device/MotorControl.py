@@ -8,7 +8,7 @@ import time
 import configparser
 
 from Hardware.Device.SerialPortDevice import SerialPortDevice
-from Process.ModConfig import ModConfig
+from Modules.modConfig import ModConfig
 
 class MotorControl(SerialPortDevice):
     '''

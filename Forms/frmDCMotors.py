@@ -197,16 +197,17 @@ class frmDCMotors(wx.Frame):
     '''
     '''
     def checkMotorAvailable(self):
-        for motor in self.parent.devControl.deviceList:
-            if motor.active:
-                if 'ChangerX' in motor.label:
-                    self.changerXChkBox.SetValue(True)
-                elif 'ChangerY' in motor.label:
-                    self.changerYChkBox.SetValue(True)
-                elif 'Turning' in motor.label:
-                    self.turningChkBox.SetValue(True)
-                elif 'UpDown' in motor.label:
-                    self.upDownChkBox.SetValue(True)
+        if (self.parent != None):
+            for motor in self.parent.devControl.deviceList:
+                if motor.active:
+                    if 'ChangerX' in motor.label:
+                        self.changerXChkBox.SetValue(True)
+                    elif 'ChangerY' in motor.label:
+                        self.changerYChkBox.SetValue(True)
+                    elif 'Turning' in motor.label:
+                        self.turningChkBox.SetValue(True)
+                    elif 'UpDown' in motor.label:
+                        self.upDownChkBox.SetValue(True)
                     
     '''
         Display infomration for the running background process
@@ -461,9 +462,10 @@ class frmDCMotors(wx.Frame):
     '''
     '''
     def onClosed(self, event):
-        if self.parent.panelList:
-            if 'MotorControl' in self.parent.panelList.keys():          
-                del self.parent.panelList['MotorControl']
+        if (self.parent != None):
+            if self.parent.panelList:
+                if 'MotorControl' in self.parent.panelList.keys():          
+                    del self.parent.panelList['MotorControl']
                 
         self.Destroy()
         return
@@ -471,8 +473,9 @@ class frmDCMotors(wx.Frame):
     '''
     '''
     def onShow(self, event):
-        self.parent.NOCOMM_Flag = False
-        self.parent.modConfig.processData.motorsEnable = True
+        if (self.parent != None):
+            self.parent.NOCOMM_Flag = False
+            self.parent.modConfig.processData.motorsEnable = True
         return
         
 #===================================================================================================
