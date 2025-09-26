@@ -9,6 +9,7 @@ from Forms.frmDAQ_Comm import frmDAQ_Comm
 from Forms.frmCalibrateCoils import frmCalibrateCoils
 from Forms.frmIRM_VoltageCalibration import frmIRM_VoltageCalibration
 from Forms.frmSettings import frmSettings
+from Forms.frmTestUnit import frmTestUnit
 
 class frmIRMARM(wx.Frame):
     '''
@@ -94,7 +95,7 @@ class frmIRMARM(wx.Frame):
         self.SetSize((panelLength, panelHeight))
         self.SetTitle('IRM/ARM Controller')
         self.Centre()
-        self.Show(True)
+        return
 
     '''
     '''
@@ -194,14 +195,14 @@ class frmIRMARM(wx.Frame):
         btnHeight = 25
         XOffset = txtBoxXOffset + txtBoxLength + 10 
         wx.StaticText(panel, label='Voltage', pos=(XOri, YOri + YOffset + txtOffset))
-        self.voltageTBox = wx.TextCtrl(panel, value='0.0', pos=(XOri + txtBoxXOffset, YOri + YOffset), size=(txtBoxLength, txtBoxHeight))
+        self.voltageTBox = wx.TextCtrl(panel, value='0', pos=(XOri + txtBoxXOffset, YOri + YOffset), size=(txtBoxLength, txtBoxHeight))
         voltageBtn = wx.Button(panel, label='Fire', pos=(XOri + XOffset, YOri + YOffset - txtOffset), size=(btnLength, btnHeight))
         voltageBtn.Bind(wx.EVT_BUTTON, self.onVoltage)
         
         YOffset = 25
         YOri += txtBoxHeight + 10 
         wx.StaticText(panel, label='Peak Field (G)', pos=(XOri, YOri + YOffset + txtOffset))
-        self.peakFieldTBox = wx.TextCtrl(panel, value='0.0', pos=(XOri + txtBoxXOffset, YOri + YOffset), size=(txtBoxLength, txtBoxHeight))
+        self.peakFieldTBox = wx.TextCtrl(panel, value='0', pos=(XOri + txtBoxXOffset, YOri + YOffset), size=(txtBoxLength, txtBoxHeight))
         peakFieldBtn = wx.Button(panel, label='Fire', pos=(XOri + XOffset, YOri + YOffset - txtOffset), size=(btnLength, btnHeight))
         peakFieldBtn.Bind(wx.EVT_BUTTON, self.onPeakField)
         
@@ -462,6 +463,7 @@ class frmIRMARM(wx.Frame):
         if (self.parent != None):
             self.parent.NOCOMM_Flag = False
             self.parent.modConfig.processData.irmArmEnable = True
+            self.parent.modConfig.processData.adwinEnable = True
         
             if not self.parent.modConfig.EnableAxialIRM:
                 self.axialRBtn.Enable(enable=False)
@@ -571,7 +573,11 @@ class frmIRMARM(wx.Frame):
 if __name__=='__main__':
     try:    
         app = wx.App(False)
-        frame = frmIRMARM(parent=None)
+        
+        testUnit = frmTestUnit(path='C:\\Users\\hd.nguyen.APPLIEDPHYSICS\\workspace\\SVN\\Windows\\Rock Magnetometer\\Paleomag_v3_Hung.INI')
+        irmARMControl = frmIRMARM(parent=testUnit)
+        testUnit.panelList['IRMControl'] = irmARMControl
+        irmARMControl.Show(True)        
         app.MainLoop()    
         
     except Exception as e:

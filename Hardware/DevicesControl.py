@@ -162,6 +162,8 @@ class DevicesControl():
         Constructor
         '''
         self.currentPath = os.getcwd()
+        if 'Forms' in self.currentPath:
+            self.currentPath = self.currentPath.replace('\\Forms', '')
         self.currentPath += '\\Hardware\\Device\\'        
         self.DCMotorHomeToTop_StopOnTrue = False
         self.gaussMeter = GaussMeterControl()

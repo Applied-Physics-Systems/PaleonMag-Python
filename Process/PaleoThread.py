@@ -20,7 +20,6 @@ devControl = DevicesControl()
 '''
 def flashingFunction(flashingMessage):
     app = wx.App(False)
-    print('flashingFunction')
     frmFlashingStatus(parent=None, message=flashingMessage)
     app.MainLoop()
     
@@ -28,7 +27,7 @@ def flashingFunction(flashingMessage):
 '''
     Background task processing
 '''
-def workerFunction(processData, mainQueue, taskID):
+def workerFunction(processData, mainQueue, taskID):    
     try:
         if isinstance(processData, str):
             mainQueue.put('None:Task Completed')
@@ -154,7 +153,7 @@ class PaleoThread():
                     # Clean up end of task
                     messageList = endMessage.split(':')
                     if messageList[0] in self.parent.panelList.keys():
-                        self.parent.panelList[messageList[0]].parent.runEndTask()  
+                        self.parent.panelList[messageList[0]].runEndTask()  
                                         
                     # Start new process
                     self.backgroundRunningFlag = False
