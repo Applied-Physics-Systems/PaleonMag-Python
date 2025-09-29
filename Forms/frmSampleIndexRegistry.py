@@ -92,7 +92,7 @@ class frmSampleIndexRegistry(wx.Frame):
             self.Centre() 
         
     '''
-    '''    
+    '''  
     def add_column(self, name, width=ULC.ULC_AUTOSIZE_USEHEADER, renderer=None):
         """A helper method to insert a column with a custom renderer."""
         item_info = ULC.UltimateListItem()
@@ -102,7 +102,9 @@ class frmSampleIndexRegistry(wx.Frame):
             item_info.SetCustomRenderer(renderer)
                     
         self.fileRegistryLCtrl.InsertColumnInfo(self.fileRegistryLCtrl.GetColumnCount(), item_info)        
-        self.fileRegistryLCtrl.SetColumnWidth(self.fileRegistryLCtrl.GetColumnCount() - 1, width)    
+        self.fileRegistryLCtrl.SetColumnWidth(self.fileRegistryLCtrl.GetColumnCount() - 1, width)
+
+        return
         
     '''
     '''
@@ -124,7 +126,7 @@ class frmSampleIndexRegistry(wx.Frame):
         self.add_column('Block', width=40, renderer=custom_renderer)
         self.add_column('Path', width=140, renderer=custom_renderer)
 
-        btnLength = 120
+        btnLength = 1201
         btnHeight = 30        
         YOffset = listHeight + 10 
         clearRegistryBtn = wx.Button(panel, label='Clear Registry', pos=(XOri, YOri + YOffset), size=(btnLength, btnHeight))        
@@ -757,7 +759,7 @@ if __name__=='__main__':
     try:    
         app = wx.App(False)
         
-        testUnit = frmTestUnit()
+        testUnit = frmTestUnit(path='C:\\Users\\hd.nguyen.APPLIEDPHYSICS\\workspace\\SVN\\Windows\\Rock Magnetometer\\Paleomag_v3_Hung.INI')
         frame = frmSampleIndexRegistry(parent=testUnit)
         frame.Show(True)        
         app.MainLoop()    

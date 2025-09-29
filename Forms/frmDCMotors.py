@@ -5,6 +5,8 @@ Created on Oct 22, 2024
 '''
 import wx
 
+from Forms.frmTestUnit import frmTestUnit
+
 class frmDCMotors(wx.Frame):
     '''
     classdocs
@@ -484,7 +486,10 @@ class frmDCMotors(wx.Frame):
 if __name__=='__main__':
     try:    
         app = wx.App(False)
-        frame = frmDCMotors(parent=None)
+        
+        testUnit = frmTestUnit(path='C:\\Users\\hd.nguyen.APPLIEDPHYSICS\\workspace\\SVN\\Windows\\Rock Magnetometer\\Paleomag_v3_Hung.INI')
+        motorControl = frmDCMotors(parent=testUnit)
+        testUnit.panelList['MotorControl'] = motorControl
         app.MainLoop()    
         
     except Exception as e:

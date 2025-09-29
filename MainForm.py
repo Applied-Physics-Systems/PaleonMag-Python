@@ -10,6 +10,7 @@ Libraries used in this project
     pip install pyserial
     pip install adwin
     pip install PyUniversalLibrary
+    pip install matplotlib
 
 '''
 import wx
@@ -37,7 +38,7 @@ from Modules.modConfig import ModConfig
 
 from Process.PaleoThread import PaleoThread
 
-VersionNumber = 'Version 0.00.24'
+VersionNumber = 'Version 0.00.25'
 
 ID_DC_MOTORS        = 0
 ID_FILE_REGISTRY    = 1

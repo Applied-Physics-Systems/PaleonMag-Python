@@ -94,9 +94,8 @@ class frmRockmagRoutine(wx.Frame):
 
         YOri += boxHeight + 10
         boxHeight = 200
-        staticBox = wx.StaticBox(panel, -1, '', pos=(XOri, YOri), size=(boxLength, boxHeight))
-        sizer = self.GUI_SampleList(panel, XOri, YOri)
-        staticBox.SetSizer(sizer)
+        wx.StaticBox(panel, -1, '', pos=(XOri, YOri), size=(boxLength, boxHeight))
+        self.GUI_SampleList(panel, XOri, YOri)
         
         panelLength = boxLength + 40
         panelHeight = YOri + boxHeight + 50 
@@ -158,7 +157,7 @@ class frmRockmagRoutine(wx.Frame):
         okBtn = wx.Button(panel, label='OK', pos=(XOri + 4*XOffset, YOri), size=(btnLength, btnHeight))
         okBtn.Bind(wx.EVT_BUTTON, self.onOK)
         
-        return sizer
+        return
         
     '''
     '''
@@ -934,7 +933,7 @@ if __name__=='__main__':
     try:    
         app = wx.App(False)        
         
-        testUnit = frmTestUnit()        
+        testUnit = frmTestUnit(path='C:\\Users\\hd.nguyen.APPLIEDPHYSICS\\workspace\\SVN\\Windows\\Rock Magnetometer\\Paleomag_v3_Hung.INI')        
         frame = frmRockmagRoutine(parent=testUnit)
         frame.Show()
         app.MainLoop()

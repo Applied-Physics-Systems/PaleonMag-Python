@@ -138,6 +138,9 @@ class frmMagnetometerControl(wx.Frame):
         self.nb.AddPage(self.autoPage, "Automatic Data Collection")
         self.nb.AddPage(self.manualPage, "Manual Data Collection")
          
+        # Bind the event handler
+        self.nb.Bind(wx.EVT_NOTEBOOK_PAGE_CHANGED, self.onPageChanged)
+                 
         # finally, put the notebook in a sizer for the panel to manage
         # the layout
         sizer = wx.BoxSizer()
@@ -185,12 +188,24 @@ class frmMagnetometerControl(wx.Frame):
         self.sampleCodeCBox.SetSelection(1)
         
         return             
+
+    '''--------------------------------------------------------------------------------------------
+                        
+                        Internal Functions
+                        
+    --------------------------------------------------------------------------------------------'''
        
     '''--------------------------------------------------------------------------------------------
                         
                         Event Handler Functions
                         
-    --------------------------------------------------------------------------------------------'''                
+    --------------------------------------------------------------------------------------------'''       
+    '''
+    '''
+    def onPageChanged(self, event):
+        self.RefreshManSampleList()
+        return
+    
     '''
         Close Tip Dialog box
     '''
