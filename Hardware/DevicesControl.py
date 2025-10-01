@@ -58,14 +58,7 @@ class DevicesControl():
     IRM_REFRESH_TEMP        = 0x1003
     IRM_FIRE                = 0x1004
     IRM_FIRE_AT_FIELD       = 0x1005
-    IRM_ARM_VOLTAGE_OUT     = 0x1006
-    IRM_TOGGLE_ARMSET       = 0x1007
-    IRM_IRM_VOLTAGE_OUT     = 0x1008
-    IRM_IRM_VOLTAGE_IN      = 0x1009
-    IRM_TOGGLE_IRMFIRE      = 0x100A
-    IRM_TOGGLE_IRMTRIM      = 0x100B
-    IRM_READ_IRM_POWER      = 0x100C
-    IRM_AVERAGE_VOLTAGE     = 0x100D
+    IRM_SET_FIELD           = 0x1006
     
     SQUID_READ_COUNT        = 0x2001
     SQUID_READ_DATA         = 0x2002
@@ -116,13 +109,7 @@ class DevicesControl():
                 IRM_SET_BIAS_FIELD: 'Set ARM Bias Field',
                 IRM_FIRE: 'Discharge IRM device',                
                 IRM_FIRE_AT_FIELD: 'Discharge IRM at field',
-                IRM_ARM_VOLTAGE_OUT: 'ARM Voltage out',
-                IRM_IRM_VOLTAGE_OUT: 'IRM Voltage out',
-                IRM_IRM_VOLTAGE_IN: 'IRM Voltage in',
-                IRM_TOGGLE_IRMFIRE: 'Toggle IRM Fire',
-                IRM_TOGGLE_IRMTRIM: 'Toggle IRM Trim',
-                IRM_READ_IRM_POWER: 'Read IRM Power',
-                IRM_AVERAGE_VOLTAGE: 'Read average IRM voltage',
+                IRM_SET_FIELD: 'Set field level',
                 SQUID_READ_COUNT: 'Read count from SQUID',
                 SQUID_READ_DATA: 'Read data from SQUID',
                 SQUID_READ_RANGE: 'Read range from SQUID',
@@ -497,46 +484,18 @@ class DevicesControl():
                 voltage = taskID[1][0] 
                 self.apsIRM.FireIRM(voltage)
 
-            elif (taskID[0] == self.IRM_FIRE_AT_FIELD):
+            elif (taskID[0] == self.IRM_SET_FIELD):
                 field = taskID[1][0]
                 self.apsIRM.coilLabel = taskID[1][1]  
-                self.apsIRM.FireIRMAtField(field)
+                self.apsIRM.IRM_SetField(field, pauseFire=True)
+                            
+            elif (taskID[0] == self.IRM_FIRE_AT_FIELD):
+                field = taskID[1][0]
+                self.apsIRM.IRM_FireField(field)
                             
             elif (taskID[0] == self.IRM_REFRESH_TEMP):
                 self.apsIRM.RefreshTemp()
-                
-            elif (taskID[0] == self.IRM_ARM_VOLTAGE_OUT):
-                outVoltage = taskID[1][0]
-                self.apsIRM.outVoltage(self.modConfig.ARMVoltageOut, outVoltage)
-                
-            elif (taskID[0] == self.IRM_TOGGLE_ARMSET):
-                mode = taskID[1][0]
-                self.apsIRM.toggleTTLRelays(self.modConfig.ARMSet, mode)
-                
-            elif (taskID[0] == self.IRM_IRM_VOLTAGE_OUT):
-                outVoltage = taskID[1][0]
-                self.apsIRM.outVoltage(self.modConfig.IRMVoltageOut, outVoltage)
-                            
-            elif (taskID[0] == self.IRM_IRM_VOLTAGE_IN):
-                inVoltage = self.apsIRM.inVoltage(self.modConfig.IRMCapacitorVoltageIn)
-                self.queue.put('IRMControl:IRM Voltage Read = ' + "{:.2f}".format(inVoltage))
-                
-            elif (taskID[0] == self.IRM_TOGGLE_IRMFIRE):
-                mode = taskID[1][0]
-                self.apsIRM.toggleTTLRelays(self.modConfig.IRMFire, mode)
-                            
-            elif (taskID[0] == self.IRM_TOGGLE_IRMTRIM):
-                mode = taskID[1][0]
-                mode = self.apsIRM.TrimOnOff(mode) 
-                self.apsIRM.toggleTTLRelays(self.modConfig.IRMTrim, mode)
-                            
-            elif (taskID[0] == self.IRM_READ_IRM_POWER):
-                inVoltage = self.apsIRM.inVoltage(self.modConfig.IRMPowerAmpVoltageIn)
-                self.queue.put('IRMControl:IRM Read Power = ' + "{:.2f}".format(inVoltage))
-                            
-            elif (taskID[0] == self.IRM_AVERAGE_VOLTAGE):
-                self.apsIRM.IRMAverageVoltageIn()
-                
+                                                
         return 'IRMControl'
 
     '''

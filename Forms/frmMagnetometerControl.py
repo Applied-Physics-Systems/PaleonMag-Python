@@ -6,8 +6,9 @@ Created on Nov 7, 2024
 import wx
 
 class AutoPage(wx.Panel):
-    def __init__(self, parent, mainForm):
-        wx.Panel.__init__(self, parent)
+    def __init__(self, noteBook, parent, mainForm):
+        wx.Panel.__init__(self, noteBook)
+        self.parent = parent
         self.mainForm = mainForm
         
         XOri = 10
@@ -16,8 +17,8 @@ class AutoPage(wx.Panel):
         YOffset = 60
         btnLength = 120
         btnHeight = 30        
-        self.modifyBtn = wx.Button(self, label='Modify', pos=(XOri + XOffset, YOri + YOffset), size=(btnLength, btnHeight))
-        self.modifyBtn.Bind(wx.EVT_BUTTON, self.onModify)
+        self.cmdChangerEdit = wx.Button(self, label='Modify', pos=(XOri + XOffset, YOri + YOffset), size=(btnLength, btnHeight))
+        self.cmdChangerEdit.Bind(wx.EVT_BUTTON, self.onCmdChangerEdit)
 
         XOffset += btnLength + 60
         self.startChangerBtn = wx.Button(self, label='Start Changer', pos=(XOri + XOffset, YOri + YOffset), size=(btnLength, btnHeight))
@@ -31,8 +32,8 @@ class AutoPage(wx.Panel):
     --------------------------------------------------------------------------------------------'''
     '''
     '''
-    def onModify(self, event):
-        print('TODO: onModify')
+    def onCmdChangerEdit(self, event):
+        print('TODO: onCmdChangerEdit')
         return
     
     '''
@@ -45,8 +46,9 @@ class AutoPage(wx.Panel):
     -------------------------------------------------------------------------------------------------
 '''
 class ManualPage(wx.Panel):
-    def __init__(self, parent, mainForm):
-        wx.Panel.__init__(self, parent)
+    def __init__(self, noteBook, parent, mainForm):
+        wx.Panel.__init__(self, noteBook)
+        self.parent = parent
         self.mainForm = mainForm
         
         XOri = 60
@@ -59,6 +61,7 @@ class ManualPage(wx.Panel):
         wx.StaticText(self, label='Choose Sample', pos=(XOri, YOri + ytextOffset))
         self.sampleList = []        
         self.cmbManSample = wx.ComboBox(self, value='', pos=(XOri + XOffset, YOri), size=(comboBoxLength, comboBoxHeight), choices=self.sampleList)
+        self.cmbManSample.Bind(wx.EVT_TEXT, self.onSampleChanged)
 
         YOffset = comboBoxHeight + 5
         textBoxHeight = 25
@@ -67,11 +70,11 @@ class ManualPage(wx.Panel):
 
         btnLength = 120
         btnHeight = 30        
-        self.measureHolderBtn = wx.Button(self, label='Measure Holder', pos=(XOri, YOri + 2*YOffset), size=(btnLength, btnHeight))
-        self.measureHolderBtn.Bind(wx.EVT_BUTTON, self.onMeasureHolder)
-        self.measureSampleBtn = wx.Button(self, label='Measure Sample', pos=(XOri + XOffset, YOri + 2*YOffset), size=(btnLength, btnHeight))
-        self.measureSampleBtn.Bind(wx.EVT_BUTTON, self.onMeasureSample)
-        self.measureSampleBtn.Enable(False)
+        self.cmdManHolder = wx.Button(self, label='Measure Holder', pos=(XOri, YOri + 2*YOffset), size=(btnLength, btnHeight))
+        self.cmdManHolder.Bind(wx.EVT_BUTTON, self.onCmdManHolder)
+        self.cmdManRun = wx.Button(self, label='Measure Sample', pos=(XOri + XOffset, YOri + 2*YOffset), size=(btnLength, btnHeight))
+        self.cmdManRun.Bind(wx.EVT_BUTTON, self.onCmdManRun)
+        self.cmdManRun.Enable(False)
         
         self.vacuumOnChkBox = wx.CheckBox(self, label='Keep The Vacuum On', pos=(XOri, YOri + 3*YOffset + 12))
         self.openSampleBtn = wx.Button(self, label='Open Sample File', pos=(XOri + XOffset, YOri + 3*YOffset + 5), size=(btnLength, btnHeight))
@@ -80,19 +83,65 @@ class ManualPage(wx.Panel):
 
     '''--------------------------------------------------------------------------------------------
                         
+                        Internal Functions
+                        
+    --------------------------------------------------------------------------------------------'''
+    '''
+        This procedure enables the commands that require use of the
+        magnetometer once the magnetometer is initialized.  We know when
+        it is initialized when the flag FLAG_MagnetInit is true.
+    '''
+    def EnableMagnetCmds(self):
+        if (self.mainForm.FLAG_MagnetInit and (not self.mainForm.FLAG_MagnetUse)):
+            self.parent.autoPage.cmdChangerEdit.Enable(True)
+            self.cmdManHolder.Enable(True)
+            self.parent.cmbSusceptibilityScaleFactor.Enabled = True
+            self.EnableMagnetRun()
+        
+        return
+    
+    '''
+        When the sample selected is changed, and a valid sample is
+        selected, then enable the cmdManRun button, so we can run the
+        sample.
+    '''
+    def EnableMagnetRun(self):
+        if (self.mainForm.FLAG_MagnetInit and \
+            (not self.mainForm.FLAG_MagnetUse) and \
+            (not self.cmdManRun.IsEnabled())):
+            # The button is not enabled and we are allowed to enable it
+            if (self.cmbManSample.GetSelection != -1):
+                # We have selected a sample in the combo box
+                self.cmdManRun.Enable(True)        # Enable the Run button
+                
+        return
+
+    '''--------------------------------------------------------------------------------------------
+                        
                         Event Handler Functions
                         
     --------------------------------------------------------------------------------------------'''
     '''
     '''
-    def onMeasureHolder(self, event):
-        print('TODO: onMeasureHolder')
+    def onSampleChanged(self, event):
+        sampleName = self.cmbManSample.GetValue()
+        if (sampleName == ''):
+            return
+        
+        self.EnableMagnetCmds()
+        
         return
     
     '''
     '''
-    def onMeasureSample(self, event):
-        print('TODO: onMeasureSample')
+    def onCmdManHolder(self, event):
+        print('TODO: onCmdManHolder')
+        return
+    
+    '''
+    '''
+    def onCmdManRun(self, event):
+        print('TODO: onCmdManRun')
         return
     
     '''
@@ -131,8 +180,8 @@ class frmMagnetometerControl(wx.Frame):
         self.nb = wx.Notebook(panel, size=(noteBookLength, noteBookHeight))
 
         # create the page windows as children of the notebook
-        self.autoPage = AutoPage(self.nb, mainForm)
-        self.manualPage = ManualPage(self.nb, mainForm)
+        self.autoPage = AutoPage(self.nb, self, mainForm)
+        self.manualPage = ManualPage(self.nb, self, mainForm)
 
         # add the pages to the notebook with the label to show on the tab
         self.nb.AddPage(self.autoPage, "Automatic Data Collection")
@@ -184,8 +233,8 @@ class frmMagnetometerControl(wx.Frame):
         comboBoxLength = 50
         comboBoxHeight = 22
         self.scaleList = ['1.0', '0.1']
-        self.sampleCodeCBox = wx.ComboBox(panel, value='', pos=(XOri + XOffset, YOri + YOffset), size=(comboBoxLength, comboBoxHeight), choices=self.scaleList)
-        self.sampleCodeCBox.SetSelection(1)
+        self.cmbSusceptibilityScaleFactor = wx.ComboBox(panel, value='', pos=(XOri + XOffset, YOri + YOffset), size=(comboBoxLength, comboBoxHeight), choices=self.scaleList)
+        self.cmbSusceptibilityScaleFactor.SetSelection(1)
         
         return             
 

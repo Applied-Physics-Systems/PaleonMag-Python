@@ -487,7 +487,7 @@ if __name__=='__main__':
     try:    
         app = wx.App(False)
         
-        testUnit = frmTestUnit(path='C:\\Users\\hd.nguyen.APPLIEDPHYSICS\\workspace\\SVN\\Windows\\Rock Magnetometer\\Paleomag_v3_Hung.INI')
+        testUnit = frmTestUnit()
         motorControl = frmDCMotors(parent=testUnit)
         testUnit.panelList['MotorControl'] = motorControl
         app.MainLoop()    

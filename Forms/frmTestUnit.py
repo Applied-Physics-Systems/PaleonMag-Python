@@ -3,6 +3,7 @@ Created on Sep 9, 2025
 
 @author: hd.nguyen
 '''
+import os
 import wx
 
 import configparser
@@ -29,8 +30,10 @@ class frmTestUnit(wx.Frame):
     classdocs
     '''
     panelList = {}
+    FLAG_MagnetInit = False     # Whether we've finished initializing the magnetometer
+    FLAG_MagnetUse = False      # Whether we've finished using the magnetometer
 
-    def __init__(self, parent=None, path=''):
+    def __init__(self, parent=None):
         '''
         Constructor
         '''
@@ -41,15 +44,16 @@ class frmTestUnit(wx.Frame):
         self.parent = parent   
         
         self.devControl = DevicesControl()
-        config = configparser.ConfigParser()
-        configPath = path
-        config.read(configPath)
-        processData = ProcessData()
-        processData.config = config 
-    
-        self.modConfig = ModConfig(process=processData)
-        self.modConfig.parseConfig(config)
         
+        # Check if the system.INI file exist
+        inFileName = '..\Paleomag.ini'
+        iniPath = self.getINIPath(inFileName)        
+        if os.path.exists(iniPath):
+            self.getConfig(iniPath)
+        else: 
+            self.openINIFile()
+            self.saveINIPath(inFileName)
+                
         self.magControl = frmMagnetometerControl(parent=self)
         self.SampleIndexRegistry = SampleIndexRegistrations(parent=self)
         self.SampQueue = SampleCommands()
@@ -80,6 +84,58 @@ class frmTestUnit(wx.Frame):
         self.SetSize((1500, 1000))
         self.SetTitle('Test Unit')
         self.Centre()
+
+    '''--------------------------------------------------------------------------------------------
+                        
+                        Utilities Functions
+                        
+    --------------------------------------------------------------------------------------------'''
+    '''
+    '''
+    def getINIPath(self, fileName):
+        self.paleomagIni = configparser.ConfigParser()
+        self.paleomagIni.read(fileName)
+        iniPath = self.paleomagIni['Program']['SystemIniPath']
+        return iniPath
+    
+    '''
+    '''
+    def saveINIPath(self, fileName):
+        self.paleomagIni.set('Program', 'SystemIniPath', self.defaultFilePath)
+        
+        # Write the configuration to an INI file
+        with open(fileName, 'w') as configfile:
+            self.paleomagIni.write(configfile)        
+            
+        return
+        
+    '''
+    '''
+    def getConfig(self, fileName):
+        config = configparser.ConfigParser()
+        config.read(fileName)
+                
+        processData = ProcessData()
+        processData.config = config 
+    
+        self.modConfig = ModConfig(process=processData)
+        self.modConfig.parseConfig(config)
+        
+        # Set paramters from INI file
+        self.NOCOMM_Flag = self.modConfig.NoCommMode 
+        return
+    
+    '''
+        Open Dialog box for INI file
+    '''
+    def openINIFile(self):
+        dlg = wx.FileDialog(self, "Open", "", "",
+                            "INI files (*.INI)|*.INI",
+                            wx.FD_OPEN | wx.FD_FILE_MUST_EXIST)
+        
+        if dlg.ShowModal() == wx.ID_OK:
+            self.defaultFilePath = dlg.GetPath()
+            self.getConfig(self.defaultFilePath)        
 
     '''--------------------------------------------------------------------------------------------
                         
@@ -117,7 +173,7 @@ class frmTestUnit(wx.Frame):
 if __name__=='__main__':
     try:    
         app = wx.App(False)
-        frame = frmTestUnit(parent=None, path='C:\\Users\\hd.nguyen.APPLIEDPHYSICS\\workspace\\SVN\\Windows\\Rock Magnetometer\\Paleomag_v3_Hung.INI')
+        frame = frmTestUnit(parent=None)
         frame.Show()
         app.MainLoop()    
         

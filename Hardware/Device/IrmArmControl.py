@@ -10,13 +10,15 @@ from Process.IRMData import IRMData
 
 APS_GET_STATUS = "PSS"
 APS_DO_PULSE = "PET"
-APS_SET_LEVEL = "PCA "
+APS_IRM_SET_HIGHRANGE = "PCA "
+APS_IRM_SET_LOWRANGE = "PCL "
 APS_SET_RANGE_HIGH = "PCRH"
 APS_SET_RANGE_LOW = "PCRL"
 APS_SET_POLARITY_NEGATIVE = "PCRN"
 APS_SET_POLARITY_POSITIVE = "PCRP"
 APS_DO_ZERO_DISCHARGE = "ZERO"
 
+APS_IRM_LEVEL_THRESHOLD = 1000
 APS_GET_RESPONSE_SERIAL_COMM_TIMEOUT_IN_SECONDS = 121
 APS_ZERO_DISCHARGE_COMMAND_REPLY_FROM_DEVICE = "Discharged."
 APS_DONE_STRING = "Done."
@@ -535,33 +537,14 @@ class IrmArmControl(SerialPortDevice):
             status = True
         
         return status
-    
-    '''
-    '''
-    def SetApsIrmPolarity_FromTargetValue(self, target_value):
-        if (target_value < 0):
-            self.SendApsIrmCommand_AndThenWait600msec(APS_SET_POLARITY_NEGATIVE)
-        else:
-            self.SendApsIrmCommand_AndThenWait600msec(APS_SET_POLARITY_POSITIVE)
-            
-        return
-         
-    '''
-    '''
-    def SetApsIrmRange_FromGaussLevel(self, level_in_positive_gaus):
-        if (self.modConfig.ApsIrm_DoRangeChange and \
-            (level_in_positive_gaus > self.modConfig.ApsIrm_RangeChangeLevel)):
-            
-            self.SendApsIrmCommand_AndThenWait600msec(APS_SET_RANGE_HIGH)
-        else:
-            
-            self.SendApsIrmCommand_AndThenWait600msec(APS_SET_RANGE_LOW)
-        return
-            
+                         
     '''
     '''
     def SetApsIrmLevel(self, target_level):
-        self.SendApsIrmCommand_AndThenWait600msec(APS_SET_LEVEL + target_level)
+        if (abs(int(target_level)) > APS_IRM_LEVEL_THRESHOLD):
+            self.SendApsIrmCommand_AndThenWait600msec(APS_IRM_SET_HIGHRANGE + target_level)
+        else:            
+            self.SendApsIrmCommand_AndThenWait600msec(APS_IRM_SET_LOWRANGE + target_level)
         return
         
     '''
@@ -571,8 +554,20 @@ class IrmArmControl(SerialPortDevice):
         return
 
     '''
+        After sending PCA/PCL command, wait for the IRM to charge 
+        to the level according to the equation
+        y = 10.802X^2 - 4.5094X + 4.0748
     '''
-    def FireAPS_AtCalibratedTarget(self, target):
+    def WaitForIrmToCharge(self, target):
+        target = abs(target/10000)
+        waitTime = 10.802 * target * target - 4.5094 * target + 4.0748
+        time.sleep(waitTime)
+        return
+    
+
+    '''
+    '''
+    def FireAPS_AtCalibratedTarget(self, target, pauseFire=False):
         if (target == 0):
             # Discharging IRM device
             self.SendZeroCommand_ToApsIRMDevice_AndWaitForReply()
@@ -580,26 +575,22 @@ class IrmArmControl(SerialPortDevice):
             return
         
         else:
-            self.SetApsIrmPolarity_FromTargetValue(target)
-            level_in_positive_gauss = int(abs(target))
-            self.SetApsIrmRange_FromGaussLevel(level_in_positive_gauss)
-            
             # Check if level is in range
-            if (level_in_positive_gauss > self.modConfig.PulseAxialMax):
-                warningMessage = 'Warning:Target IRM Peak Field (' + str(level_in_positive_gauss) + ' '
+            if (abs(target) > self.modConfig.PulseAxialMax):
+                warningMessage = 'Warning:Target IRM Peak Field (' + str(abs(target)) + ' '
                 warningMessage += self.modConfig.AFUnits + ') is above the currently set value for the Maximum IRM Peak Field ('
                 warningMessage += str(self.modConfig.PulseAxialMax) + ' ' + self.modConfig.AFUnits + ')'
                 self.queue.put(warningMessage)
                 return 
             
-            elif (level_in_positive_gauss < self.modConfig.PulseAxialMin):
-                warningMessage = 'Warning:Target IRM Peak Field (' + str(level_in_positive_gauss) + ' '
+            elif (abs(target) < self.modConfig.PulseAxialMin):
+                warningMessage = 'Warning:Target IRM Peak Field (' + str(abs(target)) + ' '
                 warningMessage += self.modConfig.AFUnits + ') is below the currently set value for the Minimum IRM Peak Field ('
                 warningMessage += str(self.modConfig.PulseAxialMin) + ' ' + self.modConfig.AFUnits + ')'
                 self.queue.put(warningMessage)
                 return
                 
-            target_level = str(level_in_positive_gauss)
+            target_level = str(target)
             
             # Catch Flow Pause or Flow Halt
             self.parent.checkProgramHaltRequest()
@@ -607,28 +598,12 @@ class IrmArmControl(SerialPortDevice):
             # Set IRM Field Level
             self.SetApsIrmLevel(target_level)
 
-            # Catch Flow Pause or Flow Halt
-            self.parent.checkProgramHaltRequest()
-
-            # Tell APS IRM to execute pulse
-            self.executeApsIrmPulse()
-            
-            # Wait for Done signal
-            while True:
-                my_local_response = self.GetApsIrmResponse(APS_GET_RESPONSE_SERIAL_COMM_TIMEOUT_IN_SECONDS)
-                if  APS_DONE_STRING in my_local_response:
-                    return
+            # Wait for IRM to charge
+            self.WaitForIrmToCharge(target)
+            if not pauseFire:
+                self.IRM_FireField(target_level)
                 
-                # Catch Flow Pause or Flow Halt
-                self.parent.checkProgramHaltRequest()
-                
-                # Send warning message
-                warningMessage = 'Warning: Over ' + str(APS_GET_RESPONSE_SERIAL_COMM_TIMEOUT_IN_SECONDS)
-                warningMessage += ' seconds have elapsed since the IRM Fire Command was sent '
-                warningMessage += 'for an IRM Pulse at ' + target_level + ' ' + self.modConfig.AFUnits + ' and '
-                warningMessage += ' no ' + APS_DONE_STRING + ' response has been received from the APS IRM Device.'
-                self.queue.put(warningMessage)
-                time.sleep(1)                            
+        return
 
     '''
         If the user has set that the IRM trim is wired such that it is
@@ -1033,18 +1008,46 @@ class IrmArmControl(SerialPortDevice):
     
     '''
     '''
-    def FireIRM(self, voltage, CalibrationMode=False):
+    def FireIRM(self, voltage, CalibrationMode=False, pauseFire=False):
         if 'ASC' in self.modConfig.IRMSystem:
             self.FireASC_IrmAtPulseVolts(voltage, CalibrationMode)
             
         elif 'APS' in self.modConfig.IRMSystem:
-            self.FireAPS_AtCalibratedTarget(voltage)
+            self.FireAPS_AtCalibratedTarget(voltage, pauseFire)
 
         return
         
     '''
     '''
-    def FireIRMAtField(self, Gauss):
+    def IRM_FireField(self, target_level):
+        # Catch Flow Pause or Flow Halt
+        self.parent.checkProgramHaltRequest()
+
+        # Tell APS IRM to execute pulse
+        self.executeApsIrmPulse()
+        
+        # Wait for Done signal
+        while True:
+            my_local_response = self.GetApsIrmResponse(APS_GET_RESPONSE_SERIAL_COMM_TIMEOUT_IN_SECONDS)
+            if  APS_DONE_STRING in my_local_response:
+                return
+            
+            # Catch Flow Pause or Flow Halt
+            self.parent.checkProgramHaltRequest()
+            
+            # Send warning message
+            warningMessage = 'Warning: Over ' + str(APS_GET_RESPONSE_SERIAL_COMM_TIMEOUT_IN_SECONDS)
+            warningMessage += ' seconds have elapsed since the IRM Fire Command was sent '
+            warningMessage += 'for an IRM Pulse at ' + target_level + ' ' + self.modConfig.AFUnits + ' and '
+            warningMessage += ' no ' + APS_DONE_STRING + ' response has been received from the APS IRM Device.'
+            self.queue.put(warningMessage)
+            time.sleep(1)           
+                             
+        return
+   
+    '''
+    '''
+    def IRM_SetField(self, Gauss, pauseFire):
         # First, lock the Coil selection
         self.CoilsLocked = True
         self.queue.put('IRMControl:Coil locked = True')
@@ -1055,7 +1058,7 @@ class IrmArmControl(SerialPortDevice):
             # APS IRM System is pre-calibrated.          
             self.parent.ADwin.TrySetRelays_ADwin('IRM Axial', True)    
             time.sleep(0.2)          
-            self.FireIRM(Gauss)
+            self.FireIRM(Gauss, pauseFire=pauseFire)
           
         else:
             if ((Gauss < 0) and (self.modConfig.EnableIRMBackfield)):
@@ -1080,7 +1083,7 @@ class IrmArmControl(SerialPortDevice):
                 
         # Last, unlock the coil selection
         self.CoilsLocked = False
-        self.queue.put(txtPulseVolts + ':Coil locked = False')
+        self.queue.put(txtPulseVolts + ':Coil locked = False:Set Field = Done:IRM Status = Done')
         
         return outField
 

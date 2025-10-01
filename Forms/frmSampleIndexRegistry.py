@@ -554,8 +554,6 @@ class frmSampleIndexRegistry(wx.Frame):
     '''
     '''
     def fileReadyToLoad(self):
-        status = False
-        
         status = True
         return status
     
@@ -563,8 +561,8 @@ class frmSampleIndexRegistry(wx.Frame):
     '''
     def onAddToRegistry(self, event):
         if (self.parent != None):
-            if ((not self.parent.magControl.manualPage.measureHolderBtn.IsEnabled()) \
-                and (not self.parent.magControl.autoPage.modifyBtn.IsEnabled())):
+            if ((not self.parent.magControl.manualPage.cmdManHolder.IsEnabled()) \
+                and (not self.parent.magControl.autoPage.cmdChangerEdit.IsEnabled())):
                 return
         
         self.updateBackupDir()
@@ -724,8 +722,8 @@ class frmSampleIndexRegistry(wx.Frame):
     '''
     def onClearRegistry(self, event):
         if (self.parent != None):
-            if ((not self.parent.magControl.manualPage.measureHolderBtn.IsEnabled()) \
-                and (not self.parent.magControl.autoPage.modifyBtn.IsEnabled())):
+            if ((not self.parent.magControl.manualPage.cmdManHolder.IsEnabled()) \
+                and (not self.parent.magControl.autoPage.cmdChangerEdit.IsEnabled())):
                 return
 
         self.parent.SampQueue.Clear()
@@ -759,7 +757,7 @@ if __name__=='__main__':
     try:    
         app = wx.App(False)
         
-        testUnit = frmTestUnit(path='C:\\Users\\hd.nguyen.APPLIEDPHYSICS\\workspace\\SVN\\Windows\\Rock Magnetometer\\Paleomag_v3_Hung.INI')
+        testUnit = frmTestUnit()
         frame = frmSampleIndexRegistry(parent=testUnit)
         frame.Show(True)        
         app.MainLoop()    

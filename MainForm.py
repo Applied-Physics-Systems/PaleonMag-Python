@@ -13,6 +13,7 @@ Libraries used in this project
     pip install matplotlib
 
 '''
+import os
 import wx
 import configparser
 from datetime import datetime
@@ -38,7 +39,7 @@ from Modules.modConfig import ModConfig
 
 from Process.PaleoThread import PaleoThread
 
-VersionNumber = 'Version 0.00.25'
+VersionNumber = 'Version 0.00.26'
 
 ID_DC_MOTORS        = 0
 ID_FILE_REGISTRY    = 1
@@ -64,6 +65,8 @@ class MainForm(wx.Frame):
     progressColor = 'None'
     panelList = {}
     config = None
+    FLAG_MagnetInit = False     # Whether we've finished initializing the magnetometer
+    FLAG_MagnetUse = False      # Whether we've finished using the magnetometer
     
     def __init__(self, *args, **kw):
         '''
@@ -71,8 +74,18 @@ class MainForm(wx.Frame):
         '''
         super(MainForm, self).__init__(*args, **kw)
         
+        self.image_control = None
+        
         self.devControl = DevicesControl()
-        self.openINIFile()
+        
+        # Check if the system.INI file exist
+        inFileName = 'Paleomag.ini'
+        iniPath = self.getINIPath(inFileName)        
+        if os.path.exists(iniPath):
+            self.getConfig(iniPath)
+        else: 
+            self.openINIFile()
+            self.saveINIPath(inFileName)
         
         self.InitUI()
         self.messageBox.SetValue(self.messageStr)
@@ -258,17 +271,15 @@ class MainForm(wx.Frame):
             self.statusBar.SetStatusText("NoCOMM mode on", 0)
         else:
             self.statusBar.SetStatusText("NoCOMM mode off", 0)
-        self.setStatusColor('Green')
         self.Bind(wx.EVT_SIZE, self.OnSize)         # Bind the OnSize event to handle resizing
                 
         # Add event handler on OnClose
         self.Bind(wx.EVT_CLOSE, self.onClosed)
                 
-        # Set the frame to fullscreen
+        # Set the frame to fullscreen        
         self.SetSize((1500, 1000)) 
         self.SetTitle('PaleoMagnetic Magnetometer Controller Systems - ' + VersionNumber)
         self.Centre() 
-        self.Show(True)
         
     '''--------------------------------------------------------------------------------------------
                         
@@ -333,7 +344,39 @@ class MainForm(wx.Frame):
                         
                         Utilities Functions
                         
-    --------------------------------------------------------------------------------------------''' 
+    --------------------------------------------------------------------------------------------'''
+    '''
+    '''
+    def getINIPath(self, fileName):
+        self.paleomagIni = configparser.ConfigParser()
+        self.paleomagIni.read(fileName)
+        iniPath = self.paleomagIni['Program']['SystemIniPath']
+        return iniPath
+    
+    '''
+    '''
+    def saveINIPath(self, fileName):
+        self.paleomagIni.set('Program', 'SystemIniPath', self.defaultFilePath)
+        
+        # Write the configuration to an INI file
+        with open(fileName, 'w') as configfile:
+            self.paleomagIni.write(configfile)        
+            
+        return
+        
+    '''
+    '''
+    def getConfig(self, fileName):
+        config = configparser.ConfigParser()
+        config.read(fileName)
+        self.modConfig = ModConfig(config=config) 
+        self.messageStr = self.devControl.setDevicesConfig(self.modConfig)
+        self.devControl.closeDevices()
+        
+        # Set paramters from INI file
+        self.NOCOMM_Flag = self.modConfig.NoCommMode 
+        return
+    
     '''
         Open Dialog box for INI file
     '''
@@ -343,15 +386,8 @@ class MainForm(wx.Frame):
                             wx.FD_OPEN | wx.FD_FILE_MUST_EXIST)
         
         if dlg.ShowModal() == wx.ID_OK:
-            self.defaultFilePath = dlg.GetPath()        
-            config = configparser.ConfigParser()
-            config.read(self.defaultFilePath)
-            self.modConfig = ModConfig(config=config) 
-            self.messageStr = self.devControl.setDevicesConfig(self.modConfig)
-            self.devControl.closeDevices()
-            
-            # Set paramters from INI file
-            self.NOCOMM_Flag = self.modConfig.NoCommMode 
+            self.defaultFilePath = dlg.GetPath()
+            self.getConfig(self.defaultFilePath)        
 
     '''
         Check if all device are connected OK
@@ -421,7 +457,8 @@ class MainForm(wx.Frame):
     def OnSize(self, event):
         # Reposition the image when the frame is resized
         rect = self.statusBar.GetFieldRect(3)
-        self.image_control.SetPosition(rect.GetTopLeft())
+        if (self.image_control != None): 
+            self.image_control.SetPosition(rect.GetTopLeft())
         event.Skip()
             
     '''
@@ -520,7 +557,11 @@ class MainForm(wx.Frame):
 if __name__=='__main__':
     try:    
         app = wx.App(False)
+        
         frame = MainForm(parent=None, id=-1)
+        frame.Maximize(maximize=True)
+        frame.Show()
+        
         app.MainLoop()    
         
     except Exception as e:

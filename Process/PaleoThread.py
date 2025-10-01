@@ -116,6 +116,7 @@ class PaleoThread():
                 tipBox.Show()        
             
             elif (sequenceType == self.ENDTASK_MAG_INIT):          
+                self.parent.FLAG_MagnetInit = True        # We're done initializing
                 self.parent.registryControl.Show()
                 self.parent.panelList['RegistryControl'] = self.parent.registryControl
             self.parent.statusBar.SetStatusText('Tasks Completed', 1)

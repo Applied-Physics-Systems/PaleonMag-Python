@@ -10,6 +10,9 @@ import configparser
 from Hardware.Device.SerialPortDevice import SerialPortDevice
 from Modules.modConfig import ModConfig
 
+'''
+    Notice: Unit ID should be set to 16 on the QuickSilver program.
+'''
 class MotorControl(SerialPortDevice):
     '''
     classdocs
@@ -369,7 +372,7 @@ if __name__=='__main__':
         config = configparser.ConfigParser()
         config.read('C:\\Users\\hd.nguyen.APPLIEDPHYSICS\\workspace\\SVN\\Windows\\Rock Magnetometer\\Paleomag_v3_Hung.INI')
         modConfig = ModConfig(config=config)          
-        motorID = 'ChangerY'         
+        motorID = 'ChangerX'         
         if 'ChangerX' in motorID:
             comPort = 'COM7'
         elif 'ChangerY' in motorID:
@@ -380,7 +383,7 @@ if __name__=='__main__':
             comPort = 'COM10'
         motorControl = MotorControl(57600, pathName, comPort, motorID, modConfig)
         
-        motorControl.runTask(6)
+        motorControl.runTask(0)
                 
         motorControl.closeDevice()
         print('Done !!!')
