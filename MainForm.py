@@ -39,7 +39,7 @@ from Modules.modConfig import ModConfig
 
 from Process.PaleoThread import PaleoThread
 
-VersionNumber = 'Version 0.00.26'
+VersionNumber = 'Version 0.00.27'
 
 ID_DC_MOTORS        = 0
 ID_FILE_REGISTRY    = 1

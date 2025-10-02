@@ -59,6 +59,8 @@ class DevicesControl():
     IRM_FIRE                = 0x1004
     IRM_FIRE_AT_FIELD       = 0x1005
     IRM_SET_FIELD           = 0x1006
+    IRM_ARM_VOLTAGE_OUT     = 0x1007
+    IRM_ARM_TOGGLE_SET      = 0x1008
     
     SQUID_READ_COUNT        = 0x2001
     SQUID_READ_DATA         = 0x2002
@@ -110,6 +112,8 @@ class DevicesControl():
                 IRM_FIRE: 'Discharge IRM device',                
                 IRM_FIRE_AT_FIELD: 'Discharge IRM at field',
                 IRM_SET_FIELD: 'Set field level',
+                IRM_ARM_VOLTAGE_OUT: 'Set ARM Voltage',
+                IRM_ARM_TOGGLE_SET: 'Toggle ARM Set',
                 SQUID_READ_COUNT: 'Read count from SQUID',
                 SQUID_READ_DATA: 'Read data from SQUID',
                 SQUID_READ_RANGE: 'Read range from SQUID',
@@ -452,10 +456,11 @@ class DevicesControl():
 
         elif (taskID[0] == self.MOTOR_READ_ANGLE):
             angle = self.motors.turningMotorAngle()
-            self.modConfig.queue.put('MotorControl:Data: TurningAngle: ' + str(angle))
+            self.modConfig.queue.put('MotorControl:TurningAngle = ' + str(angle))
 
         elif (taskID[0] == self.MOTOR_READ_HOLE):
-            self.motors.changerHole()
+            curHole = self.motors.changerHole()
+            self.modConfig.queue.put('MotorControl:LastHole = ' + str(curHole))
 
         elif (taskID[0] == self.MOTOR_RESET):
             self.motors.reset()
@@ -495,6 +500,14 @@ class DevicesControl():
                             
             elif (taskID[0] == self.IRM_REFRESH_TEMP):
                 self.apsIRM.RefreshTemp()
+                
+            elif (taskID[0] == self.IRM_ARM_VOLTAGE_OUT):
+                targetVolt = taskID[1][0]
+                self.ADwin.DoDAQIO(self.modConfig.ARMVoltageOut, numValue=targetVolt)
+                
+            elif (taskID[0] == self.IRM_ARM_TOGGLE_SET):
+                setState = taskID[1][0]
+                self.ADwin.DoDAQIO(self.modConfig.ARMSet, boolValue=setState)
                                                 
         return 'IRMControl'
 

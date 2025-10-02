@@ -80,11 +80,11 @@ class MotorControl(SerialPortDevice):
         time.sleep(0.01)        # Sleep for 100 ms
 
         respStr = self.readLine()
-        resplist = respStr.split('\n') 
-        
+        resplist = respStr.split('\n')
+                
         # Send Command and its response to the GUI
         if (self.modConfig.queue != None):
-            self.modConfig.queue.put('MotorControl:Command Exchange: ' + self.label + ';' + cmdStr + ';' + resplist[-1])
+            self.modConfig.queue.put('MotorControl:Command Exchange: ' + self.label + ';' + cmdStr + ';' + resplist[0])
                 
         return respStr 
 
@@ -209,7 +209,7 @@ class MotorControl(SerialPortDevice):
     def moveMotor(self, moveMotorPos, moveMotorVelocity, waitingForStop=True, stopEnable=0, stopCondition=0):
         # Send Command and its response to the GUI
         if (self.modConfig.queue != None):
-            self.modConfig.queue.put('MotorControl:Motor Info: ' + self.label + ';Position ' + str(moveMotorPos) + ';Velocity ' + str(moveMotorVelocity))
+            self.modConfig.queue.put('MotorControl:Motor Info: ' + self.label + ';Position ' + str(moveMotorPos) + ';Velocity ' + str(int(moveMotorVelocity)))
         
         self.pollMotor()
         self.clearPollStatus()

@@ -404,7 +404,8 @@ class Motors():
     '''
         Move UpDown Motor to the top
         
-        Move the UpDown motor to MeasPos, then wait until it cannot move any more.
+        1. Move the UpDown motor to MeasPos, then wait until it cannot move any more.
+        2. Check to see if the limit switch is on. If not, send error message 
     '''
     def HomeToTop(self):        
         # No homing to top if the program has been halted
@@ -447,7 +448,11 @@ class Motors():
         return upDownPos
             
     '''
-        Move the XY table to the center
+        Move the XY table to the center.
+        
+        1. Check to see if the UpDown has been on top. If not, move it there.
+        2. Move to the corner. 
+        3. Move to the center
     '''
     def HomeToCenter(self):
         xPos = 0 

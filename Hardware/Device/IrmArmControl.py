@@ -556,11 +556,13 @@ class IrmArmControl(SerialPortDevice):
     '''
         After sending PCA/PCL command, wait for the IRM to charge 
         to the level according to the equation
-        y = 10.802X^2 - 4.5094X + 4.0748
+        y = 25.354*X - 8.988
     '''
     def WaitForIrmToCharge(self, target):
         target = abs(target/10000)
-        waitTime = 10.802 * target * target - 4.5094 * target + 4.0748
+        waitTime = 25.354 * target - 8.988
+        if (waitTime < 2):
+            waitTime = 2 
         time.sleep(waitTime)
         return
     

@@ -217,20 +217,28 @@ class frmDCMotors(wx.Frame):
     def updateGUI(self, messageList):
         if ('Command Exchange' in messageList[0]):
             self.parent.modConfig.parseCommandExchange(messageList[1].strip())
+            self.outputTBox.SetValue(self.parent.modConfig.outCommand)
+            self.inputTBox.SetValue(self.parent.modConfig.inResponse)
+            self.lastPosTBox.SetValue(self.parent.modConfig.lastPositionRead)
+            
         elif ('Motor Info' in messageList[0]):
             self.parent.modConfig.parseMotorInfo(messageList[1].strip())
+            self.targetPosTBox.SetValue(self.parent.modConfig.targetPosition)
+            self.velocityTBox.SetValue(self.parent.modConfig.velocity)
+            
         elif ('Data' in messageList[0]):
             self.parent.modConfig.parseMotorData(messageList[1].strip(), messageList[2].strip())
+            self.goXTBox.SetValue(self.parent.modConfig.xPos)
+            self.goYTBox.SetValue(self.parent.modConfig.yPos)
+            self.spinSampleTBox.SetValue(self.parent.modConfig.turningAngle)
             
-        self.outputTBox.SetValue(self.parent.modConfig.outCommand)
-        self.inputTBox.SetValue(self.parent.modConfig.inResponse)
-        self.lastPosTBox.SetValue(self.parent.modConfig.lastPositionRead)
-        self.targetPosTBox.SetValue(self.parent.modConfig.targetPosition)
-        self.velocityTBox.SetValue(self.parent.modConfig.velocity)
-        self.goXTBox.SetValue(self.parent.modConfig.xPos)
-        self.goYTBox.SetValue(self.parent.modConfig.yPos)
-        self.spinSampleTBox.SetValue(self.parent.modConfig.turningAngle)
+        elif ('TurningAngle = ' in messageList[0]):
+            self.lastTurnTBox.SetValue(messageList[0].replace('TurningAngle = ', ''))
+
+        elif ('LastHole = ' in messageList[0]):
+            self.lastHoleTBox.SetValue(messageList[0].replace('LastHole = ', ''))
             
+        # Update active motor checkbox            
         if 'ChangerX' in self.parent.modConfig.activeMotor:
             self.activeMotroRBox.SetSelection(0)
         elif 'Turning' in self.parent.modConfig.activeMotor:
@@ -269,9 +277,20 @@ class frmDCMotors(wx.Frame):
     '''
     def onMoveMotor(self, event):
         activeMotor = self.activeMotroRBox.GetStringSelection()
-        tartgetPosition = int(self.targetPosTBox.GetValue())
-        velocity = int(self.velocityTBox.GetValue())
-        self.parent.pushTaskToQueue([self.parent.devControl.MOTOR_MOVE, [activeMotor, tartgetPosition, velocity]])
+        
+        try:
+            targetPosition = int(self.targetPosTBox.GetValue())
+        except:
+            targetPosition = 0
+            self.targetPosTBox.SetValue('0')
+        
+        try:    
+            velocity = int(self.velocityTBox.GetValue())
+        except:
+            velocity = self.parent.modConfig.LiftSpeedSlow
+            self.velocityTBox.SetValue(str(velocity))
+            
+        self.parent.pushTaskToQueue([self.parent.devControl.MOTOR_MOVE, [activeMotor, targetPosition, velocity]])
         return
         
     '''
@@ -319,9 +338,9 @@ class frmDCMotors(wx.Frame):
     '''
     def onChangeHole(self, event):
         try:
-            currentHole = float(self.changeHoleTBox.GetValue())
+            currentHole = int(self.changeHoleTBox.GetValue())
         except:
-            currentHole = 0.0
+            currentHole = 0
         self.parent.pushTaskToQueue([self.parent.devControl.MOTOR_CHANGE_HOLE, [currentHole]])
         return 
         
@@ -389,14 +408,20 @@ class frmDCMotors(wx.Frame):
     '''
     '''
     def onChangeTurnAngle(self, event):
-        turnAngle = self.changeAngleTBox.GetValue() 
+        try:
+            turnAngle = float(self.changeAngleTBox.GetValue())
+        except:
+            turnAngle = 0.0 
         self.parent.pushTaskToQueue([self.parent.devControl.MOTOR_CHANGE_TURN_ANGLE, [turnAngle]])
         return
         
     '''
     '''
     def onChangeHeight(self, event):
-        height = self.changeHeightTBox.GetValue() 
+        try:
+            height = int(self.changeHeightTBox.GetValue())
+        except:
+            height = 0 
         self.parent.pushTaskToQueue([self.parent.devControl.MOTOR_CHANGE_HEIGHT, [height]])
         return
         

@@ -31,7 +31,16 @@ class frmDAQ_Comm(wx.Frame):
         self.SetSize((400, 305))
         self.SetTitle('DAQ Boards Comm Controller')
         self.Centre()
-        self.Show(True)
+
+    '''--------------------------------------------------------------------------------------------
+                        
+                        Public Functions
+                        
+    --------------------------------------------------------------------------------------------'''
+    '''
+    '''
+    def ZOrder(self):
+        return        
 
 #===================================================================================================
 # Main Module
@@ -40,6 +49,7 @@ if __name__=='__main__':
     try:    
         app = wx.App(False)
         frame = frmDAQ_Comm(parent=None)
+        frame.Show(True)
         app.MainLoop()    
         
     except Exception as e:

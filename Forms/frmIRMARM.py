@@ -6,6 +6,7 @@ Created on Jul 7, 2025
 import wx
 
 from Forms.frmTestUnit import frmTestUnit
+from Forms.frmDAQ_Comm import frmDAQ_Comm
 
 class frmIRMARM(wx.Frame):
     '''
@@ -62,17 +63,53 @@ class frmIRMARM(wx.Frame):
         btnHeight = 30
         closeBtn = wx.Button(panel, label='Close', pos=(X2Ori, Y2Ori), size=(btnLength, btnHeight))
         closeBtn.Bind(wx.EVT_BUTTON, self.onClose)
+        
+        # Third Column, First box
+        X3Ori = X2Ori + box3Length + 10
+        Y3Ori = 10 
+        box4Length = box3Length 
+        box4Height = 180
+        wx.StaticBox(panel, -1, 'IRM/ARM DAQ Controller', pos=(X3Ori, Y3Ori), size=(box4Length, box4Height))
+        self.GUI_DAQController(panel, X3Ori, Y3Ori)
 
         # Add event handler on OnShow
         self.Bind(wx.EVT_SHOW, self.onShow)
 
-        panelLength = X2Ori + box3Length + 30 
+        panelLength = X3Ori + box4Length + 30 
         panelHeight = Y1Ori + box2Height + 60
         self.SetSize((panelLength, panelHeight))
         self.SetTitle('IRM/ARM Controller')
         self.Centre()
         return
                         
+    '''
+    '''
+    def GUI_DAQController(self, panel, XOri, YOri):
+        XOri += 10
+        YOri += 30
+
+        XOffset = 40
+        btnLength = 100
+        btnHeight = 30
+        showBtn = wx.Button(panel, label='Show', pos=(XOri + XOffset, YOri), size=(btnLength, btnHeight))
+        showBtn.Bind(wx.EVT_BUTTON, self.onShowDAQController)
+        
+        XOffset = btnLength + 30  
+        YOffset = 50
+        txtBoxLength = 50 
+        txtBoxHeight = 25        
+        textYOffset = 2
+        armVBtn = wx.Button(panel, label='ARM V', pos=(XOri, YOri + YOffset), size=(btnLength, btnHeight))
+        armVBtn.Bind(wx.EVT_BUTTON, self.onARMVoltageOut)
+        self.armVTBox = wx.TextCtrl(panel, value='0', pos=(XOri + XOffset, YOri + YOffset + textYOffset), size=(txtBoxLength, txtBoxHeight))
+
+        armSetBtn = wx.Button(panel, label='ARM Set', pos=(XOri, YOri + 2*YOffset), size=(btnLength, btnHeight))
+        armSetBtn.Bind(wx.EVT_BUTTON, self.onARMSet)
+        self.armSetTBox = wx.TextCtrl(panel, value='Off', pos=(XOri + XOffset, YOri + 2*YOffset + textYOffset), size=(txtBoxLength, txtBoxHeight))
+        self.armSetTBox.SetBackgroundColour('red')
+
+        return
+    
     '''
     '''
     def GUI_IRM(self, panel, XOri, YOri):
@@ -169,7 +206,43 @@ class frmIRMARM(wx.Frame):
                         
                         Event Handler Functions
                         
-    --------------------------------------------------------------------------------------------'''                                   
+    --------------------------------------------------------------------------------------------'''  
+    '''
+    '''
+    def onARMSet(self, event):
+        currentState = self.armSetTBox.GetValue()
+        if (currentState == 'Off'):       
+            # Need to toggle TTL for ARM shut 
+            self.armSetTBox.SetValue('On')
+            self.armSetTBox.SetBackgroundColour('green')
+            self.parent.pushTaskToQueue([self.parent.devControl.IRM_ARM_TOGGLE_SET, [False]])
+            
+        else:
+            # Need to toggle TTL for ARM open
+            self.armSetTBox.SetValue('Off')
+            self.armSetTBox.SetBackgroundColour('red')
+            self.parent.pushTaskToQueue([self.parent.devControl.IRM_ARM_TOGGLE_SET, [True]])
+        return
+    
+    '''
+    '''
+    def onARMVoltageOut(self, event):
+        try:
+            targetVolt = int(self.armVTBox.GetValue())
+        except:
+            targetVolt = 0
+        self.parent.pushTaskToQueue([self.parent.devControl.IRM_ARM_VOLTAGE_OUT, [targetVolt]])
+            
+        return
+    
+    '''
+    '''
+    def onShowDAQController(self, event):
+        self.frmDAQ_Comm = frmDAQ_Comm()
+        self.frmDAQ_Comm.ZOrder()
+        self.frmDAQ_Comm.Show()
+        return 
+    
     '''
     '''
     def onFireField(self, event):
