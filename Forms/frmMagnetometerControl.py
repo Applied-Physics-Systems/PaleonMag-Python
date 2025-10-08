@@ -66,7 +66,7 @@ class ManualPage(wx.Panel):
         YOffset = comboBoxHeight + 5
         textBoxHeight = 25
         wx.StaticText(self, label='Sample Height (cm):', pos=(XOri, YOri + ytextOffset + YOffset))
-        self.sampleHeightTBox = wx.TextCtrl(self, pos=(XOri + XOffset, YOri + YOffset), size=(comboBoxLength, textBoxHeight))
+        self.txtSampleHeight = wx.TextCtrl(self, pos=(XOri + XOffset, YOri + YOffset), size=(comboBoxLength, textBoxHeight))
 
         btnLength = 120
         btnHeight = 30        
@@ -77,9 +77,9 @@ class ManualPage(wx.Panel):
         self.cmdManRun.Enable(False)
         
         self.vacuumOnChkBox = wx.CheckBox(self, label='Keep The Vacuum On', pos=(XOri, YOri + 3*YOffset + 12))
-        self.openSampleBtn = wx.Button(self, label='Open Sample File', pos=(XOri + XOffset, YOri + 3*YOffset + 5), size=(btnLength, btnHeight))
-        self.openSampleBtn.Bind(wx.EVT_BUTTON, self.onOpenSampleFile)
-        self.openSampleBtn.Enable(False)
+        self.cmdOpenSampleFile = wx.Button(self, label='Open Sample File', pos=(XOri + XOffset, YOri + 3*YOffset + 5), size=(btnLength, btnHeight))
+        self.cmdOpenSampleFile.Bind(wx.EVT_BUTTON, self.onOpenSampleFile)
+        self.cmdOpenSampleFile.Enable(False)
 
     '''--------------------------------------------------------------------------------------------
                         
@@ -116,6 +116,21 @@ class ManualPage(wx.Panel):
                 
         return
 
+    '''
+        (June 2008 L Carporzen) Visualisation of the data instead of looking at the text file
+    '''
+    def DataAnalysis_SampleFile(self, filename):
+        sampleName = self.cmbManSample.GetValue()
+        if (sampleName == ''):
+            return
+        
+        self.mainForm.registryControl.frmPlots.RefreshSamples()
+        self.mainForm.registryControl.frmPlots.cmbSamples.SetValue(sampleName)
+        self.mainForm.registryControl.frmPlots.ZOrder()
+        self.mainForm.registryControl.frmPlots.Show()
+        self.mainForm.registryControl.frmPlots.SetFocus()
+        return
+
     '''--------------------------------------------------------------------------------------------
                         
                         Event Handler Functions
@@ -124,12 +139,26 @@ class ManualPage(wx.Panel):
     '''
     '''
     def onSampleChanged(self, event):
-        sampleName = self.cmbManSample.GetValue()
+        sampleName = self.cmbManSample.GetValue().strip()
         if (sampleName == ''):
             return
         
         self.EnableMagnetCmds()
+        specName = sampleName
+        specParent = self.mainForm.SampleIndexRegistry.SampleFileByIndex(self.cmbManSample.GetSelection())
         
+        if self.mainForm.SampleIndexRegistry.IsValidSample(specParent, specName):            
+            self.cmdOpenSampleFile.Enable(True)            
+            specimen = self.mainForm.SampleIndexRegistry.GetItem(specParent).sampleSet.GetItem(specName)            
+            if (specimen.SampleHeight > 0):       
+                sampleHeight = specimen.SampleHeight / self.mainForm.modConfig.UpDownMotor1cm 
+            else:                
+                sampleHeight = self.mainForm.modConfig.SampleHeight / self.mainForm.modConfig.UpDownMotor1cm
+            self.txtSampleHeight.SetValue("{:.2f}".format(sampleHeight))
+            
+        else:            
+            self.cmdOpenSampleFile.Enable(False)
+                
         return
     
     '''
@@ -147,7 +176,18 @@ class ManualPage(wx.Panel):
     '''
     '''
     def onOpenSampleFile(self, event):
-        print('TODO: onOpenSampleFile')
+        sampleName = self.cmbManSample.GetValue() 
+        if (sampleName == ''):
+            return
+        
+        specName = sampleName
+        specParent = self.mainForm.SampleIndexRegistry.SampleFileByIndex(self.cmbManSample.GetSelection())
+        
+        if self.mainForm.SampleIndexRegistry.IsValidSample(specParent, specName):            
+            specimen = self.mainForm.SampleIndexRegistry.GetItem(specParent).sampleSet.GetItem(specName)
+            filename = specimen.SpecFilePath(self.mainForm.SampleIndexRegistry.GetItem(specParent))
+        
+        self.DataAnalysis_SampleFile(filename)
         return
 
 '''
@@ -295,8 +335,9 @@ class frmMagnetometerControl(wx.Frame):
 if __name__=='__main__':
     try:    
         app = wx.App(False)
-        frame = frmMagnetometerControl(parent=None)
-        frame.Show()
+        
+        magControl = frmMagnetometerControl(parent=None)
+        magControl.Show()        
         app.MainLoop()    
         
     except Exception as e:

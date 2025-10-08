@@ -9,7 +9,6 @@ import math
 
 import wx.lib.agw.ultimatelistctrl as ULC
 
-from Forms.frmTestUnit import frmTestUnit
 from ClassModules.RockmagStep import RockmagSteps
 
 '''
@@ -933,8 +932,7 @@ if __name__=='__main__':
     try:    
         app = wx.App(False)        
         
-        testUnit = frmTestUnit()        
-        frame = frmRockmagRoutine(parent=testUnit)
+        frame = frmRockmagRoutine(parent=None)
         frame.Show()
         app.MainLoop()
         

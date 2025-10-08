@@ -75,7 +75,71 @@ class PaleoThread():
         '''
         Constructor
         '''
-        self.parent = parent                
+        self.parent = parent
+                        
+    '''--------------------------------------------------------------------------------------------
+                        
+                        Internal Functions
+                        
+    --------------------------------------------------------------------------------------------'''
+    def parseDeviceMessages(self, endMessage): 
+        if ('Task Completed' in endMessage):
+            self.parent.modConfig.processData = self.mainQueue.get()                    
+                                                                                                    
+            # Clean up end of task
+            messageList = endMessage.split(':')
+            if messageList[0] in self.parent.panelList.keys():
+                self.parent.panelList[messageList[0]].runEndTask()  
+                                
+            # Start new process
+            self.backgroundRunningFlag = False
+            if (len(self.taskQueue) > 0):
+                self.startProcess()
+                    
+            else:
+                self.parent.appendMessageBox('Tasks Completed\n')
+                self.parent.statusBar.SetStatusText('Tasks Completed', 1)
+                self.parent.setStatusColor('Green')
+                self.parent.timer.Stop()
+                                        
+        elif ('Error:' in endMessage):
+            self.taskQueue = []
+            messageList = endMessage.split(':')
+            if (len(messageList) > 2):    
+                self.parent.messageBox.SetBackgroundColour('Red')           
+                wx.MessageBox(messageList[2], caption='PaleonMag')
+                self.parent.messageBox.SetBackgroundColour('Cyan')
+                
+        elif ('MessageBox:' in endMessage):
+            messageList = endMessage.split(':')
+            dlg = wx.MessageBox(messageList[2], style=wx.YES_NO|wx.CENTER, caption=messageList[0])
+            if (dlg == wx.YES):
+                frmCalibrateCoils(self)
+        
+        elif ('Warning:' in endMessage):
+            messageList = endMessage.split(':')
+            if (len(messageList) > 2):
+                self.parent.statusBar.SetStatusText(messageList[2], 1)     
+            else:
+                wx.MessageBox(messageList[1], style=wx.OK|wx.CENTER, caption='Warning!')
+                
+        elif ('Program Status:' in endMessage):
+            messageList = endMessage.split(':')
+            self.parent.statusBar.SetStatusText(messageList[1], 2)
+                
+        else:
+            '''
+                string format
+                    message_0:message_1: ... :message_n
+                message_x format
+                    label = value
+            '''
+            messageList = endMessage.split(':')
+            if (len(messageList) > 1):
+                if messageList[0] in self.parent.panelList.keys():
+                    self.parent.panelList[messageList[0]].updateGUI(messageList[1:])
+                                                                                
+        return
         
     '''--------------------------------------------------------------------------------------------
                         
@@ -147,64 +211,11 @@ class PaleoThread():
     def checkProcess(self):
         if (self.process != None):
             try:
-                endMessage = self.mainQueue.get(timeout=0.01)
-                if ('Task Completed' in endMessage):
-                    self.parent.modConfig.processData = self.mainQueue.get()                    
-                                                                                                            
-                    # Clean up end of task
-                    messageList = endMessage.split(':')
-                    if messageList[0] in self.parent.panelList.keys():
-                        self.parent.panelList[messageList[0]].runEndTask()  
-                                        
-                    # Start new process
-                    self.backgroundRunningFlag = False
-                    if (len(self.taskQueue) > 0):
-                        self.startProcess()
-                            
-                    else:
-                        self.parent.appendMessageBox('Tasks Completed\n')
-                        self.parent.statusBar.SetStatusText('Tasks Completed', 1)
-                        self.parent.setStatusColor('Green')
-                        self.parent.timer.Stop()
-                                                
-                elif ('Error:' in endMessage):
-                    self.taskQueue = []
-                    messageList = endMessage.split(':')
-                    if (len(messageList) > 2):    
-                        self.parent.messageBox.SetBackgroundColour('Red')           
-                        wx.MessageBox(messageList[2], caption='PaleonMag')
-                        self.parent.messageBox.SetBackgroundColour('Cyan')
-                        
-                elif ('MessageBox:' in endMessage):
-                    messageList = endMessage.split(':')
-                    dlg = wx.MessageBox(messageList[2], style=wx.YES_NO|wx.CENTER, caption=messageList[0])
-                    if (dlg == wx.YES):
-                        frmCalibrateCoils(self)
-                
-                elif ('Warning:' in endMessage):
-                    messageList = endMessage.split(':')
-                    if (len(messageList) > 2):
-                        self.parent.statusBar.SetStatusText(messageList[2], 1)     
-                    else:
-                        wx.MessageBox(messageList[1], style=wx.OK|wx.CENTER, caption='Warning!')
-                        
-                elif ('Program Status:' in endMessage):
-                    messageList = endMessage.split(':')
-                    self.parent.statusBar.SetStatusText(messageList[1], 2)
-                        
-                else:
-                    '''
-                        string format
-                            message_0:message_1: ... :message_n
-                        message_x format
-                            label = value
-                    '''
-                    messageList = endMessage.split(':')
-                    if (len(messageList) > 1):
-                        if messageList[0] in self.parent.panelList.keys():
-                            self.parent.panelList[messageList[0]].updateGUI(messageList[1:])
-                                                                                        
-                return
+                queueSize = self.mainQueue.qsize()
+                if (queueSize > 0):
+                    for _ in range(0, queueSize):                
+                        endMessage = self.mainQueue.get_nowait()
+                        self.parseDeviceMessages(endMessage)
                     
             except:
                 if (self.backgroundRunningFlag):
@@ -216,7 +227,7 @@ class PaleoThread():
                 else:
                     self.flashingCount = 0
                     
-                return
+        return
     
     '''
         

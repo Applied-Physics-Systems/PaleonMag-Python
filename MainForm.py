@@ -79,7 +79,7 @@ class MainForm(wx.Frame):
         self.devControl = DevicesControl()
         
         # Check if the system.INI file exist
-        inFileName = 'Paleomag.ini'
+        inFileName = 'Paleomag.config'
         iniPath = self.getINIPath(inFileName)        
         if os.path.exists(iniPath):
             self.getConfig(iniPath)

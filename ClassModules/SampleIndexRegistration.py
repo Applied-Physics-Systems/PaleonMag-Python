@@ -126,13 +126,61 @@ class SampleIndexRegistrations():
                         Internal Functions
                         
     --------------------------------------------------------------------------------------------'''
-    
    
     '''--------------------------------------------------------------------------------------------
                         
                         Public API Functions
                         
     --------------------------------------------------------------------------------------------'''
+    '''
+    '''
+    def GetItem(self, fileName):
+        samples = SampleIndexRegistration(self.parent)
+        
+        for item in self.Item:
+            if (item.filename == fileName):
+                samples = item
+        
+        return samples
+    
+    '''
+    '''
+    def IsValidSample(self, fileName, sampleName):
+        
+        status = self.GetItem(fileName).sampleSet.IsValidSample(sampleName)
+        
+        return status 
+        
+    '''
+    '''
+    def SampleCount(self):
+        SampleCount = 0
+        if (self.Count == 0):
+            return
+        
+        for i in range(0, self.Count):
+            SampleCount += self.Item[i].sampleSet.Count
+            
+        return SampleCount
+    
+    '''
+    '''
+    def SampleFileByIndex(self, vindex):
+        sampCount = self.SampleCount()
+        sampleFileByIndex = ''
+        if ((vindex < 0) or (vindex >= sampCount)):
+            return sampleFileByIndex
+        
+        for i in range(0, self.Count):
+            if (vindex < self.Item[i].sampleSet.Count):
+                break
+            else: 
+                vindex = vindex - self.Item[i].sampleSet.Count
+                    
+        sampleFileByIndex = self.Item[i].filename
+        
+        return sampleFileByIndex
+        
     '''
         ' Original State:
         '   1) This was a private function

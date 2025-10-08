@@ -194,7 +194,6 @@ class frmDCMotors(wx.Frame):
         self.SetSize((800, 500))
         self.SetTitle('Motor Control')
         self.Centre()
-        self.Show(True)
                           
     '''
     '''
@@ -514,7 +513,8 @@ if __name__=='__main__':
         
         testUnit = frmTestUnit()
         motorControl = frmDCMotors(parent=testUnit)
-        testUnit.panelList['MotorControl'] = motorControl
+        testUnit.panelList['MotorControl'] = motorControl        
+        motorControl.Show(True)
         app.MainLoop()    
         
     except Exception as e:

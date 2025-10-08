@@ -9,6 +9,7 @@ import wx
 import configparser
 
 from Forms.frmMagnetometerControl import frmMagnetometerControl
+from Forms.frmSampleIndexRegistry import frmSampleIndexRegistry
 from Forms.frmVacuum import frmVacuum
 from Forms.frmChanger import frmChanger
 from Forms.frmMeasure import frmMeasure
@@ -46,7 +47,7 @@ class frmTestUnit(wx.Frame):
         self.devControl = DevicesControl()
         
         # Check if the system.INI file exist
-        inFileName = '..\Paleomag.ini'
+        inFileName = '..\Paleomag.config'
         iniPath = self.getINIPath(inFileName)        
         if os.path.exists(iniPath):
             self.getConfig(iniPath)
@@ -54,7 +55,13 @@ class frmTestUnit(wx.Frame):
             self.openINIFile()
             self.saveINIPath(inFileName)
                 
+        self.FLAG_MagnetInit = True        # We're done initializing
+                
+        self.InitUI()        
+
+        self.registryControl = frmSampleIndexRegistry(parent=self)
         self.magControl = frmMagnetometerControl(parent=self)
+        
         self.SampleIndexRegistry = SampleIndexRegistrations(parent=self)
         self.SampQueue = SampleCommands()
         self.magControl = frmMagnetometerControl(parent=self)
@@ -65,10 +72,8 @@ class frmTestUnit(wx.Frame):
         self.modMeasure = modMeasure()
         self.modFlow = modFlow()
         self.paleoThread = PaleoThread(parent=self)
-                
-        self.InitUI()        
        
-                # Add timer
+        # Add timer
         self.timer = wx.Timer(self)
         self.timer.Stop()
         self.Bind(wx.EVT_TIMER, self.OnTimer, self.timer)
@@ -173,8 +178,11 @@ class frmTestUnit(wx.Frame):
 if __name__=='__main__':
     try:    
         app = wx.App(False)
+        
         frame = frmTestUnit(parent=None)
-        frame.Show()
+        frame.registryControl.Show()
+        frame.magControl.Show()
+        
         app.MainLoop()    
         
     except Exception as e:

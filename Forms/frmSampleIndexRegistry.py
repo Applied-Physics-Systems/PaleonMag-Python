@@ -15,7 +15,6 @@ from ClassModules.RockmagStep import RockmagSteps
 from Forms.frmPlots import frmPlots
 from Forms.frmRockmagRoutine import frmRockmagRoutine
 from Forms.frmRockmagRoutine import ThreeDRenderer
-from Forms.frmTestUnit import frmTestUnit
     
 '''
     ----------------------------------------------------------------------------------------
@@ -757,8 +756,7 @@ if __name__=='__main__':
     try:    
         app = wx.App(False)
         
-        testUnit = frmTestUnit()
-        frame = frmSampleIndexRegistry(parent=testUnit)
+        frame = frmSampleIndexRegistry(parent=None)
         frame.Show(True)        
         app.MainLoop()    
         

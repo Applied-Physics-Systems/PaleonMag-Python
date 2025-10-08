@@ -275,6 +275,11 @@ class frmPlots(wx.Frame):
     --------------------------------------------------------------------------------------------'''
     '''
     '''
+    def ZOrder(self):
+        return
+    
+    '''
+    '''
     def RefreshSamples(self):
         
         self.cmbSamples.Clear()
