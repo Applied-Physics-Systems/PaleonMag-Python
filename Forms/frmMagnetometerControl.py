@@ -4,6 +4,7 @@ Created on Nov 7, 2024
 @author: hd.nguyen
 '''
 import wx
+import numpy as np
 
 class AutoPage(wx.Panel):
     def __init__(self, noteBook, parent, mainForm):
@@ -21,9 +22,9 @@ class AutoPage(wx.Panel):
         self.cmdChangerEdit.Bind(wx.EVT_BUTTON, self.onCmdChangerEdit)
 
         XOffset += btnLength + 60
-        self.startChangerBtn = wx.Button(self, label='Start Changer', pos=(XOri + XOffset, YOri + YOffset), size=(btnLength, btnHeight))
-        self.startChangerBtn.Bind(wx.EVT_BUTTON, self.onStartChanger)
-        self.startChangerBtn.Enable(False)
+        self.cmdChangerOK = wx.Button(self, label='Start Changer', pos=(XOri + XOffset, YOri + YOffset), size=(btnLength, btnHeight))
+        self.cmdChangerOK.Bind(wx.EVT_BUTTON, self.onStartChanger)
+        self.cmdChangerOK.Enable(False)
 
     '''--------------------------------------------------------------------------------------------
                         
@@ -71,9 +72,9 @@ class ManualPage(wx.Panel):
         btnLength = 120
         btnHeight = 30        
         self.cmdManHolder = wx.Button(self, label='Measure Holder', pos=(XOri, YOri + 2*YOffset), size=(btnLength, btnHeight))
-        self.cmdManHolder.Bind(wx.EVT_BUTTON, self.onCmdManHolder)
+        self.cmdManHolder.Bind(wx.EVT_BUTTON, self.cmdManHolder_Click)
         self.cmdManRun = wx.Button(self, label='Measure Sample', pos=(XOri + XOffset, YOri + 2*YOffset), size=(btnLength, btnHeight))
-        self.cmdManRun.Bind(wx.EVT_BUTTON, self.onCmdManRun)
+        self.cmdManRun.Bind(wx.EVT_BUTTON, self.cmdManRun_Click)
         self.cmdManRun.Enable(False)
         
         self.vacuumOnChkBox = wx.CheckBox(self, label='Keep The Vacuum On', pos=(XOri, YOri + 3*YOffset + 12))
@@ -86,6 +87,14 @@ class ManualPage(wx.Panel):
                         Internal Functions
                         
     --------------------------------------------------------------------------------------------'''
+    def getFloat(self, textBox):
+        try:
+            floatValue = float(textBox.GetValue())
+        except:
+            floatValue = 0.0
+            
+        return floatValue
+
     '''
         This procedure enables the commands that require use of the
         magnetometer once the magnetometer is initialized.  We know when
@@ -130,6 +139,145 @@ class ManualPage(wx.Panel):
         self.mainForm.registryControl.frmPlots.Show()
         self.mainForm.registryControl.frmPlots.SetFocus()
         return
+    
+    '''
+      Summary: Function checks the sign and value of the sample height, returning a false
+               if the height does not check out in some way.
+     
+               If the height has the wrong sign, the function will change the sign of the height
+               in txtSampleHeight, call cmdManRun_click again and return a false to the present
+               instance of the event handler to close that first instance.
+     
+               If the height is too great for the sample to fit in the AF region or Susc. coil
+               region, a message box will pop-up and say the max allowed height
+    '''
+    def SampleHeightCheck(self, IsHolder=False):
+        status = False
+     
+        # Store the sample height to local variable in CM's
+        SampleHeight = self.getFloat(self.txtSampleHeight)
+        
+        # First check to see if the the SampleMotorUnits have the correct sign
+        if (np.sign(SampleHeight) == np.sign(self.mainForm.modConfig.MeasPos)):        
+            '''
+                Sample height has the wrong sign, it should have the opposite sign
+                as the Measurement Position. (i.e. positive measurement position = negative updownmotor1cm
+                conversion factor, which means to get a positive sample motor height, you need a negative
+                sample height in cm's first).
+                Change the sign of the sample height
+            '''
+            self.txtSampleHeight.SetValue = str(-1 * SampleHeight)
+            
+            # Return a false
+            status = False
+            
+            if not IsHolder:                
+                # Call the cmdManRun_Click event handler again
+                self.cmdManRun_Click()
+                
+            else:            
+                # Call the cmdManHolder_Click event handler again
+                self.cmdManHolder_Click()
+                            
+            # Exit this function
+            return status
+                    
+        '''
+            Now, the SampleHeight has the correct sign, can check to make sure
+            that the SampleMotorUnis is such that the sample will fit into the AF or susc. coil region
+            
+            Convert that height / 2 to Sample Motor Units (because the changer system centers the sample
+            in the AF or susc. coil; therefore, only need to constrain 1/2 of the sample height.
+        '''
+        SampleMotorUnits = SampleHeight * self.mainForm.modConfig.UpDownMotor1cm / 2
+        
+        # Get the Sample Object for this specimen
+        specName = self.cmbManSample.GetValue()
+        specParent = self.mainForm.SampleIndexRegistry.SampleFileByIndex(self.cmbManSample.GetSelection())
+        specimen = self.mainForm.SampleIndexRegistry.GetItem(specParent).sampleSet.GetItem(specName)
+        
+        # Check to see if the specimen is nothing
+        if (specimen == None):
+        
+            status = False
+            
+            # Raise a message box to let the user know that they need to select a real sample
+            warningMessage = 'Could not find sample: ' + specName + ' in SAM file: \n' 
+            warningMessage += specParent + '\n\n'
+            warningMessage += 'Please check SAM file or select a different sample.'
+            wx.MessageBox(warningMessage, style=wx.OK|wx.CENTER, caption='Whoops!')                   
+            return status
+                    
+        YesSusc = False
+        
+        # Check to see if susceptibility measurements are being performed on the sample
+        #With specimen.Parent            
+        for i in range(0, specimen.parent.measurementSteps.Count):        
+            # Set the current step index = i
+            specimen.parent.measurementSteps.CurrentStepIndex = i
+            
+            if specimen.parent.measurementSteps.CurrentStep.MeasureSusceptibility:            
+                # Toggle the measuring susceptibility flag to true
+                YesSusc = True
+                
+                # Exit the for loop
+                break
+                                    
+        # Now also check to see if rockmag is being done on this sample
+        YesRockmag = specimen.parent.RockmagMode
+        
+        '''            
+            If YesSusc = True, and the measure susceptiblity module is enabled
+            then need to make sure the sample will be able to be placed within
+            the susceptibility coils
+        '''
+        if (YesSusc and self.mainForm.modConfig.EnableSusceptibility):        
+            # Will the sample be able to be fit into the susceptibility coils?
+            # If No, then return false and exit the function
+            if (abs(SampleMotorUnits) > abs(self.mainForm.modConfig.SCoilPos)):
+                '''            
+                    Sample height is too large
+                    Pop-up a message box
+                    Note: Max allowed height = distance in CM to the susc. coil - 0.5 cm for slop
+                '''
+                warningMessage = "Sample Height is too large to raise the sample into the susceptibility coil.\n"
+                warningMessage += "Current Sample Height = " + str(SampleHeight) + " cm\n"
+                warningMessage += "Max. Allowed Height = " + "{:.2f}".format(-2 * (self.mainForm.modConfig.SCoilPos / self.mainForm.modConfig.UpDownMotor1cm) - 0.5) + " cm"
+                wx.MessageBox(warningMessage, style=wx.OK|wx.CENTER, caption="Bad Height!")
+                                              
+                # Return false
+                return False
+                        
+        # Now check to see if the sample height is too large to do rockmag
+        if (YesRockmag and (abs(SampleMotorUnits) > abs(self.mainForm.modConfig.AFPos))):
+            '''
+                Wha-oh! Sample height is too large to do rockmag = AF / ARM / IRM
+                Pop-up a message box
+                Note: Max allowed height = distance in cm to the AF coil center - 0.5 cm for slop
+            '''
+            warningMessage = "Sample Height is too large to raise the sample into the AF / IRM / ARM coils.\n" 
+            warningMessage += "Current Sample Height = " + str(SampleHeight) + " cm\n" 
+            warningMessage += "Max. Allowed Height = " + "{:.2f}".format(-2 * (self.mainForm.modConfig.AFPos / self.mainForm.modConfig.UpDownMotor1cm) - 0.5) + " cm"
+            wx.MessageBox(warningMessage, style=wx.OK|wx.CENTER, caption="Bad Height!")
+    
+            # Return False
+            return False
+            
+        # Return True
+        status = True
+        
+        return status
+    
+    '''
+        Disable all commands that use the magnetometer
+    '''
+    def DisableMagnetCmds(self):
+        self.parent.autoPage.cmdChangerEdit.Enable(False)
+        self.parent.cmbSusceptibilityScaleFactor.Enable(False)
+        self.parent.autoPage.cmdChangerOK.Enable(False)
+        self.cmdManHolder.Enable(False)
+        self.cmdManRun.Enable(False)
+        return
 
     '''--------------------------------------------------------------------------------------------
                         
@@ -163,13 +311,66 @@ class ManualPage(wx.Panel):
     
     '''
     '''
-    def onCmdManHolder(self, event):
-        print('TODO: onCmdManHolder')
+    def cmdManHolder_Click(self, event=None):
+        # Check to see if the Sample Height is OK
+        if not self.SampleHeightCheck(True):
+            return
+        
+        if not self.mainForm.FLAG_MagnetUse:
+            
+            self.mainForm.FLAG_MagnetUse = True # Notify that we're using magnetometer
+            
+            self.DisableMagnetCmds()            # Disable buttons that use magnetometer
+            
+            self.mainForm.pushTaskToQueue([self.mainForm.devControl.MOTOR_NEAREST_HOLE, [None]])
+            
+            self.mainForm.pushTaskToQueue([self.mainForm.paleoThread.SHOW_FORMS, ['frmMeasure', 'cmdManHolder_Click']])
+                        
+            '''========================================================================================================
+            '            '(March 10, 2011 - I Hilburn)
+            '            'This code has been commented out as it is being applied even when the
+            '            'user has not selected for the susceptibility measurements to be performed
+            '            'New code has been added in MeasureTreatAndRead in
+            '            'modMeasure to ensure that the susceptibility lagTime is set during the appropriate
+            '            'Holder measurements
+            ''--------------------------------------------------------------------------------------------------------
+            '            If COMPortSusceptibility > 0 And EnableSusceptibility Then frmSusceptibilityMeter.LagTime
+            ========================================================================================================'''
+            
+            '''
+            ' reset SampleHolder step type to NRM, just in case
+            SampleHolder.Parent.measurementSteps(1).StepType = "NRM"
+            SampleHolder.Parent.measurementSteps(1).Level = 0
+    
+    '        Motor_MoveLoadToZero         ' Lower sample to zero position
+            'MotorUpDn_Move ZeroPos, 2
+            
+            Measure_TreatAndRead SampleHolder, False ' Read Holder
+    
+    '        Motor_MoveZeroToLoad         ' Raise sample back to load position
+            
+            MotorUpDn_Move 0, 2
+            HolderMeasured = True        ' Set the "holder measured" flag
+            
+            'DisplayStatus (5)            ' Waiting for motor to stop...
+     '       Motor_WaitStop ("UPDOWN")              ' Wait for motor
+            'DisplayStatus (-1)           ' Clear status bar
+            
+            frmProgram.StatBarNew vbNullString
+            
+            FLAG_MagnetUse = False       ' Notify that we stopped
+            
+            EnableMagnetCmds
+            
+            SampleHolder.SampleHeight = 0
+        
+        End If
+        '''
         return
     
     '''
     '''
-    def onCmdManRun(self, event):
+    def cmdManRun_Click(self, event=None):
         print('TODO: onCmdManRun')
         return
     
@@ -242,6 +443,8 @@ class frmMagnetometerControl(wx.Frame):
 
         # Add event handler on OnClose
         self.Bind(wx.EVT_CLOSE, self.onClose)
+        # Add event handler on OnShow
+        self.Bind(wx.EVT_SHOW, self.onShow)
 
         self.SetSize((400, 280))                                        
         self.SetTitle('Magnetometer Control')
@@ -305,6 +508,14 @@ class frmMagnetometerControl(wx.Frame):
                     del self.parent.panelList['MagnetometerControl']
                 
         self.Destroy()
+        
+    '''
+    '''
+    def onShow(self, event):
+        if (self.parent != None):
+            self.parent.NOCOMM_Flag = False
+            self.parent.modConfig.processData.motorsEnable = True
+        return
         
     '''--------------------------------------------------------------------------------------------
                         

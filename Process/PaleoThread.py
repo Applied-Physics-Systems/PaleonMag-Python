@@ -7,7 +7,6 @@ import wx
 import multiprocessing
 
 from Forms.frmTip import frmTip
-from Forms.frmCalibrateCoils import frmCalibrateCoils
 from Forms.frmFlashingStatus import frmFlashingStatus
 
 from Hardware.DevicesControl import DevicesControl
@@ -27,7 +26,7 @@ def flashingFunction(flashingMessage):
 '''
     Background task processing
 '''
-def workerFunction(processData, mainQueue, taskID):    
+def workerFunction(processData, mainQueue, processQueue, taskID):    
     try:
         if isinstance(processData, str):
             mainQueue.put('None:Task Completed')
@@ -35,8 +34,9 @@ def workerFunction(processData, mainQueue, taskID):
             return
         modConfig = ModConfig(process=processData, queue=mainQueue)
         devControl.setDevicesConfig(modConfig)
+        devControl.processQueue = processQueue
         
-        deviceID = devControl.runTask(mainQueue, taskID)
+        deviceID = devControl.runTask(taskID)
         
         processData = devControl.updateProcessData()
                 
@@ -57,8 +57,9 @@ def workerFunction(processData, mainQueue, taskID):
 class PaleoThread():
     '''
     classdocs
-    '''
+    '''    
     END_OF_SEQUENCE     = 0xFFFF
+    SHOW_FORMS          = 0xFFFE
     ENDTASK_SYSTEM_INIT = 0
     ENDTASK_MAG_INIT    = 1
 
@@ -82,62 +83,173 @@ class PaleoThread():
                         Internal Functions
                         
     --------------------------------------------------------------------------------------------'''
-    def parseDeviceMessages(self, endMessage): 
-        if ('Task Completed' in endMessage):
-            self.parent.modConfig.processData = self.mainQueue.get()                    
-                                                                                                    
-            # Clean up end of task
-            messageList = endMessage.split(':')
-            if messageList[0] in self.parent.panelList.keys():
-                self.parent.panelList[messageList[0]].runEndTask()  
-                                
-            # Start new process
+    '''
+        Display dialog box for message with option Yes/No
+    '''
+    def handleMessageBox(self, endMessage):
+        messageList = endMessage.split(':')
+        captionStr = ''
+        messageStr = None
+        handlerStr = ''
+        for message in messageList:
+            if 'CaptionStr = ' in message:
+                captionStr = message.replace('CaptionStr = ', '')
+            if 'MessageStr = ' in message:
+                messageStr = message.replace('MessageStr = ', '')
+                messageStr = messageStr.replace(';', '\n')
+            if 'FlashingStr = ' in message:
+                self.flashingMessage = message.replace('FlashingStr = ', '')
+            if 'HandlerStr = ' in message:
+                handlerStr = message.replace('HandlerStr = ', '')
+                
+        if (messageStr != None):
             self.backgroundRunningFlag = False
-            if (len(self.taskQueue) > 0):
-                self.startProcess()
-                    
-            else:
-                self.parent.appendMessageBox('Tasks Completed\n')
-                self.parent.statusBar.SetStatusText('Tasks Completed', 1)
-                self.parent.setStatusColor('Green')
-                self.parent.timer.Stop()
-                                        
-        elif ('Error:' in endMessage):
-            self.taskQueue = []
-            messageList = endMessage.split(':')
-            if (len(messageList) > 2):    
-                self.parent.messageBox.SetBackgroundColour('Red')           
-                wx.MessageBox(messageList[2], caption='PaleonMag')
-                self.parent.messageBox.SetBackgroundColour('Cyan')
-                
-        elif ('MessageBox:' in endMessage):
-            messageList = endMessage.split(':')
-            dlg = wx.MessageBox(messageList[2], style=wx.YES_NO|wx.CENTER, caption=messageList[0])
+            dlg = wx.MessageBox(messageStr, style=wx.YES_NO|wx.CENTER, caption=captionStr)
             if (dlg == wx.YES):
-                frmCalibrateCoils(self)
-        
-        elif ('Warning:' in endMessage):
-            messageList = endMessage.split(':')
-            if (len(messageList) > 2):
-                self.parent.statusBar.SetStatusText(messageList[2], 1)     
+                if (handlerStr == 'HomeToCenter'):
+                    self.processQueue.put('Continue Flow:')
+                                    
             else:
-                wx.MessageBox(messageList[1], style=wx.OK|wx.CENTER, caption='Warning!')
+                self.processQueue.put('Task Aborted')
+            self.backgroundRunningFlag = True
+                    
+        return
+    
+    '''
+        Display dialog box for input data
+    '''
+    def handleInputBox(self, endMessage):
+        messageList = endMessage.split(':')
+        if (len(messageList) == 6):
+            message = messageList[1].replace('Message = ', '')
+            title =  messageList[2].replace('Title = ', '')
+            try:
+                inputValue = int(messageList[3].replace('InputValue = ', ''))
+            except:
+                inputValue = 0
                 
-        elif ('Program Status:' in endMessage):
-            messageList = endMessage.split(':')
-            self.parent.statusBar.SetStatusText(messageList[1], 2)
+            try:                    
+                minValue = int(messageList[4].replace('MinValue = ', ''))
+            except:
+                minValue = 0
+                
+            try:
+                maxValue = int(messageList[5].replace('MaxValue = ', ''))
+            except:
+                maxValue = 0
+            
+            newInput = -1
+            while not ((newInput >= minValue) and (newInput <= maxValue)):
+                dialog = wx.TextEntryDialog(None, message.replace(';', '\n'), title, str(inputValue))
+                dialog.CenterOnScreen()                
+                if (dialog.ShowModal() == wx.ID_OK):
+                    inputStr = dialog.GetValue()
+                    try:
+                        newInput = int(inputStr)
+                    except:
+                        newInput = -1
+        
+                dialog.Destroy()
+            self.processQueue.put('Continue Flow:' + str(newInput))
+                    
+        return
+    
+    '''
+        string format
+            message_0:message_1: ... :message_n
+        message_x format
+            label = value
+    '''
+    def handleTaskMessage(self, endMessage):
+        messageList = endMessage.split(':')
+        if (len(messageList) > 1):
+            if messageList[0] in self.parent.panelList.keys():
+                self.parent.panelList[messageList[0]].updateGUI(messageList[1:])
+        return
+    
+    '''
+        Update program status in the status bar
+    '''
+    def handleProgramStatus(self, endMessage):
+        messageList = endMessage.split(':')
+        self.parent.updateTaskStatus(messageList[1])
+        return
+
+    '''
+        If the number of message greater than 2,
+        Else display the waring message in the dialog message box 
+    '''
+    def handleWarningMessage(self, endMessage):
+        messageList = endMessage.split(':')
+        if (len(messageList) > 2):
+            self.parent.updateProgressStatus(messageList[2])
+        else:
+            wx.MessageBox(messageList[1], style=wx.OK|wx.CENTER, caption='Warning!')
+        return
+    
+    '''
+        1. Turn the panel red with error message
+        
+        2. Display dialog box for the error message
+        
+        3. After the dialog box error message, turn back the panel to cyan
+    '''
+    def handleErrorMessage(self, endMessage):
+        self.taskQueue = []
+        messageList = endMessage.split(':')
+        if (len(messageList) > 2):    
+            self.parent.messageBox.SetBackgroundColour('Red')           
+            wx.MessageBox(messageList[2], caption='PaleonMag')
+            self.parent.messageBox.SetBackgroundColour('Cyan')
+            
+        return
+    
+    '''
+    '''
+    def handleTaskCompleted(self, endMessage):
+        self.parent.modConfig.processData = self.mainQueue.get()                    
+                                                                                                
+        # Clean up end of task
+        messageList = endMessage.split(':')
+        if messageList[0] in self.parent.panelList.keys():
+            self.parent.panelList[messageList[0]].runEndTask()  
+                            
+        # Start new process
+        self.backgroundRunningFlag = False
+        if (len(self.taskQueue) > 0):
+            self.startProcess()
                 
         else:
-            '''
-                string format
-                    message_0:message_1: ... :message_n
-                message_x format
-                    label = value
-            '''
-            messageList = endMessage.split(':')
-            if (len(messageList) > 1):
-                if messageList[0] in self.parent.panelList.keys():
-                    self.parent.panelList[messageList[0]].updateGUI(messageList[1:])
+            self.parent.appendMessageBox('Tasks Completed\n')
+            self.parent.updateProgressStatus('Tasks Completed')
+            self.parent.setStatusColor('Green')
+            self.parent.timer.Stop()
+            
+        return
+    
+    '''
+    '''
+    def parseDeviceMessages(self, endMessage):
+        if ('Task Completed' in endMessage):
+            self.handleTaskCompleted(endMessage)
+                                        
+        elif ('Error:' in endMessage):
+            self.handleErrorMessage(endMessage)
+                
+        elif ('MessageBox:' in endMessage):
+            self.handleMessageBox(endMessage)
+                
+        elif ('InputBox:' in endMessage):
+            self.handleInputBox(endMessage)
+            
+        elif ('Warning:' in endMessage):
+            self.handleWarningMessage(endMessage)
+                
+        elif ('Program Status:' in endMessage):
+            self.handleProgramStatus(endMessage)
+                
+        else:
+            self.handleTaskMessage(endMessage)
                                                                                 
         return
         
@@ -153,25 +265,8 @@ class PaleoThread():
         runFlag = True
         
         processFunction = self.taskQueue.pop(0)
-        taskID = processFunction[0] 
-        if (taskID == self.parent.devControl.MOTOR_HOME_TO_TOP):
-            self.parent.appendMessageBox(self.parent.devControl.messages[taskID] + '\n')
-            self.flashingMessage = 'Please Wait, Homing To The Top'
-            
-        elif (taskID == self.parent.devControl.MOTOR_HOME_TO_CENTER):
-            self.flashingMessage = 'Please Wait, Homing XY Table'
-            noCommStr = 'The XY Stage needs to be homed to the center, now\n\n'
-            noCommStr += 'The code will home the Up/Down glass tube to the top limit switch'
-            noCommStr += '  before moving the XY stage. HOWEVER, if there are cables or other'
-            noCommStr += ' impediments in the way, the XY Stage should not be homed.\n\n'
-            noCommStr += 'Do you want the XY stage to be homed to the center position, now?'
-            dlg = wx.MessageBox(noCommStr, style=wx.YES_NO|wx.CENTER, caption='Warning: XY State Homing!')
-            if (dlg == wx.YES):
-                self.parent.appendMessageBox(self.parent.devControl.messages[taskID] + '\n')
-            else:
-                runFlag = False
-        
-        elif (taskID == self.END_OF_SEQUENCE):
+        taskID = processFunction[0]         
+        if (taskID == self.END_OF_SEQUENCE):
             runFlag = False
             paramList = processFunction[1]
             sequenceType = paramList[0]
@@ -183,8 +278,12 @@ class PaleoThread():
                 self.parent.FLAG_MagnetInit = True        # We're done initializing
                 self.parent.registryControl.Show()
                 self.parent.panelList['RegistryControl'] = self.parent.registryControl
-            self.parent.statusBar.SetStatusText('Tasks Completed', 1)
+            self.parent.updateProgressStatus('Tasks Completed')
             self.parent.setStatusColor('Green')
+            
+        elif (taskID == self.SHOW_FORMS):
+            self.handleShowForms(processFunction[1])
+            runFlag = False
         
         else:
             if (taskID in self.parent.devControl.messages.keys()):
@@ -201,7 +300,8 @@ class PaleoThread():
     def runProcess(self, taskID):
         self.parent.timer.Stop()
         self.mainQueue = multiprocessing.Queue()
-        self.process = multiprocessing.Process(target=workerFunction, args=(self.parent.modConfig.processData, self.mainQueue, taskID))
+        self.processQueue = multiprocessing.Queue()
+        self.process = multiprocessing.Process(target=workerFunction, args=(self.parent.modConfig.processData, self.mainQueue, self.processQueue, taskID))
         self.process.start()
         self.parent.timer.Start(int(200))      # Checking every 200ms 
                 
@@ -218,15 +318,27 @@ class PaleoThread():
                         self.parseDeviceMessages(endMessage)
                     
             except:
-                if (self.backgroundRunningFlag):
-                    self.flashingCount += 1
-                    if ((self.flashingCount > self.FLASH_DISPLAY_OFF_TIME) and (self.flashingMessage != None)): 
-                        flashingProcess = multiprocessing.Process(target=flashingFunction, args=(self.flashingMessage,))
-                        flashingProcess.start()
-                        self.flashingCount = 0
-                else:
+                queueSize = 0
+                
+            if (self.backgroundRunningFlag):
+                self.flashingCount += 1
+                if ((self.flashingCount > self.FLASH_DISPLAY_OFF_TIME) and (self.flashingMessage != None)): 
+                    flashingProcess = multiprocessing.Process(target=flashingFunction, args=(self.flashingMessage,))
+                    flashingProcess.start()
                     self.flashingCount = 0
+            else:
+                self.flashingCount = 0
                     
+        return
+    
+    '''
+    '''
+    def handleShowForms(self, formParams):
+        formID = formParams[0]
+        functionID = formParams[1]
+        if (formID == 'frmMeasure'):
+            self.parent.frmMeasure.initForm(functionID)
+            self.parent.frmMeasure.Show()
         return
     
     '''

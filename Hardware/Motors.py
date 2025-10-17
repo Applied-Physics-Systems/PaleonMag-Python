@@ -56,7 +56,7 @@ class Motors():
         else:
             try:            
                 message += label + ': ' + comPort  
-                device = MotorControl(57600, self.currentPath, comPort, label, self.modConfig)
+                device = MotorControl(57600, self.currentPath, comPort, label, parent=self)
             except:
                 message += ' Failed to open'
                 self.devicesAllGoodFlag = False
@@ -141,7 +141,7 @@ class Motors():
     --------------------------------------------------------------------------------------------'''  
     '''
     '''
-    def upDownHeight(self):
+    def UpDownHeight(self):
         return self.upDown.readPosition()
         
     '''
@@ -301,7 +301,7 @@ class Motors():
 
     '''
     '''
-    def changerHole(self):
+    def ChangerHole(self):
         if not self.modConfig.UseXYTableAPS:
             # Chain Drive
             curPos = self.changerX.readPosition()
@@ -320,7 +320,7 @@ class Motors():
     def convertHoleToPos(self, hole):
         fullLoop = abs((self.modConfig.SlotMax - self.modConfig.SlotMin + 1) * self.modConfig.OneStep)
         currentPos = self.changerX.readPosition()
-        self.changerHole()
+        self.ChangerHole()
         targetHole = hole
         targetHolePosRaw = self.modConfig.OneStep * hole
         stepsToGo = (targetHolePosRaw - currentPos) % fullLoop
@@ -562,7 +562,7 @@ class Motors():
                               self.modConfig.PickupTorqueThrottle * self.modConfig.UpDownTorqueFactor, 
                               self.modConfig.PickupTorqueThrottle * self.modConfig.UpDownTorqueFactor)
         self.upDown.moveMotor(self.modConfig.SampleBottom, self.modConfig.LiftSpeedSlow)
-        currentPos = self.upDownHeight()
+        currentPos = self.UpDownHeight()
         
         self.upDown.zeroTargetPos()
         
@@ -603,7 +603,7 @@ class Motors():
         
     '''
     '''
-    def setChangerHole(self, hole):
+    def SetChangerHole(self, hole):
         if (self.parent.modChanger.isValidStart(hole)):
             if not self.modConfig.UseXYTableAPS:
                 self.changerX.relabelPos(self.convertHoleToPos(hole))
@@ -611,15 +611,15 @@ class Motors():
                 self.changerX.relabelPos(self.modConfig.convertHoletoPosX(hole))
                 self.changerY.relabelPos(self.modConfig.convertHoletoPosY(hole))
                 
-            self.changerHole()
+            self.ChangerHole()
             
         return
         
     '''
     '''
-    def changerMotortoHole(self, hole, waitingForStop=True):
+    def ChangerMotortoHole(self, hole, waitingForStop=True):
         # Let's get the sample rod out of the way if necessary
-        if (abs(self.upDownHeight()) > abs(self.modConfig.SampleBottom) * 0.1): 
+        if (abs(self.UpDownHeight()) > abs(self.modConfig.SampleBottom) * 0.1): 
             self.HomeToTop()
         
         if not self.modConfig.UseXYTableAPS:
@@ -630,7 +630,7 @@ class Motors():
             
             if (int(curpos/fullLoop) != 0): 
                 self.changerX.relabelPos(curpos % fullLoop)
-            startinghole = self.changerHole()
+            startinghole = self.ChangerHole()
             target = self.convertHoleToPos(hole)
             self.changerX.moveMotor(target, self.modConfig.ChangerSpeed, waitingForStop)
             
@@ -641,7 +641,7 @@ class Motors():
             if (int(curpos/fullLoop) != 0): 
                 self.changerX.relabelPos(curpos % fullLoop)
             
-            curhole = self.changerHole()
+            curhole = self.ChangerHole()
             self.modConfig.queue.put('MotorControl:Data: curHole: ' + str(curhole))
             
             # Because OneStep is negative, the criteria was never reach (always <0 and not >0.02) till the asolute value (May 2007 L Carporzen)
@@ -670,7 +670,7 @@ class Motors():
             curposX = startingPosX
             curposY = startingPosY
             
-            startinghole = self.changerHole()
+            startinghole = self.ChangerHole()
             targetX = self.modConfig.convertHoletoPosX(hole)
             targetY = self.modConfig.convertHoletoPosY(hole)
             
@@ -683,7 +683,7 @@ class Motors():
             curposX = self.changerX.readPosition()
             curposY = self.changerY.readPosition()
             
-            curhole = self.changerHole()
+            curhole = self.ChangerHole()
             self.modConfig.queue.put('MotorControl:Data: curHole: ' + str(curhole))
             
             # Because OneStep is negative, the criteria was never reach (always <0 and not >0.02) till the asolute value (May 2007 L Carporzen)
@@ -711,7 +711,7 @@ class Motors():
 
     '''
     '''
-    def turningMotorAngle(self):
+    def TurningMotorAngle(self):
         angle = self.convertPosToAngle(self.turning.readPosition())
                 
         return angle 
@@ -766,20 +766,20 @@ class Motors():
     '''
     def turningMotorRotate(self, angle, waitingForStop=True):
         startingPos = self.turning.readPosition()
-        startingangle = self.turningMotorAngle()
+        startingangle = self.TurningMotorAngle()
         
         target = self.convertAngleToPos(angle)
         self.turning.moveMotor(target, self.modConfig.TurnerSpeed, waitingForStop)
         if not waitingForStop:
             return
         
-        CurAngle = self.turningMotorAngle()
+        CurAngle = self.TurningMotorAngle()
         if (abs((CurAngle - angle) % 360) > 3):
             # First try to move to move back to the desired position
             # MoveMotor MotorTurning, startingPos, TurnerSpeed, pauseOverride:=True
             # curpos = ReadPosition(MotorTurning)            
             self.turning.moveMotor(target, self.modConfig.TurnerSpeed)
-            CurAngle = self.turningMotorAngle()
+            CurAngle = self.TurningMotorAngle()
         
         # Quit here if this is bad ...
         if (abs((CurAngle - angle) % 360) > 3):
@@ -795,10 +795,10 @@ class Motors():
             errorMessage += "Execution has been paused. Please check machine."
             raise ValueError(errorMessage)
         
-        CurAngle = self.turningMotorAngle()
+        CurAngle = self.TurningMotorAngle()
         
         CurAngle = CurAngle - int(CurAngle / 360) * 360     # Integer division
-        if (CurAngle != self.turningMotorAngle()): 
+        if (CurAngle != self.TurningMotorAngle()): 
             self.setTurningMotorAngle(CurAngle)
             
         return                
@@ -808,12 +808,12 @@ class Motors():
     def turningMotorSpin(self, speedRPS, Duration=60):
         if (speedRPS == 0):
             self.turning.motorStop()
-            activeAngle = self.turningMotorAngle()
+            activeAngle = self.TurningMotorAngle()
             CurAngle = activeAngle - int(activeAngle / 360) * 360
             if (CurAngle != activeAngle): 
                 self.setTurningMotorAngle(CurAngle)
                 
-            activeAngle = self.turningMotorAngle()
+            activeAngle = self.TurningMotorAngle()
             if (CurAngle != activeAngle): 
                 self.setTurningMotorAngle(CurAngle)
                 
@@ -825,10 +825,10 @@ class Motors():
             self.turningMotorRotate(target)
             self.turning.waitForMotorStop()
             self.setTurningMotorAngle(0)
-            CurAngle = self.turningMotorAngle()
+            CurAngle = self.TurningMotorAngle()
         else:
             startingPos = self.turning.readPosition()
-            self.turningMotorAngle()
+            self.TurningMotorAngle()
             target = startingPos - self.modConfig.TurningMotorFullRotation * speedRPS * Duration
             self.turning.moveMotor(target, abs(self.modConfig.TurningMotor1rps * speedRPS), False)
             
@@ -848,6 +848,10 @@ class Motors():
     def runTask(self, taskID):
         if (taskID == 0):
             self.HomeToTop()
+            
+        elif (taskID == 1):
+            self.HomeToTop()
+            self.HomeToCenter()
         
 #===================================================================================================
 # Main Module
@@ -861,10 +865,8 @@ if __name__=='__main__':
         
         devControl = Motors(devicePath, modConfig=modConfig)
         devControl.openMotors()
-                
-        devControl.HomeToCenter()    
-        
-        devControl.runTask(0)
+                        
+        devControl.runTask(1)
         
         print('Done !!!')
         

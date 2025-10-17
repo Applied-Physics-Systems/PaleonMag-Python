@@ -52,6 +52,7 @@ class DevicesControl():
     MOTOR_READ_HOLE         = 0x0014
     MOTOR_RESET             = 0x0015    
     MOTOR_STOP              = 0x0016
+    MOTOR_NEAREST_HOLE      = 0x0017
     
     IRM_ARM_INIT            = 0x1001
     IRM_SET_BIAS_FIELD      = 0x1002
@@ -82,7 +83,7 @@ class DevicesControl():
     AF_CLEAN_COIL           = 0x4003
     AF_START_RAMP           = 0x4004
     AF_SET_RELAYS_DEFAULT   = 0x4005
-    
+        
     SYSTEM_DISCONNECT       = 0xF001
     
     messages = {MOTOR_HOME_TO_TOP: 'Run HomeToTop\n',
@@ -107,6 +108,7 @@ class DevicesControl():
                 MOTOR_READ_HOLE: 'Read Hole',
                 MOTOR_RESET: 'Reset',
                 MOTOR_STOP: 'Stop',                
+                MOTOR_NEAREST_HOLE: 'Changer to the nearest hole',
                 IRM_ARM_INIT: 'Initialize IRM/ARM',
                 IRM_SET_BIAS_FIELD: 'Set ARM Bias Field',
                 IRM_FIRE: 'Discharge IRM device',                
@@ -147,6 +149,7 @@ class DevicesControl():
     devicesAllGoodFlag = False
     programHaltedFlag = False
     programPausedFlag = False
+    currentPosInitialized = False
 
     def __init__(self):
         '''
@@ -157,6 +160,7 @@ class DevicesControl():
             self.currentPath = self.currentPath.replace('\\Forms', '')
         self.currentPath += '\\Hardware\\Device\\'        
         self.DCMotorHomeToTop_StopOnTrue = False
+        self.processQueue = None
         self.gaussMeter = GaussMeterControl()
                     
     '''
@@ -164,7 +168,7 @@ class DevicesControl():
     '''
     def setDevicesConfig(self, modConfig):  
         self.modConfig = modConfig
-        self.modChanger = ModChanger(self.modConfig)
+        self.modChanger = ModChanger(self)
         message = self.openDevices()
         
         return message
@@ -293,54 +297,11 @@ class DevicesControl():
         for device in self.deviceList:
             self.closeDevice(device)
 
-    '''
-        Check for message from the MainForm
-        If Program_Halt request is sent, exit.
-        Otherwise, continue
-    '''
-    def checkInterruptRequest(self):
-        try:
-            message = self.modConfig.queue.get(timeout=0.001)
-            if 'Program_Interrupt' in message:
-                return True
-                
-            return False
-            
-        except:
-            return False
-
-    '''
-        Check for message from the MainForm
-        If Program_Halt request is sent, exit.
-        Otherwise, continue
-    '''
-    def checkProgramHaltRequest(self):
-        try:
-            message = self.modConfig.queue.get(timeout=0.001)
-            if 'Program_Halted' in message:
-                self.Flow_Pause()
-                return True
-                
-            return False
-            
-        except:
-            return False
-        
-    '''
-    '''
-    def Flow_Pause(self):
-        self.modConfig.queue.put('Flow Pause')
-        pauseFlag = True
-        while pauseFlag:
-            try:
-                message = self.modConfig.queue.get(timeout=0.1)
-                if 'Continue Flow' in message:
-                    pauseFlag = False
-            except:
-                time.sleep(0.01)
-                
-        return
-      
+    '''--------------------------------------------------------------------------------------------
+                        
+                     Internal Functions
+                        
+    --------------------------------------------------------------------------------------------'''
     '''
         Update data for process that has been changed 
         These are the data that are exchanged between processes.
@@ -356,15 +317,153 @@ class DevicesControl():
             self.modConfig.processData.ADwinDO = self.ADwin.modConfig.processData.ADwinDO
                         
         return self.modConfig.processData 
-                       
+    
+    '''--------------------------------------------------------------------------------------------
+                        
+                     Flow Control Functions
+                        
+    --------------------------------------------------------------------------------------------'''
+    '''
+        Check for message from the MainForm
+        If Program_Halt request is sent, exit.
+        Otherwise, continue
+    '''
+    def checkInterruptRequest(self):
+        try:
+            queueSize = self.processQueue.qsize()
+            if (queueSize > 0):
+                for _ in range(0, queueSize):                
+                    message = self.processQueue.get_nowait()
+                    if 'Program_Interrupt' in message:
+                        return True
+                
+            return False
+            
+        except:
+            return False
+
+    '''
+        Check for message from the MainForm
+        If Program_Halt request is sent, exit.
+        Otherwise, continue
+    '''
+    def checkProgramHaltRequest(self):
+        try:
+            queueSize = self.processQueue.qsize()
+            if (queueSize > 0):
+                for _ in range(0, queueSize):
+                    message = self.processQueue.get_nowait()
+                    if 'Program_Halted' in message:
+                        self.Flow_Pause()
+                        return True
+                
+            return False
+            
+        except:
+            return False
+        
     '''
     '''
-    def runMotorTask(self, queue, taskID):
+    def Flow_Pause(self):
+        self.modConfig.queue.put('Flow Pause:')
+        pauseFlag = True
+        message = ''
+        while pauseFlag:
+            try:
+                queueSize = self.processQueue.qsize()
+                if (queueSize > 0):
+                    for _ in range(0, queueSize):                
+                        message = self.processQueue.get_nowait()
+                        if 'Continue Flow' in message:
+                            pauseFlag = False
+                            
+                        elif 'Program_End' in message:
+                            pauseFlag = False
+
+                        elif 'Task Aborted' in message:
+                            pauseFlag = False                            
+                        
+            except:
+                time.sleep(0.1)
+                
+        if 'Program_End' in message:
+            raise ValueError('Error:Program forced end.')
+        elif 'Task Aborted' in message:
+            raise AssertionError('Warning:Task Abort')                                                
+                
+        return message
+      
+    '''
+        Request the main form process to display input form
+        Wait until it receive data or program halt
+    '''
+    def displayInputForm(self, message, title, inputValue, minValue, maxValue):
+        sendMessage = 'InputBox'
+        sendMessage += ':Message = ' + message 
+        sendMessage += ':Title = ' + title
+        sendMessage += ':InputValue = ' + str(inputValue)
+        sendMessage += ':MinValue = ' + str(minValue)
+        sendMessage += ':MaxValue = ' + str(maxValue)        
+        self.modConfig.queue.put(sendMessage)
+        
+        message = self.Flow_Pause()
+        messageList = message.split(':')
+        
+        if (len(messageList) >= 2): 
+            return messageList[1]
+        else:
+            return ''
+    
+    '''
+    '''
+    def displayMessageBox(self, caption=None, message=None, flashing=None, postMessageHandler=None, pause=False):
+        sendMessage = 'MessageBox'
+
+        if (caption != None):
+            sendMessage += ':CaptionStr = ' + caption
+        
+        if (message != None):
+            sendMessage += ':MessageStr = ' + message
+            
+        if (flashing != None):
+            sendMessage += ':FlashingStr = ' + flashing          
+
+        if (postMessageHandler != None):
+            sendMessage += ':HandlerStr = ' + postMessageHandler
+                      
+        self.modConfig.queue.put(sendMessage)
+          
+        if pause:
+            self.Flow_Pause()
+            
+        return
+    
+    '''--------------------------------------------------------------------------------------------
+                        
+                     Task Handling Functions
+                        
+    --------------------------------------------------------------------------------------------'''                             
+    '''
+    '''
+    def runMotorTask(self, taskID):
         
         if (taskID[0] == self.MOTOR_HOME_TO_TOP):
+            self.displayMessageBox(flashing='Please Wait, Homing To The Top')
             self.motors.HomeToTop()
                 
         elif (taskID[0] == self.MOTOR_HOME_TO_CENTER):
+            flashingMessage = 'Please Wait, Homing XY Table'
+            messageStr = 'The XY Stage needs to be homed to the center, now;;'
+            messageStr += 'The code will home the Up/Down glass tube to the top limit switch'
+            messageStr += '  before moving the XY stage. HOWEVER, if there are cables or other'
+            messageStr += ' impediments in the way, the XY Stage should not be homed.;;'
+            messageStr += 'Do you want the XY stage to be homed to the center position, now?'            
+            self.displayMessageBox(caption='Warning - XY State Homing!', 
+                                   message=messageStr, 
+                                   flashing=flashingMessage, 
+                                   postMessageHandler='HomeToCenter', 
+                                   pause=True)
+            
             xPos, yPos = self.motors.HomeToCenter()
             self.modConfig.queue.put('MotorControl:Data: xPos: ' + str(xPos))
             self.modConfig.queue.put('MotorControl:Data: yPos: ' + str(yPos))
@@ -411,11 +510,11 @@ class DevicesControl():
 
         elif (taskID[0] == self.MOTOR_SET_CURRENT_HOLE):
             currentHole = taskID[1][0]
-            self.motors.setChangerHole(currentHole)
+            self.motors.SetChangerHole(currentHole)
 
         elif (taskID[0] == self.MOTOR_CHANGE_HOLE):
             currentHole = taskID[1][0]
-            self.motors.changerMotortoHole(currentHole)
+            self.motors.ChangerMotortoHole(currentHole)
         
         elif (taskID[0] == self.MOTOR_GO_TO_X):
             moveMotorPos = taskID[1][0]
@@ -455,11 +554,11 @@ class DevicesControl():
                 activeMotor.readPosition()
 
         elif (taskID[0] == self.MOTOR_READ_ANGLE):
-            angle = self.motors.turningMotorAngle()
+            angle = self.motors.TurningMotorAngle()
             self.modConfig.queue.put('MotorControl:TurningAngle = ' + str(angle))
 
         elif (taskID[0] == self.MOTOR_READ_HOLE):
-            curHole = self.motors.changerHole()
+            curHole = self.motors.ChangerHole()
             self.modConfig.queue.put('MotorControl:LastHole = ' + str(curHole))
 
         elif (taskID[0] == self.MOTOR_RESET):
@@ -467,16 +566,19 @@ class DevicesControl():
 
         elif (taskID[0] == self.MOTOR_STOP):
             self.motors.stop()
+            
+        elif (taskID[0] == self.MOTOR_NEAREST_HOLE):
+            self.modChanger.Changer_NearestHole()
                 
         return 'MotorControl'
 
     '''
     '''
-    def runIRMTask(self, queue, taskID):
+    def runIRMTask(self, taskID):
                 
         if (self.apsIRM != None):
             self.apsIRM.parent = self
-            self.apsIRM.queue = queue
+            self.apsIRM.queue = self.modConfig.queue
              
             if (taskID[0] == self.IRM_ARM_INIT):
                 self.apsIRM.init_IrmArm()
@@ -513,58 +615,58 @@ class DevicesControl():
 
     '''
     '''
-    def runSquidTask(self, queue, taskID):
+    def runSquidTask(self, taskID):
 
         if (taskID[0] == self.SQUID_READ_COUNT):
             activeAxis = taskID[1][0]
             cmdStr, respStr = self.SQUID.readCount(activeAxis)
-            queue.put('SQUIDControl:' + cmdStr + ':' + respStr)
+            self.modConfig.queue.put('SQUIDControl:' + cmdStr + ':' + respStr)
 
         elif (taskID[0] == self.SQUID_READ_DATA):
             activeAxis = taskID[1][0]
             cmdStr, respStr = self.SQUID.readData(activeAxis)
-            queue.put('SQUIDControl:' + cmdStr + ':' + respStr)
+            self.modConfig.queue.put('SQUIDControl:' + cmdStr + ':' + respStr)
             
         elif (taskID[0] == self.SQUID_READ_RANGE):
             activeAxis = taskID[1][0]
             cmdStr, respStr = self.SQUID.readRange(activeAxis)
-            queue.put('SQUIDControl:' + cmdStr + ':' + respStr)
+            self.modConfig.queue.put('SQUIDControl:' + cmdStr + ':' + respStr)
 
         elif (taskID[0] == self.SQUID_RESET_COUNT):
             activeAxis = taskID[1][0]
             cmdStr, respStr = self.SQUID.resetCount(activeAxis)
-            queue.put('SQUIDControl:' + cmdStr + ':' + respStr)
+            self.modConfig.queue.put('SQUIDControl:' + cmdStr + ':' + respStr)
 
         elif (taskID[0] == self.SQUID_CONFIGURE):
             activeAxis = taskID[1][0]
             cmdStr, respStr = self.SQUID.configure(activeAxis)
-            queue.put('SQUIDControl:' + cmdStr + ':' + respStr)
+            self.modConfig.queue.put('SQUIDControl:' + cmdStr + ':' + respStr)
             
         elif (taskID[0] == self.SQUID_CHANGE_RATE):
             activeAxis = taskID[1][0]
             rateLabel = taskID[1][1]
             cmdStr, respStr = self.SQUID.changeRate(activeAxis, rateLabel)
-            queue.put('SQUIDControl:' + cmdStr + ':' + respStr)
+            self.modConfig.queue.put('SQUIDControl:' + cmdStr + ':' + respStr)
 
         elif (taskID[0] == self.SQUID_SET_CFG):
             activeAxis = taskID[1][0]
             cfgLabel = taskID[1][1]
             cmdStr, respStr = self.SQUID.setCfg(activeAxis, cfgLabel)
-            queue.put('SQUIDControl:' + cmdStr + ':' + respStr)
+            self.modConfig.queue.put('SQUIDControl:' + cmdStr + ':' + respStr)
             
         elif (taskID[0] == self.SQUID_READ):
             cmdStr, respStr = self.SQUID.getResponse()
-            queue.put('SQUIDControl:' + cmdStr + ':' + respStr)
+            self.modConfig.queue.put('SQUIDControl:' + cmdStr + ':' + respStr)
                 
         return 'SQUIDControl'
 
     '''
     '''
-    def runVacuumTask(self, queue, taskID):
+    def runVacuumTask(self, taskID):
 
         if (taskID[0] == self.VACUUM_INIT):
             cmdStr, respStr = self.vacuum.init(self.ADwin)                        
-            queue.put('VacuumControl:' + cmdStr + ':' + respStr)
+            self.modConfig.queue.put('VacuumControl:' + cmdStr + ':' + respStr)
             
         elif (taskID[0] == self.VACUUM_SET_CONNECT):
             mode = taskID[1][0]
@@ -572,7 +674,7 @@ class DevicesControl():
             if 'On' in mode:
                 switch = True
             cmdStr, respStr = self.vacuum.valveConnect(switch)
-            queue.put('VacuumControl:' + cmdStr + ':' + respStr)
+            self.modConfig.queue.put('VacuumControl:' + cmdStr + ':' + respStr)
 
         elif (taskID[0] == self.VACUUM_SET_MOTOR):
             mode = taskID[1][0]
@@ -580,11 +682,11 @@ class DevicesControl():
             if 'On' in mode:
                 switch = True
             cmdStr, respStr = self.vacuum.motorPower(self.ADwin, switch)
-            queue.put('VacuumControl:' + cmdStr + ':' + respStr)
+            self.modConfig.queue.put('VacuumControl:' + cmdStr + ':' + respStr)
             
         elif (taskID[0] == self.VACUUM_RESET):
             cmdStr, respStr = self.vacuum.reset()        
-            queue.put('VacuumControl:' + cmdStr + ':' + respStr)
+            self.modConfig.queue.put('VacuumControl:' + cmdStr + ':' + respStr)
 
         elif (taskID[0] == self.VACUUM_SET_DEGAUSSER):
             mode = taskID[1][0]
@@ -594,7 +696,7 @@ class DevicesControl():
 
     '''
     '''
-    def runAFTask(self, queue, taskID):
+    def runAFTask(self, taskID):
         
         if (taskID[0] == self.AF_SWITCH_COIL):
             activeCoil = taskID[1][0]
@@ -602,7 +704,7 @@ class DevicesControl():
             
         elif (taskID[0] == self.AF_REFRESH_T):
             temp1, temp2 = self.ADwin.refreshTs()
-            queue.put('ADWinAFControl:' + temp1 + ':' + temp2)
+            self.modConfig.queue.put('ADWinAFControl:' + temp1 + ':' + temp2)
             
         elif (taskID[0] == self.AF_SET_RELAYS_DEFAULT):
             self.ADwin.TrySetAllRelaysToDefaultPosition_ADwin()
@@ -616,7 +718,7 @@ class DevicesControl():
                                    ClipTest = False, 
                                    Verbose=Verbose)
             
-            queue.put('ADWinAFControl:Active Coil = Transverse')
+            self.modConfig.queue.put('ADWinAFControl:Active Coil = Transverse')
     
             self.ADwin.executeRamp(self.modConfig.TransverseCoilSystem, 
                                    self.modConfig.AfTransMax, 
@@ -669,7 +771,7 @@ class DevicesControl():
 
     '''
     '''
-    def runSystemTask(self, queue, taskID):
+    def runSystemTask(self, taskID):
         
         if (taskID[0] == self.SYSTEM_DISCONNECT):
             if (self.motors != None):            
@@ -712,34 +814,36 @@ class DevicesControl():
     '''
         
     '''
-    def runTask(self, queue, taskID):
-        self.queue = queue
+    def runTask(self, taskID):
         deviceStr = 'None'
         try:   
             deviceID = ((taskID[0] & 0xF000) >> 12)          
             if (deviceID == DEVICE_MOTORS):
-                deviceStr = self.runMotorTask(queue, taskID)
+                deviceStr = self.runMotorTask(taskID)
                 
             elif (deviceID == DEVICE_IRM):
-                deviceStr = self.runIRMTask(queue, taskID)
+                deviceStr = self.runIRMTask(taskID)
                 
             elif (deviceID == DEVICE_SQUID):
-                deviceStr = self.runSquidTask(queue, taskID)
+                deviceStr = self.runSquidTask(taskID)
 
             elif (deviceID == DEVICE_VACUUM):
-                deviceStr = self.runVacuumTask(queue, taskID)
+                deviceStr = self.runVacuumTask(taskID)
 
             elif (deviceID == DEVICE_AF):
-                deviceStr = self.runAFTask(queue, taskID)
+                deviceStr = self.runAFTask(taskID)
                 
             elif (deviceID == DEVICE_SYSTEM):
-                deviceStr = self.runSystemTask(queue, taskID)
+                deviceStr = self.runSystemTask(taskID)
                                             
         except ValueError as e:
             self.modConfig.queue.put(deviceStr + ':Error: ' + str(e))
 
         except IOError as e:
-            self.modConfig.queue.put(deviceStr + ':MessageBox: ' + str(e))
+            self.displayMessageBox(caption=deviceStr, message=str(e))
+            
+        except AssertionError as e:
+            self.modConfig.queue.put(deviceStr + ':' + str(e))
         
         return deviceStr
 

@@ -34,11 +34,11 @@ class SampleIndexRegistration():
         self.doUp = False
         self.doBoth = False
         
-        self.measurementSteps = RockmagSteps()
+        self.measurementSteps = RockmagSteps(self)
         
         self.RockmagMode = False
         
-        self.sampleSet = Samples()
+        self.sampleSet = Samples(self)
         
     '''--------------------------------------------------------------------------------------------
                         
@@ -103,7 +103,7 @@ class SampleIndexRegistrations():
         self.parent = parent
         self.Item = []
         self.SampleHolderIndex = None
-        self.SampleHolderIndexTag = ''
+        self.SampleHolderIndexTag = '!Holder'
 
         self._Count = 0
 
@@ -224,7 +224,7 @@ class SampleIndexRegistrations():
         self.SampleHolderIndex.avgSteps = 1
         self.SampleHolderIndex.doUp = True
         self.SampleHolderIndex.doBoth = False
-        self.SampleHolderIndex.measurementSteps = RockmagSteps()
+        self.SampleHolderIndex.measurementSteps = RockmagSteps(self)
         self.SampleHolderIndex.sampleSet = Samples()
         
         '''    

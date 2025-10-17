@@ -77,7 +77,7 @@ class frmTestUnit(wx.Frame):
         self.timer = wx.Timer(self)
         self.timer.Stop()
         self.Bind(wx.EVT_TIMER, self.OnTimer, self.timer)
-        self.timer.Start(int(200))      # Checking every 200ms
+        self.timer.Start(200)      # Checking every 200ms
 
     '''
     '''
@@ -89,6 +89,26 @@ class frmTestUnit(wx.Frame):
         self.SetSize((1500, 1000))
         self.SetTitle('Test Unit')
         self.Centre()
+
+    '''
+    '''
+    def updateCommStatus(self, statusMessage):
+        return
+    
+    '''
+    '''
+    def updateProgressStatus(self, statusMessage):
+        return
+
+    '''
+    '''
+    def updateTaskStatus(self, statusMessage):
+        return
+
+    '''
+    '''
+    def updateCurrentTime(self, statusMessage):
+        return
 
     '''--------------------------------------------------------------------------------------------
                         

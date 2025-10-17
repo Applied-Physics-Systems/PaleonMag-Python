@@ -19,12 +19,13 @@ class MotorControl(SerialPortDevice):
     '''
     queue = None
 
-    def __init__(self, baudRate, pathName, comPort, Label, modConfig):
+    def __init__(self, baudRate, pathName, comPort, Label, parent=None):
         '''
         Constructor
         '''                
-        self.MotorAddress = '16'
-        SerialPortDevice.__init__(self, baudRate, 'MotorControl', pathName, comPort, Label, modConfig)
+        self.parent = parent
+        self.MotorAddress = '16'        
+        SerialPortDevice.__init__(self, baudRate, 'MotorControl', pathName, comPort, Label, parent.modConfig)
                
     '''--------------------------------------------------------------------------------------------
                         
@@ -152,9 +153,18 @@ class MotorControl(SerialPortDevice):
         while not finished:
             oldPosition[1] = oldPosition[0]
             oldPosition[0] = pollPosition              
-            pollPosition = self.readPosition()      # Dummy read
-            
+            pollPosition = self.readPosition()      # Dummy read            
             time.sleep(0.01)
+            
+            if (self.label == 'UpDown'):                
+                self.parent.UpDownHeight()
+            elif (self.label == 'Turning'):
+                self.parent.TurningMotorAngle()
+            elif (self.label == 'ChangerX'):
+                self.parent.ChangerHole()
+            elif (self.label == 'ChangerY'):
+                self.parent.ChangerHole()
+            
             pollPosition = self.readPosition()
             
             # if we're not moving, we're done
@@ -372,18 +382,18 @@ if __name__=='__main__':
         config = configparser.ConfigParser()
         config.read('C:\\Users\\hd.nguyen.APPLIEDPHYSICS\\workspace\\SVN\\Windows\\Rock Magnetometer\\Paleomag_v3_Hung.INI')
         modConfig = ModConfig(config=config)          
-        motorID = 'ChangerX'         
+        motorID = 'ChangerY'         
         if 'ChangerX' in motorID:
-            comPort = 'COM7'
+            comPort = 'COM27'
         elif 'ChangerY' in motorID:
-            comPort = 'COM8'
+            comPort = 'COM28'
         elif 'UpDown' in motorID:
-            comPort = 'COM9'
+            comPort = 'COM29'
         elif 'Turning' in motorID:
-            comPort = 'COM10'
+            comPort = 'COM30'
         motorControl = MotorControl(57600, pathName, comPort, motorID, modConfig)
         
-        motorControl.runTask(0)
+        motorControl.runTask(3)
                 
         motorControl.closeDevice()
         print('Done !!!')

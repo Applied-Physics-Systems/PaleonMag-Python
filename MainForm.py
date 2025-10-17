@@ -6,6 +6,7 @@ Created on Oct 4, 2024
 @company: Applied Physics Systems
 
 Libraries used in this project
+    pip install numpy
     pip install wxPython
     pip install pyserial
     pip install adwin
@@ -36,10 +37,11 @@ from ClassModules.SampleCommand import SampleCommands
 from Modules.modMeasure import modMeasure
 from Modules.modFlow import modFlow
 from Modules.modConfig import ModConfig
+from Modules.modChanger import ModChanger
 
 from Process.PaleoThread import PaleoThread
 
-VersionNumber = 'Version 0.00.27'
+VersionNumber = 'Version 0.00.28'
 
 ID_DC_MOTORS        = 0
 ID_FILE_REGISTRY    = 1
@@ -101,6 +103,7 @@ class MainForm(wx.Frame):
         
         self.modMeasure = modMeasure()
         self.modFlow = modFlow(parent=self)
+        self.modChanger = ModChanger(parent=self)
         self.paleoThread = PaleoThread(parent=self)
 
         self.checkDevicesComm()
@@ -268,9 +271,9 @@ class MainForm(wx.Frame):
         self.statusBar.SetFont(font)        
         # set text to status bar
         if self.NOCOMM_Flag:
-            self.statusBar.SetStatusText("NoCOMM mode on", 0)
+            self.updateCommStatus("NoCOMM mode on")
         else:
-            self.statusBar.SetStatusText("NoCOMM mode off", 0)
+            self.updateCommStatus("NoCOMM mode off")
         self.Bind(wx.EVT_SIZE, self.OnSize)         # Bind the OnSize event to handle resizing
                 
         # Add event handler on OnClose
@@ -280,6 +283,30 @@ class MainForm(wx.Frame):
         self.SetSize((1500, 1000)) 
         self.SetTitle('PaleoMagnetic Magnetometer Controller Systems - ' + VersionNumber)
         self.Centre() 
+        
+    '''
+    '''
+    def updateCommStatus(self, statusMessage):
+        self.statusBar.SetStatusText(statusMessage, 0)
+        return
+    
+    '''
+    '''
+    def updateProgressStatus(self, statusMessage):
+        self.statusBar.SetStatusText(statusMessage, 1)
+        return
+
+    '''
+    '''
+    def updateTaskStatus(self, statusMessage):
+        self.statusBar.SetStatusText(statusMessage, 2)
+        return
+
+    '''
+    '''
+    def updateCurrentTime(self, statusMessage):
+        self.statusBar.SetStatusText(statusMessage, 4)
+        return
         
     '''--------------------------------------------------------------------------------------------
                         
@@ -414,7 +441,7 @@ class MainForm(wx.Frame):
     '''
     def sendErrorMessage(self, errorMessage):
         self.statusBar.SetBackgroundColour(wx.Colour(255, 0, 0))
-        self.statusBar.SetStatusText(errorMessage, 1)
+        self.updateProgressStatus(errorMessage)
             
     '''
     '''
@@ -431,15 +458,15 @@ class MainForm(wx.Frame):
             self.image_control = wx.StaticBitmap(self.statusBar, -1, img, pos=rect.GetTopLeft())
                 
         return
-            
+                
     '''
         
     '''
-    def pushTaskToQueue(self, taskFunction):
+    def pushTaskToQueue(self, taskFunction):        
         if not self.NOCOMM_Flag:
             self.statusBar.SetBackgroundColour(wx.NullColour)
             self.setStatusColor('Red')
-            self.statusBar.SetStatusText("Task running ...", 1)
+            self.updateProgressStatus("Task running ...")
             self.paleoThread.pushTaskToQueue(taskFunction)
             
         else:
@@ -465,7 +492,8 @@ class MainForm(wx.Frame):
         Close MainForm
     '''
     def onClosed(self, event):
-        if not self.paleoThread.backgroundRunningFlag:        
+        if not self.paleoThread.backgroundRunningFlag:
+            self.paleoThread.processQueue.put('Program_End')        
             self.paleoThread.runProcess([self.devControl.SYSTEM_DISCONNECT,[None]])
         
         self.Destroy()
@@ -500,11 +528,11 @@ class MainForm(wx.Frame):
             self.statusBar.SetBackgroundColour(wx.NullColour)
             if self.NOCOMM_Flag:  
                 self.NOCOMM_Flag = False
-                self.statusBar.SetStatusText('NoCOMM mode off', 0)
+                self.updateCommStatus('NoCOMM mode off')
                 self.toolbar.SetToolNormalBitmap(id=ID_NOCOMM_OFF, bitmap=wx.Bitmap('.\\Resources\\NoCommOff.png'))
             else:
                 self.NOCOMM_Flag = True
-                self.statusBar.SetStatusText('NoCOMM mode on', 0)
+                self.updateCommStatus('NoCOMM mode on')
                 self.toolbar.SetToolNormalBitmap(id=ID_NOCOMM_OFF, bitmap=wx.Bitmap('.\\Resources\\NoCommOn.png'))
             
         elif (menuID == ID_MAG_CONTROL):
@@ -546,7 +574,7 @@ class MainForm(wx.Frame):
         # Format the time as HH:MM
         formatted_time = now.strftime("%H:%M %p")
         self.statusBar.SetBackgroundColour(wx.NullColour)
-        self.statusBar.SetStatusText(formatted_time, 4)
+        self.updateCurrentTime(formatted_time)
         
         if self.paleoThread.backgroundRunningFlag:
             self.paleoThread.checkProcess()

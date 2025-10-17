@@ -22,7 +22,7 @@ class frmMeasure(wx.Frame):
         self.parent = parent   
         
         self.InitUI()        
-        
+                
     '''
     '''
     def InitUI(self):
@@ -38,6 +38,42 @@ class frmMeasure(wx.Frame):
                         Public API Functions
                         
     --------------------------------------------------------------------------------------------'''
+    '''
+    '''
+    def initForm(self, functionID):
+        if (functionID == 'cmdManHolder_Click'):
+            self.parent.modConfig.processData.SampleHolder.SampleHeight = self.parent.magControl.manualPage.txtSampleHeight.GetValue() * self.parent.modConfig.UpDownMotor1cm
+            
+            '''                                        
+                    frmProgram.StatBarNew "Measuring holder..."
+                    
+                    'DisplayStatus (4)            ' Measuring Holder...
+                    frmProgram.mnuViewMeasurement.Enabled = True
+                    frmProgram.mnuViewMeasurement.Checked = True
+                    
+                    Load frmMeasure
+                    Load frmStats
+                    
+                    frmMeasure.HideStats
+                    frmMeasure.clearStats
+                    frmMeasure.clearData
+                    
+                    frmMeasure.SetSample "Holder"
+                    frmMeasure.MomentX.Visible = False ' (October 2007 L Carporzen) Susceptibility versus demagnetization
+                    
+                    frmMeasure.framJumps.Top = 5040
+                    frmMeasure.framJumps.Left = 5400
+                    
+                    frmMeasure.InitEqualArea ' (August 2007 L Carporzen) Equal area plot
+                    
+                    frmMeasure.ZOrder
+                    frmMeasure.Show
+            '''
+            
+        return 
+    
+    '''
+    '''
     def updateFlowStatus(self):
         print('TODO: frmMeasure.updateFlowStatus')
         return

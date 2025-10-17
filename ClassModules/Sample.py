@@ -9,10 +9,12 @@ class Sample():
     '''
 
 
-    def __init__(self):
+    def __init__(self, parent=None):
         '''
         Constructor
         '''
+        self.parent = parent
+        
         self.Samplename = ''
         self.sampleHole = 0
         self.IndexFile = ''
@@ -38,10 +40,11 @@ class Samples():
     '''
 
 
-    def __init__(self):
+    def __init__(self, parent=None):
         '''
         Constructor
         '''
+        self.parent = parent
         self.Item = []
         self.IndexFile = ''        
         self.Count = 0
@@ -89,7 +92,7 @@ class Samples():
     '''
     '''
     def Add(self, sampleName, sampleHole=0):
-        objNewMember = Sample()
+        objNewMember = Sample(self.parent)
         
         objNewMember.Samplename = sampleName.strip()
         objNewMember.sampleHole = sampleHole
@@ -104,7 +107,7 @@ class Samples():
     def getItemWithKey(self, keyStr):
         sample = None
         for eachEntry in self.Item:
-            if (keyStr == eachEntry.IndexFile):
+            if keyStr in eachEntry.Samplename:
                 sample = eachEntry
                 break
             

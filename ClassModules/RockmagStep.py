@@ -216,18 +216,19 @@ class RockmagSteps():
     '''
 
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, mainForm=None):
         '''
         Constructor
         '''
         self.parent = parent
+        self.mainForm = mainForm
         
         self.CurrentStepIndex = 0
         self.nextStepID = 1
         self.Item = []
         
         self._Count = 0
-        self._CurrentStep = RockmagStep()
+        self._CurrentStep = RockmagStep(mainForm)
 
     '''--------------------------------------------------------------------------------------------
                         
@@ -294,7 +295,7 @@ class RockmagSteps():
                   BeforeStep = 0, 
                   AfterStep = 0):
         
-        objNewMember = RockmagStep(self.parent)
+        objNewMember = RockmagStep(self.mainForm)
         
         # set the properties passed into the method
         objNewMember.StepType = StepType

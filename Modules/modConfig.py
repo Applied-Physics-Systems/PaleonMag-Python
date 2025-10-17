@@ -64,9 +64,8 @@ class ModConfig():
     xPos = '0'
     yPos = '0'
     turningAngle = '0'
+    processData = None
     
-    processData = ProcessData()
-
     def __init__(self, process=None, config=None, queue=None):
         '''
         Constructor
@@ -76,10 +75,11 @@ class ModConfig():
             self.processData = process        
             self.parseConfig(self.processData.config)
         elif (config != None):
+            self.processData = ProcessData()
             self.parseConfig(config)
             
         self.queue = queue
-        
+    
     '''
     '''
     def retrieveChannel(self, dataStr, config):
