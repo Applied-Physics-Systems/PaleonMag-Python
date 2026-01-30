@@ -13,9 +13,13 @@ from Forms.frmSampleIndexRegistry import frmSampleIndexRegistry
 from Forms.frmVacuum import frmVacuum
 from Forms.frmChanger import frmChanger
 from Forms.frmMeasure import frmMeasure
+from Forms.frmStats import frmStats
+from Forms.frmAF_2G import frmAF_2G
+from Forms.frmADWIN_AF import frmADWIN_AF
 
 from ClassModules.SampleIndexRegistration import SampleIndexRegistrations
 from ClassModules.SampleCommand import SampleCommands
+from ClassModules.Sample import Sample
 
 from Modules.modMeasure import modMeasure
 from Modules.modFlow import modFlow
@@ -62,12 +66,15 @@ class frmTestUnit(wx.Frame):
         self.registryControl = frmSampleIndexRegistry(parent=self)
         self.magControl = frmMagnetometerControl(parent=self)
         
+        self.SampleHolder = Sample()
         self.SampleIndexRegistry = SampleIndexRegistrations(parent=self)
-        self.SampQueue = SampleCommands()
-        self.magControl = frmMagnetometerControl(parent=self)
+        self.SampQueue = SampleCommands(parent=self)
         self.vacuumControl = frmVacuum(parent=self)
         self.frmMeasure = frmMeasure(parent=self)
-        self.MainChanger = frmChanger(parent=self)
+        self.frmStats = frmStats(parent=self)
+        self.MainChanger = frmChanger(parent=self)        
+        self.frmAF_2G = frmAF_2G(parent=self)
+        self.frmADWIN_AF = frmADWIN_AF(parent=self)
         
         self.modMeasure = modMeasure()
         self.modFlow = modFlow()
@@ -110,6 +117,13 @@ class frmTestUnit(wx.Frame):
     def updateCurrentTime(self, statusMessage):
         return
 
+    '''
+        frmProgram.mnuViewMeasurement.Enabled = True
+        frmProgram.mnuViewMeasurement.Checked = True
+    '''
+    def updateViewMeasurementWindow(self, enableFlag):
+        return
+
     '''--------------------------------------------------------------------------------------------
                         
                         Utilities Functions
@@ -147,7 +161,7 @@ class frmTestUnit(wx.Frame):
         self.modConfig.parseConfig(config)
         
         # Set paramters from INI file
-        self.NOCOMM_Flag = self.modConfig.NoCommMode 
+        self.modConfig.processData.NOCOMM_MODE = self.modConfig.NoCommMode 
         return
     
     '''
@@ -202,6 +216,7 @@ if __name__=='__main__':
         frame = frmTestUnit(parent=None)
         frame.registryControl.Show()
         frame.magControl.Show()
+        frame.panelList['frmMagnetometerControl'] = frame.magControl
         
         app.MainLoop()    
         

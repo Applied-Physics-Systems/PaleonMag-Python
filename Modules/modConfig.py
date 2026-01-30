@@ -65,6 +65,7 @@ class ModConfig():
     yPos = '0'
     turningAngle = '0'
     processData = None
+    COMPortSusceptibility = -1
     
     def __init__(self, process=None, config=None, queue=None):
         '''
@@ -205,6 +206,11 @@ class ModConfig():
         self.HoleSlotNum = self.getConfig_Int(config, 'SampleChanger', 'HoleSlotNum', 10)
         self.OneStep = self.getConfig_Float(config, 'SampleChanger', 'OneStep', -1010.1010101)
 
+        self.ZeroPos = self.getConfig_Int(config, 'SteppingMotor', 'ZeroPos', -25886)        
+        self.MeasPos = self.getConfig_Int(config, 'SteppingMotor', 'MeasPos', -30607)
+        self.AFPos = self.getConfig_Int(config, 'SteppingMotor', 'AFPos', -8405)
+        self.IRMPos = self.getConfig_Int(config, 'SteppingMotor', 'IRMPos', -44100)
+        self.SCoilPos = self.getConfig_Int(config, 'SteppingMotor', 'SCoilPos', -4202)
         self.DCMotorHomeToTop_StopOnTrue = self.getConfig_Bool(config, 'SteppingMotor', 'DCMotorHomeToTop_StopOnTrue', True)
         self.UpDownTorqueFactor = self.getConfig_Int(config, 'SteppingMotor', 'UpDownTorqueFactor', 40) 
         self.UpDownMaxTorque = self.getConfig_Int(config, 'SteppingMotor', 'UpDownMaxTorque', 32000)   
@@ -216,15 +222,12 @@ class ModConfig():
         self.LiftSpeedNormal = self.getConfig_Int(config, 'SteppingMotor', 'LiftSpeedNormal', 25000000)    
         self.LiftSpeedFast = self.getConfig_Int(config, 'SteppingMotor', 'LiftSpeedFast', 50000000)
         self.LiftAcceleration = self.getConfig_Int(config, 'SteppingMotor', 'LiftAcceleration', 90000)
-        self.MeasPos = self.getConfig_Int(config, 'SteppingMotor', 'MeasPos', -30607)
         self.ChangerSpeed = self.getConfig_Int(config, 'SteppingMotor', 'ChangerSpeed', 31000)   
         self.SCurveFactor = self.getConfig_Int(config, 'SteppingMotor', 'SCurveFactor', 32767)
-        self.SCoilPos = self.getConfig_Int(config, 'SteppingMotor', 'SCoilPos', -4202)
-        self.AFPos = self.getConfig_Int(config, 'SteppingMotor', 'AFPos', -8405)
-        self.ZeroPos = self.getConfig_Int(config, 'SteppingMotor', 'ZeroPos', -25886)        
         self.TurningMotorFullRotation = self.getConfig_Int(config, 'SteppingMotor', 'TurningMotorFullRotation', 2000)
         self.TurningMotor1rps = self.getConfig_Int(config, 'SteppingMotor', 'TurningMotor1rps', 16000000)
         self.TurnerSpeed = self.getConfig_Int(config, 'SteppingMotor', 'TurnerSpeed', 2000000)
+        self.TrayOffsetAngle = self.getConfig_Int(config, 'SteppingMotor', 'TrayOffsetAngle', 0)
         self.PickupTorqueThrottle = self.getConfig_Float(config, 'SteppingMotor', 'PickupTorqueThrottle', 0.4)
         self.SampleHoleAlignmentOffset = self.getConfig_Float(config, 'SteppingMotor', 'SampleHoleAlignmentOffset', -0.02)
 
@@ -232,6 +235,9 @@ class ModConfig():
 
         self.DoVacuumReset = self.getConfig_Bool(config, 'Vacuum', 'DoVacuumReset', False)
         self.DoDegausserCooling = self.getConfig_Bool(config, 'Vacuum', 'DoDegausserCooling', False)
+
+        self.SusceptibilityMomentFactorCGS = self.getConfig_Float(config, 'SusceptibilityCalibration', 'SusceptibilityMomentFactorCGS', 0.0000097914)
+        self.SusceptibilityScaleFactor = self.getConfig_Float(config, 'SusceptibilityCalibration', 'SusceptibilityScaleFactor', 0.1)
 
         self.EnableARM = self.getConfig_Bool(config, 'Modules', 'EnableARM', False)
         self.EnableAF = self.getConfig_Bool(config, 'Modules', 'EnableAF', False)
@@ -241,6 +247,13 @@ class ModConfig():
         self.EnableTransIRM = self.getConfig_Bool(config, 'Modules', 'EnableTransIRM', False)
         self.EnableIRMBackfield = self.getConfig_Bool(config, 'Modules', 'EnableIRMBackfield', False)
         
+        self.ZCal = self.getConfig_Float(config, 'MagnetometerCalibration', 'ZCal', -1.671)
+        self.XCal = self.getConfig_Float(config, 'MagnetometerCalibration', 'XCal', -2.359)
+        self.YCal = self.getConfig_Float(config, 'MagnetometerCalibration', 'YCal', 2.603)
+        self.RangeFact = self.getConfig_Float(config, 'MagnetometerCalibration', 'RangeFact', 0.00001)
+        self.ReadDelay = self.getConfig_Int(config, 'MagnetometerCalibration', 'ReadDelay', 1)
+        
+        self.AFRampRate = self.getConfig_Int(config, 'AF', 'AFRampRate', 3)
         self.AFUnits = config['AF']['AFUnits'].strip()
         self.Tunits = config['AF']['Tunits'].strip()
         self.AFSystem = config['AF']['AFSystem'].strip()
@@ -278,6 +291,16 @@ class ModConfig():
         self.EnableDegausserCooler = self.getConfig_Bool(config, 'Modules', 'EnableDegausserCooler', False)
         self.EnableT1 = self.getConfig_Bool(config, 'Modules', 'EnableT1', False)
         self.EnableT2 = self.getConfig_Bool(config, 'Modules', 'EnableT2', False)
+        
+        self.RemeasureCSDThreshold = self.getConfig_Int(config, 'Magnetometry', 'RemeasureCSDThreshold', 50)
+        self.JumpThreshold = self.getConfig_Float(config, 'Magnetometry', 'JumpThreshold', 0.1)
+        self.StrongMom = self.getConfig_Float(config, 'Magnetometry', 'StrongMom', 0.02)
+        self.IntermMom = self.getConfig_Float(config, 'Magnetometry', 'IntermMom', 0.000001)
+        self.MomMinForRedo = self.getConfig_Float(config, 'Magnetometry', 'MomMinForRedo', 0.00000001)
+        self.JumpSensitivity = self.getConfig_Int(config, 'Magnetometry', 'JumpSensitivity', 1)
+        self.NbTry = self.getConfig_Int(config, 'Magnetometry', 'NbTry', 0)
+        self.NbHolderTry = self.getConfig_Int(config, 'Magnetometry', 'NbHolderTry', 0)
+        self.HolderMomentTooHighThreshold = self.getConfig_Float(config, 'Magnetometry', 'HolderMomentTooHighThreshold', 0.0000005)
         
         self.IRMSystem = config['IRMPulse']['IRMSystem']        
         self.PulseMCCVoltConversion = self.getConfig_Float(config, 'IRMPulse', 'PulseMCCVoltConversion', 0.0237)
@@ -330,6 +353,8 @@ class ModConfig():
         self.ARMVoltGauss = self.getConfig_Float(config, 'ARM', 'ARMVoltGauss', 0.19)
         self.ARMVoltMax = self.getConfig_Int(config, 'ARM', 'ARMVoltMax', 11)
         self.ARMTimeMax = self.getConfig_Int(config, 'ARM', 'ARMTimeMax', 600)
+        
+        self.MailFromName = config['Email']['MailFromName'].strip()
         
         self.waveForms = self.getWaveForms(config)
         return

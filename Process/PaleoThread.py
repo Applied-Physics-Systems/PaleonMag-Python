@@ -59,7 +59,6 @@ class PaleoThread():
     classdocs
     '''    
     END_OF_SEQUENCE     = 0xFFFF
-    SHOW_FORMS          = 0xFFFE
     ENDTASK_SYSTEM_INIT = 0
     ENDTASK_MAG_INIT    = 1
 
@@ -77,7 +76,7 @@ class PaleoThread():
         Constructor
         '''
         self.parent = parent
-                        
+                                
     '''--------------------------------------------------------------------------------------------
                         
                         Internal Functions
@@ -123,31 +122,44 @@ class PaleoThread():
         if (len(messageList) == 6):
             message = messageList[1].replace('Message = ', '')
             title =  messageList[2].replace('Title = ', '')
+            
             try:
                 inputValue = int(messageList[3].replace('InputValue = ', ''))
             except:
                 inputValue = 0
                 
+            checkMin = False
             try:                    
                 minValue = int(messageList[4].replace('MinValue = ', ''))
+                checkMin = True
             except:
                 minValue = 0
                 
+            checkMax = False
             try:
                 maxValue = int(messageList[5].replace('MaxValue = ', ''))
+                checkMax = True
             except:
                 maxValue = 0
             
             newInput = -1
-            while not ((newInput >= minValue) and (newInput <= maxValue)):
+            validInput = False
+            while not validInput:
                 dialog = wx.TextEntryDialog(None, message.replace(';', '\n'), title, str(inputValue))
                 dialog.CenterOnScreen()                
                 if (dialog.ShowModal() == wx.ID_OK):
                     inputStr = dialog.GetValue()
                     try:
-                        newInput = int(inputStr)
+                        newInput = float(inputStr)
+                        validInput = True
+                        if checkMin:
+                            if (newInput < minValue):
+                                validInput = False
+                        if checkMax:
+                            if (newInput > maxValue):
+                                validInput = False
                     except:
-                        newInput = -1
+                        validInput = False
         
                 dialog.Destroy()
             self.processQueue.put('Continue Flow:' + str(newInput))
@@ -277,14 +289,10 @@ class PaleoThread():
             elif (sequenceType == self.ENDTASK_MAG_INIT):          
                 self.parent.FLAG_MagnetInit = True        # We're done initializing
                 self.parent.registryControl.Show()
-                self.parent.panelList['RegistryControl'] = self.parent.registryControl
+                self.parent.panelList['frmSampleIndexRegistry'] = self.parent.registryControl
             self.parent.updateProgressStatus('Tasks Completed')
             self.parent.setStatusColor('Green')
-            
-        elif (taskID == self.SHOW_FORMS):
-            self.handleShowForms(processFunction[1])
-            runFlag = False
-        
+                    
         else:
             if (taskID in self.parent.devControl.messages.keys()):
                 self.parent.appendMessageBox(self.parent.devControl.messages[taskID] + '\n')
@@ -301,7 +309,9 @@ class PaleoThread():
         self.parent.timer.Stop()
         self.mainQueue = multiprocessing.Queue()
         self.processQueue = multiprocessing.Queue()
-        self.process = multiprocessing.Process(target=workerFunction, args=(self.parent.modConfig.processData, self.mainQueue, self.processQueue, taskID))
+        
+        self.process = multiprocessing.Process(target=workerFunction, args=(self.parent.modConfig.processData, self.mainQueue, self.processQueue, taskID))        
+        
         self.process.start()
         self.parent.timer.Start(int(200))      # Checking every 200ms 
                 
@@ -332,16 +342,6 @@ class PaleoThread():
         return
     
     '''
-    '''
-    def handleShowForms(self, formParams):
-        formID = formParams[0]
-        functionID = formParams[1]
-        if (formID == 'frmMeasure'):
-            self.parent.frmMeasure.initForm(functionID)
-            self.parent.frmMeasure.Show()
-        return
-    
-    '''
         
     '''
     def pushTaskToQueue(self, taskFunction):
@@ -351,5 +351,12 @@ class PaleoThread():
             if (len(self.taskQueue) > 0):
                 self.startProcess()
                 
+        return
+    
+    '''
+        Input: dictionary with 'DataType'
+    '''
+    def sendDataToWorkerThread(self, dataDict):
+        self.processQueue.put(dataDict)
         return
     

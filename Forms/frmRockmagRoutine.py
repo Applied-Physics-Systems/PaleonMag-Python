@@ -69,7 +69,7 @@ class frmRockmagRoutine(wx.Frame):
         self.parent = parent   
         self.rmgFilePath = ''
         
-        self.rmStepList = RockmagSteps(self.parent)
+        self.rmStepList = RockmagSteps(self, self.parent)
         
         self.InitUI()        
         
@@ -482,7 +482,7 @@ class frmRockmagRoutine(wx.Frame):
     '''
     '''
     def onClear(self, event):
-        self.rmStepList = RockmagSteps(self.parent)
+        self.rmStepList = RockmagSteps(self, self.parent)
         self.refreshListDisplay()
         return
     
@@ -703,7 +703,7 @@ class frmRockmagRoutine(wx.Frame):
     '''
     '''
     def onStandardAF(self, event):
-        self.rmStepList = RockmagSteps(self.parent)
+        self.rmStepList = RockmagSteps(self, self.parent)
         self.rmStepList.Add("AF", 0)
         for i in range(1, 7):
             self.rmStepList.Add("AF", 25 * (2 ** i))

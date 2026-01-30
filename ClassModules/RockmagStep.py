@@ -3,7 +3,14 @@ Created on Sep 9, 2025
 
 @author: hd.nguyen
 '''
+import time
 from builtins import property
+
+from ClassModules.AF_Error_Response import AFErrorActionEnum
+from ClassModules.AF_Ramp_Error import AFErrorTypeEnum
+
+from Modules.modAF_DAQ import coil_type
+from Modules.modAF_DAQ import modStatusCode
 
 DEMAGLEN = 6
 
@@ -46,8 +53,11 @@ class RockmagStep():
         self.Measure = False
         self.MeasureSusceptibility = False
         
+        self.rockmagsteptype = ''
+                
         self._Level = 0
         self._DemagStepLabel = ''
+        self._DemagStepLabelLong = ''
 
     '''--------------------------------------------------------------------------------------------
                         
@@ -80,6 +90,25 @@ class RockmagStep():
         
         
         return self._DemagStepLabel
+
+    @property
+    def DemagStepLabelLong(self):
+        return self._DemagStepLabelLong
+    
+    @DemagStepLabelLong.getter
+    def DemagStepLabelLong(self):
+        self._DemagStepLabelLong = self.StepType
+        
+        if (self.StepType == RockmagStepARM): 
+            setLevel = self.BiasField 
+        else: 
+            setLevel = self.Level
+            
+        self._DemagStepLabelLong += " " + str(setLevel)
+        if (self.StepType == RockmagStepRRM):
+            self._DemagStepLabelLong = self._DemagStepLabelLong + "/" + self.SpinSpeed & " rps"
+        
+        return self._DemagStepLabelLong
     
     @property
     def Level(self):
@@ -206,6 +235,480 @@ class RockmagStep():
             mvarLevel = self._Level
         
         return mvarLevel
+
+    '''--------------------------------------------------------------------------------------------
+                        
+                        Iternal Functions
+                        
+    --------------------------------------------------------------------------------------------'''
+    '''
+    '''
+    def setRockmagStepAF(self):
+        if ((self.Level > 0) and self.parent.modConfig.EnableAF):             
+            # Override defaults for error table for Axial Ramp
+            self.parent.modAF_DAQ.AF_Error_Response_Table.Add(AFErrorTypeEnum.ZeroMonitorVoltage, coil_type.Axial, modStatusCode.CodeRed, AFErrorActionEnum.SuppressError)
+            self.parent.modAF_DAQ.AF_Error_Response_Table.Add(AFErrorTypeEnum.TargetUndershoot, coil_type.Axial, modStatusCode.CodeRed, AFErrorActionEnum.SuppressError)
+             
+            # Axial AF Ramp
+            if (self.parent.modConfig.AFSystem == "2G"):                
+                # (August 2007 L Carporzen) Allow to wait between each ramp
+                if (self.parent.ADwin.AF2GControl.txtWaitingTime != 0): 
+                    time.sleep(self.parent.ADwin.AF2GControl.txtWaitingTime)                
+                self.parent.ADwin.AF2GControl.CycleWithHold(self.HoldTime, self.parent.modConfig.AxialCoilSystem, self.Level, self.parent.modConfig.AFRampRate)            
+                self.parent.ADwin.AF2GControl.Disconnect()
+            
+            elif (self.parent.modConfig.AFSystem == "ADWIN"):                                                
+                self.parent.ADwin.ExecuteRamp(self.parent.modConfig.AxialCoilSystem,
+                                              self.Level,
+                                              CalRamp = True, 
+                                              ClipTest = False,
+                                              Verbose=self.parent.ADwin.Verbose)
+                                                                    
+            three_seconds = 3            
+            self.parent.modAF_DAQ.PauseBetweenUseCoils_InSeconds(three_seconds)
+            
+            # Transverse AF Ramp - X direction
+            if (self.parent.modConfig.AFSystem == "2G"):                
+                self.parent.ADwin.AF2GControl.Connect()
+                self.parent.ADwin.AF2GControl.CycleWithHold(self.HoldTime, self.parent.modConfig.TransverseCoilSystem, self.Level, self.parent.modConfig.AFRampRate)
+                
+            elif (self.parent.modConfig.AFSystem == "ADWIN"):            
+                self.parent.ADwin.ExecuteRamp(self.parent.modConfig.TransverseCoilSystem,
+                                              self.Level,
+                                              CalRamp = True,
+                                              ClipTest = False,
+                                              Verbose=self.parent.ADwin.Verbose)
+                                                    
+            self.parent.motors.TurningMotorRotate(90)
+                            
+            # Transverse AF Ramp - Y direction
+            if (self.parent.modConfig.AFSystem == "2G"):            
+                # (August 2007 L Carporzen) Allow to wait between each ramp
+                if (self.parent.ADwin.AF2GControl.txtWaitingTime != 0):
+                    time.sleep(self.parent.ADwin.AF2GControl.txtWaitingTime)                
+                self.parent.ADwin.AF2GControl.CycleWithHold(self.HoldTime, self.parent.modConfig.TransverseCoilSystem, self.Level, self.parent.modConfig.AFRampRate)
+                                    
+            elif (self.parent.modConfig.AFSystem == "ADWIN"):            
+                self.parent.ADwin.ExecuteRamp(self.parent.modConfig.TransverseCoilSystem,
+                                              self.Level,
+                                              CalRamp = True, 
+                                              ClipTest = False, 
+                                              Verbose=self.parent.ADwin.Verbose)
+            
+            self.parent.motors.TurningMotorRotate(360)
+            
+            # Check for Axial Error, error types are safe for bit-wise combination
+            if ((self.parent.modConfig.AFSystem == "ADWIN") and \
+               (((self.parent.modAF_DAQ.AF_Axial_Error_Status.ErrorType == AFErrorTypeEnum.TargetUndershoot) or
+               (self.parent.modAF_DAQ.AF_Axial_Error_Status.ErrorType == AFErrorTypeEnum.ZeroMonitorVoltage)))):            
+                # Need to enable expression of code-red error for axial AF failure
+                self.parent.modAF_DAQ.AF_Error_Response_Table.Add(AFErrorTypeEnum.ZeroMonitorVoltage, coil_type.Axial, modStatusCode.CodeRed, AFErrorActionEnum.ExpressError)
+                self.parent.modAF_DAQ.AF_Error_Response_Table.Add(AFErrorTypeEnum.TargetUndershoot, coil_type.Axial, modStatusCode.CodeRed, AFErrorActionEnum.ExpressError)
+                
+                self.parent.ADwin.ExecuteRamp(self.parent.modConfig.AxialCoilSystem, 
+                                              self.Level, 
+                                              CalRamp = True,
+                                              ClipTest = False,
+                                              Verbose=self.parent.ADwin.Verbose)
+            
+            # Restore Default AF error handling / error responses
+            self.parent.modAF_DAQ.InitDefault_AFErrorResponseTable()
+                                    
+            self.parent.gaussMeter.cmdResetPeak_Click()
+            
+        return
+    
+    '''
+    '''
+    def setRockmagStepAFmax(self):
+        if ((self.Level > 0) and self.parent.modConfig.EnableAF):            
+            # Suppress CodeYellow and CodeRed Target Undershoot errors
+            self.parent.modAF_DAQ.AF_Error_Response_Table.SetItem(AFErrorTypeEnum.TargetUndershoot, coil_type.Axial, modStatusCode.CodeYellow, AFErrorActionEnum.SuppressError) 
+            self.parent.modAF_DAQ.AF_Error_Response_Table.SetItem(AFErrorTypeEnum.TargetUndershoot, coil_type.Transverse, modStatusCode.CodeYellow, AFErrorActionEnum.SuppressError)
+            self.parent.modAF_DAQ.AF_Error_Response_Table.SetItem(AFErrorTypeEnum.TargetUndershoot, coil_type.Axial, modStatusCode.CodeRed, AFErrorActionEnum.SuppressError)
+            self.parent.modAF_DAQ.AF_Error_Response_Table.SetItem(AFErrorTypeEnum.TargetUndershoot, coil_type.Transverse, modStatusCode.CodeRed, AFErrorActionEnum.SuppressError)
+            
+            if (self.parent.modConfig.AFSystem == "2G"):                
+                self.parent.ADwin.AF2GControl.Connect
+                self.parent.ADwin.AF2GControl.CycleWithHold(self.HoldTime, self.parent.modConfig.TransverseCoilSystem, self.parent.modConfig.AfTransMax, self.parent.modConfig.AFRampRate)
+                
+            elif (self.parent.modConfig.AFSystem == "ADWIN"):                                                    
+                self.parent.ADwin.ExecuteRamp(self.parent.modConfig.TransverseCoilSystem,
+                                              self.parent.modConfig.AfTransMax,
+                                              CalRamp = True,
+                                              ClipTest = False,
+                                              Verbose=self.parent.ADwin.Verbose)
+            
+            self.parent.motors.TurningMotorRotate(90)
+            
+            if (self.parent.modConfig.AFSystem == "2G"):                
+                # (August 2007 L Carporzen) Allow to wait between each ramp
+                if (self.parent.ADwin.AF2GControl.txtWaitingTime != 0):
+                    time.sleep(self.parent.ADwin.AF2GControl.txtWaitingTime)            
+                self.parent.ADwin.AF2GControl.CycleWithHold(self.HoldTime, self.parent.modConfig.TransverseCoilSystem, self.parent.modConfig.AfTransMax, self.parent.modConfig.AFRampRate)
+                
+            elif (self.parent.modConfig.AFSystem == "ADWIN"):            
+                self.parent.ADwin.ExecuteRamp(self.parent.modConfig.TransverseCoilSystem, 
+                                              self.parent.modConfig.AfTransMax,
+                                              CalRamp = True,
+                                              ClipTest = False,
+                                              Verbose=self.parent.ADwin.Verbose)
+            
+            self.parent.motors.TurningMotorRotate(360)
+            
+            if (self.parent.modConfig.AFSystem == "2G"):                
+                # (August 2007 L Carporzen) Allow to wait between each ramp
+                if (self.parent.ADwin.AF2GControl.txtWaitingTime != 0):
+                    time.sleep(self.parent.ADwin.AF2GControl.txtWaitingTime)                        
+                self.parent.ADwin.AF2GControl.CycleWithHold(self.HoldTime, self.parent.modConfig.AxialCoilSystem, self.parent.modConfig.AfAxialMax, self.parent.modConfig.AFRampRate)                
+                self.parent.ADwin.AF2GControl.Disconnect()
+                
+            elif (self.parent.modConfig.AFSystem == "ADWIN"):            
+                self.parent.ADwin.ExecuteRamp(self.parent.modConfig.AxialCoilSystem, 
+                                              self.parent.modConfig.AfAxialMax,
+                                              CalRamp = True,
+                                              ClipTest = False,
+                                              Verbose=self.parent.ADwin.Verbose)
+                                        
+            # Set Error responses back to default
+            self.parent.modAF_DAQ.InitDefault_AFErrorResponseTable()
+
+        return
+    
+    '''
+    '''
+    def setRockmagStep(self, coilSystem):
+        if (self.parent.modConfig.AFSystem == "2G"):                
+            self.parent.ADwin.AF2GControl.Connect()                
+            self.parent.ADwin.AF2GControl.CycleWithHold(self.HoldTime, 
+                                                        coilSystem, 
+                                                        self.Level, 
+                                                        self.parent.modConfig.AFRampRate)                
+            self.parent.ADwin.AF2GControl.Disconnect()
+            
+        elif (self.parent.modConfig.AFSystem == "ADWIN"):            
+            self.parent.ADwin.ExecuteRamp(coilSystem, 
+                                          self.Level,
+                                          CalRamp = True,
+                                          ClipTest = False,
+                                          Verbose=self.parent.ADwin.Verbose)
+        return
+   
+    '''
+    '''
+    def setRockmagStepAFz(self):
+        if ((self.Level > 0) and self.parent.modConfig.EnableAF):            
+            self.setRockmagStep(self.parent.modConfig.AxialCoilSystem)        
+        return
+   
+    '''
+    '''
+    def setRockmagStepUAFX1(self):
+        if ((self.Level > 0) and self.parent.modConfig.EnableAF):            
+            self.setRockmagStep(self.parent.modConfig.TransverseCoilSystem)
+        return
+   
+    '''
+    '''
+    def setRockmagStepUAFX2(self):
+        if ((self.Level > 0) and self.parent.modConfig.EnableAF):            
+            self.parent.motors.TurningMotorRotate(90)
+            self.setRockmagStep(self.parent.modConfig.TransverseCoilSystem)                        
+            self.parent.motors.TurningMotorRotate(360)
+            
+        return
+    
+    '''
+    '''
+    def setRockmagStepUAFZ1(self):
+        if ((self.Level > 0) and self.parent.modConfig.EnableAF):            
+            self.setRockmagStep(self.parent.modConfig.AxialCoilSystem)
+        return
+    
+    '''
+    '''
+    def setRockmagStepaTAFX(self):
+        if ((self.Level > 0) and self.parent.modConfig.EnableAF):            
+            self.setRockmagStep(self.parent.modConfig.AxialCoilSystem)
+        return
+   
+    '''
+    '''
+    def setRockmagStepaTAFY(self):
+        if ((self.Level > 0) and self.parent.modConfig.EnableAF):            
+            self.setRockmagStep(self.parent.modConfig.AxialCoilSystem)
+        return
+   
+    '''
+    '''
+    def setRockmagStepaTAFZ(self):
+        if ((self.Level > 0) and self.parent.modConfig.EnableAF):            
+            self.setRockmagStep(self.parent.modConfig.AxialCoilSystem)
+        return
+   
+    '''
+    '''
+    def setRockmagStepARM(self):
+        if ((self.Level > 0) and self.parent.modConfig.EnableARM):
+            self.setRockmagStep(self.parent.modConfig.AxialCoilSystem)
+            
+        else:        
+            time.sleep(self.HoldTime)
+            
+        return
+   
+    '''
+    '''
+    def setRockmagStepVRM(self):
+        self.parent.displayStatusBar('VRM Decay: ' + '{:.1f}'.format(self.HoldTime) + ' secs')
+        remaining_time_seconds = self.HoldTime
+        while (remaining_time_seconds >= 0):
+            time.sleep(1)
+            remaining_time_seconds -= 1
+            self.parent.displayStatusBar('VRM Decay: ' + '{:.1f}'.format(remaining_time_seconds) + ' secs')
+        return
+    
+    '''
+    '''
+    def setRockmagStepPulseIRMAxial(self, SampleHeight):
+        if self.parent.modConfig.EnableAxialIRM:            
+            SampleCenterRMPosition = int(self.parent.apsIRM.IRMCenteringPos(self.Level) + SampleHeight / 2)
+            
+            if ((SampleCenterRMPosition / abs(SampleCenterRMPosition)) != (self.parent.modConfig.AFPos / abs(self.parent.modConfig.AFPos))):                
+                # crap... our sample is too large to put in the AF coil!
+                return
+                         
+            # discharge with sample in load position            
+            self.parent.motors.UpDownMove(0, 1)            
+            if (self.parent.modConfig.IRMSystem != "APS"):
+            
+                self.parent.apsIRM.update_frmIRMARM('Coil Type = Axial')
+                self.parent.apsIRM.FireIRM(0)                 # ??? 5/12/17
+                
+                time.sleep(1)
+                
+                self.parent.apsIRM.update_frmIRMARM('Coil Type = Axial')
+                self.parent.apsIRM.FireIRM(0)
+            
+            self.parent.motors.UpDownMove(SampleCenterRMPosition, 1)
+            
+            if (abs(self.Level) > 0):
+                self.parent.apsIRM.update_frmIRMARM('Coil Type = Axial')
+                self.parent.apsIRM.FireIRMAtField(self.Level)
+        
+        return
+    
+    '''
+    '''
+    def setRockmagStepRRM(self):
+        if self.parent.modConfig.EnableAF:            
+            self.parent.motors.TurningMotorSpin(self.SpinSpeed, 300 + self.HoldTime)            
+            if (self.Level > 0):
+                self.setRockmagStep(self.parent.modConfig.TransverseCoilSystem)            
+            self.parent.motors.TurningMotorSpin(0)
+        
+        return
+    
+    '''
+    '''
+    def setRockmagStepRRMz(self):
+        if self.parent.modConfig.EnableAF:            
+            self.parent.motors.TurningMotorSpin(self.SpinSpeed, 300 + self.HoldTime)
+            if (self.Level > 0):
+                self.setRockmagStep(self.parent.modConfig.AxialCoilSystem)            
+            self.parent.motors.TurningMotorSpin(0)
+            
+        return
+   
+    '''--------------------------------------------------------------------------------------------
+                        
+                        Public API Functions
+                        
+    --------------------------------------------------------------------------------------------'''
+    '''
+    '   August 11, 2010
+    '   Mod to Public Sub PerformStep
+    '
+    '   Isaac Hilburn
+    '
+    '   Summary:    Added If ... then ... elseif ... then statments to select the correct AFsystem to do
+    '               the treatment for the rock mag step.
+    '               Also, cleaned up the code appearance so that it's easier to read / understand.  Also
+    '               added more code documentation
+    '''
+    def PerformStep(self, specimen):        
+        if self.parent.checkProgramHaltRequest():
+            return
+        
+        if (self.parent.modConfig.ARMMax > 0):
+            self.parent.apsIRM.SetBiasField(0)
+        
+        if not ((self.StepType == RockmagStepAF) or \
+                (self.StepType == RockmagStepARM) or \
+                (self.StepType == RockmagStepPulseIRMAxial) or \
+                (self.StepType == RockmagStepPulseIRMTrans) or \
+                (self.StepType == RockmagStepRRM) or \
+                (self.StepType == RockmagStepVRM) or \
+                (self.StepType == RockmagStepUAFX1) or \
+                (self.StepType == RockmagStepUAFX2) or \
+                (self.StepType == RockmagStepUAFZ1) or \
+                (self.StepType == RockmagStepaTAFX) or \
+                (self.StepType == RockmagStepaTAFY) or \
+                (self.StepType == RockmagStepaTAFZ) or \
+                (self.StepType == RockmagStepAFmax) or \
+                (self.StepType == RockmagStepAFz)):
+            return
+
+        '''        
+            (August 2010 - I Hilburn)
+            Added in logical conditions to check to see that the necessary module
+            for a rockmag step is enabled
+        
+            Check AF module
+        '''
+        if (((self.StepType == RockmagStepAF) or \
+            (self.StepType == RockmagStepAFz) or \
+            (self.StepType == RockmagStepUAFX1) or \
+            (self.StepType == RockmagStepUAFX2) or \
+            (self.StepType == RockmagStepUAFZ1) or \
+            (self.StepType == RockmagStepaTAFX) or \
+            (self.StepType == RockmagStepaTAFY) or \
+            (self.StepType == RockmagStepaTAFZ) or \
+            (self.StepType == RockmagStepAFmax) or \
+            (self.StepType == RockmagStepARM)) and \
+            (not self.parent.modConfig.EnableAF)):
+            # Wha-oh, user is trying to do an AF step without the AF module switched on
+            MsgBox = "AF Module is currently disabled. AF demag cannot be performed."
+            self.parent.displayMessageBox(caption="Whoops!", message=MsgBox, pause=True)
+            return
+            
+        
+        # Check IRM Axial module
+        if ((self.StepType == RockmagStepPulseIRMAxial) and \
+           (not self.parent.modConfig.EnableAxialIRM)):
+            # Wha-oh, user is trying to do an IRM axial step without the module switched on
+            MsgBox = "Axial IRM Module is currently disabled. IRM Axial pulse cannot be performed."
+            self.parent.displayMessageBox(caption="Whoops!", message=MsgBox, pause=True)
+            return
+        
+        # Check IRM Transverse module
+        if ((self.StepType == RockmagStepPulseIRMTrans) and \
+           (not self.parent.modConfig.EnableTransIRM)):
+            # Wha-oh, user is trying to do an IRM transverse step without the module switched on
+            MsgBox = "Transverse IRM Module is currently disabled. " 
+            MsgBox += "IRM Transverse pulse cannot be performed."
+            self.parent.displayMessageBox(caption="Whoops!", message=MsgBox, pause=True)
+            return
+        
+        # Check ARM
+        if ((self.rockmagsteptype == RockmagStepARM) and \
+           (not self.parent.modConfig.EnableARM)):
+            # MsgBox the user - ARM module is disabled
+            MsgBox = "ARM Module is currently disabled. " 
+            MsgBox += "ARM Bias Voltage cannot be used right now, " 
+            MsgBox += "though the AF module is enabled."
+            self.parent.displayMessageBox(caption="Whoops!", message=MsgBox, pause=True)
+            return
+        
+        if (specimen.parent.doBoth and (not specimen.parent.doUp)):
+            return
+        
+        # (February 2010 L Carporzen) Measure the TAF and uncorrect them in sample file
+        if ((self.StepType == RockmagStepaTAFX) or \
+           (self.StepType == RockmagStepaTAFY) or \
+           (self.StepType == RockmagStepaTAFZ)):
+            if (self.parent.measurements.frmMeasure_lblDemag != specimen.parent.measurementSteps.CurrentStep.DemagStepLabelLong):            
+                # We assume that we have the same height than before                
+                self.parent.motors.HomeToTop()
+                
+                message = "Doing " + self.StepType
+                message += " axial demagnetization.\n"
+                message += "What is the height (in cm) of the sample?\n \n"
+                message += "Orientation conventions:\n"
+                message += "aTAFX vertical quartz disk with arrow toward the top and "
+                message += "sample on the clean lab side of the disk.\n"
+                message += "aTAFY vertical quartz disk with arrow toward the oven and "
+                message += "sample on the clean lab side of the disk."
+                title = "Important!"  
+                inputValue = specimen.SampleHeight / self.parent.modConfig.UpDownMotor1cm                
+                valX = self.parent.displayInputForm(message=message, title=title, inputValue=inputValue)
+                specimen.SampleHeight = self.parent.modConfig.UpDownMotor1cm * valX
+                    
+            
+        # Position the center of the sample in the center of the
+        # rock-mag coils
+        SampleCenterRMPosition = int(self.parent.modConfig.AFPos + specimen.SampleHeight / 2)
+            
+        if ((SampleCenterRMPosition / abs(SampleCenterRMPosition)) != (self.parent.modConfig.AFPos / abs(self.parent.modConfig.AFPos))):            
+            # crap... our sample is too large to put in the AF coil!
+            return
+        
+        if (self.StepType == RockmagStepPulseIRMAxial):            
+            self.parent.motors.UpDownMove(0, 1)            
+        else:            
+            #  Move somewhat slowly into AF region
+            self.parent.motors.UpDownMove(SampleCenterRMPosition, 1)
+        
+        
+        self.parent.motors.TurningMotorRotate(0)
+        
+        # Set the ARM Bias field if this rock-mag step requires it
+        if (self.parent.modConfig.EnableARM and (self.BiasField > 0) and \
+           ((self.StepType == RockmagStepARM) or \
+            (self.StepType == RockmagStepRRM) or \
+            (self.StepType == RockmagStepRRMz))):
+            self.parent.apsIRM.SetBiasField(self.BiasField)
+                
+        self.parent.modAF_DAQ.ClearAFErrorStatus()
+        self.parent.modAF_DAQ.InitDefault_AFErrorResponseTable()
+        
+        #Select Case mvarStepType            
+        if (self.StepType == RockmagStepAF):
+            self.setRockmagStepAF()
+                                                
+        elif (self.StepType == RockmagStepAFmax):
+            self.setRockmagStepAFmax()
+                                                
+        elif (self.StepType == RockmagStepAFz):
+            self.setRockmagStepAFz()
+                            
+        elif (self.StepType == RockmagStepUAFX1):
+            self.setRockmagStepUAFX1()
+                            
+        elif (self.StepType == RockmagStepUAFX2):
+            self.setRockmagStepUAFX2()
+                            
+        elif (self.StepType == RockmagStepUAFZ1):
+            self.setRockmagStepUAFZ1()                
+            
+        elif (self.StepType == RockmagStepaTAFX):
+            self.setRockmagStepaTAFX()
+                            
+        elif (self.StepType == RockmagStepaTAFY):
+            self.setRockmagStepaTAFY()                    
+            
+        elif (self.StepType == RockmagStepaTAFZ):
+            self.setRockmagStepaTAFZ()
+                                
+        elif (self.StepType == RockmagStepARM):
+            self.setRockmagStepARM()
+                        
+        elif (self.StepType == RockmagStepVRM):
+            self.setRockmagStepVRM()
+                    
+        elif (self.StepType == RockmagStepPulseIRMAxial):
+            self.setRockmagStepPulseIRMAxial(specimen.SampleHeight)
+                                    
+        elif (self.StepType == RockmagStepRRM):
+            self.setRockmagStepRRM()
+                                    
+        elif (self.StepType == RockmagStepRRMz):
+            self.setRockmagStepRRMz()
+                                
+        if (self.BiasField > 0):        
+            self.parent.apsIRM.SetBiasField(0)
+            
+        return
         
 '''
     -----------------------------------------------------------------------------------------------
@@ -250,11 +753,11 @@ class RockmagSteps():
     
     @CurrentStep.getter
     def CurrentStep(self):
-        self._CurrentStep = RockmagStep()
+        self._CurrentStep = RockmagStep(self.mainForm)
         self._CurrentStep.StepType = ''
         
-        if (len(self.Item[0]) > self.CurrentStepIndex):
-            self._CurrentStep = self.Item[0][self.CurrentStepIndex]
+        if (len(self.Item) > self.CurrentStepIndex):
+            self._CurrentStep = self.Item[self.CurrentStepIndex]
         
         return self._CurrentStep
     
@@ -273,7 +776,9 @@ class RockmagSteps():
     '''
     '''
     def AdvanceStep(self):
-        self.CurrentStepIndex = (self.CurrentStepIndex + 1) % (self.Count)
+        self.CurrentStepIndex = (self.CurrentStepIndex + 1)
+        if (self.CurrentStepIndex >= self.Count):
+            self.CurrentStepIndex = -1            
         return
     
     '''
@@ -308,14 +813,7 @@ class RockmagSteps():
         objNewMember.Remarks = Remarks 
         objNewMember.key = "S" + str(self.nextStepID)
         
-        if (BeforeStep > 0):
-            self.Item.append([objNewMember, "S" + str(self.nextStepID), BeforeStep])
-            
-        elif (AfterStep > 0):
-            self.Item.append([objNewMember, "S" + str(self.nextStepID),None, AfterStep]) 
-            
-        else:
-            self.Item.append([objNewMember, "S" + str(self.nextStepID)])
+        self.Item.append(objNewMember)
         
         self.nextStepID = self.nextStepID + 1
         

@@ -85,7 +85,7 @@ class MotorControl(SerialPortDevice):
                 
         # Send Command and its response to the GUI
         if (self.modConfig.queue != None):
-            self.modConfig.queue.put('MotorControl:Command Exchange: ' + self.label + ';' + cmdStr + ';' + resplist[0])
+            self.modConfig.queue.put('frmDCMotors:Command Exchange: ' + self.label + ';' + cmdStr + ';' + resplist[0])
                 
         return respStr 
 
@@ -132,12 +132,12 @@ class MotorControl(SerialPortDevice):
         routines to denote the current location as Zero so that all other
         locations can be defined as an offset from Zero.
     '''
-    def zeroTargetPos(self, attempt_number = 1):
+    def ZeroTargetPos(self, attempt_number = 1):
         respStr = self.sendMotorCommand('145')
         
         if (not ('*' in respStr) and (attempt_number < 5)):
             time.sleep(0.25)
-            self.zeroTargetPos(attempt_number+1) 
+            self.ZeroTargetPos(attempt_number+1) 
         
         self.readPosition()        
         return             
@@ -219,7 +219,7 @@ class MotorControl(SerialPortDevice):
     def moveMotor(self, moveMotorPos, moveMotorVelocity, waitingForStop=True, stopEnable=0, stopCondition=0):
         # Send Command and its response to the GUI
         if (self.modConfig.queue != None):
-            self.modConfig.queue.put('MotorControl:Motor Info: ' + self.label + ';Position ' + str(moveMotorPos) + ';Velocity ' + str(int(moveMotorVelocity)))
+            self.modConfig.queue.put('frmDCMotors:Motor Info: ' + self.label + ';Position ' + str(moveMotorPos) + ';Velocity ' + str(int(moveMotorVelocity)))
         
         self.pollMotor()
         self.clearPollStatus()
@@ -246,7 +246,7 @@ class MotorControl(SerialPortDevice):
     def moveMotorOnTime(self, moveMotorPos, moveMotorAcceleration, waitingForStop=True, stopEnable=0, stopCondition=0):
         # Send Command and its response to the GUI
         if (self.modConfig.queue != None):
-            self.modConfig.queue.put('MotorControl:Motor Info: ' + self.label + ';Position ' + str(moveMotorPos) + ';Acceleration ' + str(moveMotorAcceleration))
+            self.modConfig.queue.put('frmDCMotors:Motor Info: ' + self.label + ';Position ' + str(moveMotorPos) + ';Acceleration ' + str(moveMotorAcceleration))
         
         self.pollMotor()
         self.clearPollStatus()
@@ -288,7 +288,7 @@ class MotorControl(SerialPortDevice):
     def relabelPos(self, position):
         iPosition = int(position)
         while (abs(self.readPosition() - iPosition) > 10):
-            self.zeroTargetPos()
+            self.ZeroTargetPos()
             # @16 11 10 num 'load register
             self.sendMotorCommand('11 10 ' + str(-1*iPosition))
             # @16 165 1802 ' subtract register 10 from T&P

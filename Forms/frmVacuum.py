@@ -164,7 +164,7 @@ class frmVacuum(wx.Frame):
     '''
     def onShow(self, event):
         if (self.parent != None):
-            self.parent.NOCOMM_Flag = False
+            self.parent.modConfig.processData.NOCOMM_MODE = False
             self.parent.modConfig.processData.vacuumEnable = True
                 
             if (self.parent.devControl.vacuum == None):
@@ -183,8 +183,8 @@ class frmVacuum(wx.Frame):
     '''
     def onClosed(self, event):
         if (self.parent != None):
-            if 'VacuumControl' in self.parent.panelList.keys():          
-                del self.parent.panelList['VacuumControl']
+            if 'frmVacuum' in self.parent.panelList.keys():          
+                del self.parent.panelList['frmVacuum']
                 
         self.Destroy()
         return

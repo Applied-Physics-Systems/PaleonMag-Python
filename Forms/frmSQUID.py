@@ -223,7 +223,7 @@ class frmSQUID(wx.Frame):
     '''
     '''
     def onShow(self, event):
-        self.parent.NOCOMM_Flag = False
+        self.parent.modConfig.processData.NOCOMM_MODE = False
         self.parent.modConfig.processData.squidEnable = True
         
         if (self.parent.devControl.SQUID != None):
@@ -243,8 +243,8 @@ class frmSQUID(wx.Frame):
     '''
     def onClosed(self, event):
         if (self.parent != None):
-            if 'SQUIDControl' in self.parent.panelList.keys():          
-                del self.parent.panelList['SQUIDControl']
+            if 'frmSQUID' in self.parent.panelList.keys():          
+                del self.parent.panelList['frmSQUID']
                 
         self.Destroy()
         return

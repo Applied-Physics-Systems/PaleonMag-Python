@@ -3,6 +3,7 @@ Created on Nov 6, 2024
 
 @author: hd.nguyen
 '''
+import os
 import time
 
 from Hardware.Device.SerialPortDevice import SerialPortDevice
@@ -29,7 +30,7 @@ class IrmArmControl(SerialPortDevice):
     '''
 
 
-    def __init__(self, baudRate, pathName, comPort, Label, modConfig):
+    def __init__(self, baudRate, pathName, comPort, Label, parent):
         '''
         Constructor
         '''
@@ -39,11 +40,16 @@ class IrmArmControl(SerialPortDevice):
         self.CurrentBiasField = 0   
         self.CoilsLocked = False     
         self.coilLabel = 'Axial'
-        self.parent = None
-        self.queue = None
+        self.parent = parent
         self.IRMInterrupt = False
                 
-        SerialPortDevice.__init__(self, baudRate, 'IrmArmControl', pathName, comPort, Label, modConfig)
+        SerialPortDevice.__init__(self, baudRate, 'IrmArmControl', pathName, comPort, Label, self.parent.modConfig)
+
+    '''
+    '''
+    def update_frmIRMARM(self, message):
+        self.modConfig.queue.put('frmIRMARM:' + message)
+        return
 
     '''--------------------------------------------------------------------------------------------
                         
@@ -423,7 +429,7 @@ class IrmArmControl(SerialPortDevice):
             txtTemp = ':Temp2 = ' + "{:.2f}".format(Temp2)
             
         if (txtTemp != ''):
-            self.queue.put('IRMControl' + txtTemp)
+            self.update_frmIRMARM(txtTemp)
          
         # Check Temperature to see if it is not zeroed (gone within 20 deg of -1 * Toffset)
         if not self.parent.ADwin.ValidSensorTemp(Temp1, Temp2):             
@@ -487,7 +493,7 @@ class IrmArmControl(SerialPortDevice):
             Sum += working
         
         outVoltage = Sum / Times / self.modConfig.PulseReturnMCCVoltConversion        
-        self.queue.put('IRMControl:Read Voltage = ' + "{:.1f}".format(outVoltage))
+        self.update_frmIRMARM('Read Voltage = ' + "{:.1f}".format(outVoltage))
         
         return outVoltage
     
@@ -579,23 +585,24 @@ class IrmArmControl(SerialPortDevice):
         else:
             # Check if level is in range
             if (abs(target) > self.modConfig.PulseAxialMax):
-                warningMessage = 'Warning:Target IRM Peak Field (' + str(abs(target)) + ' '
+                warningMessage = 'Target IRM Peak Field (' + str(abs(target)) + ' '
                 warningMessage += self.modConfig.AFUnits + ') is above the currently set value for the Maximum IRM Peak Field ('
                 warningMessage += str(self.modConfig.PulseAxialMax) + ' ' + self.modConfig.AFUnits + ')'
-                self.queue.put(warningMessage)
+                self.parent.displayWarning(warningMessage)
                 return 
             
             elif (abs(target) < self.modConfig.PulseAxialMin):
-                warningMessage = 'Warning:Target IRM Peak Field (' + str(abs(target)) + ' '
+                warningMessage = 'Target IRM Peak Field (' + str(abs(target)) + ' '
                 warningMessage += self.modConfig.AFUnits + ') is below the currently set value for the Minimum IRM Peak Field ('
                 warningMessage += str(self.modConfig.PulseAxialMin) + ' ' + self.modConfig.AFUnits + ')'
-                self.queue.put(warningMessage)
+                self.parent.displayWarning(warningMessage)
                 return
                 
             target_level = str(target)
             
             # Catch Flow Pause or Flow Halt
-            self.parent.checkProgramHaltRequest()
+            if self.parent.checkProgramHaltRequest():
+                return
 
             # Set IRM Field Level
             self.SetApsIrmLevel(target_level)
@@ -606,6 +613,55 @@ class IrmArmControl(SerialPortDevice):
                 self.IRM_FireField(target_level)
                 
         return
+
+    '''
+    '''
+    def FireIRMAtField(self, Gauss):
+        self.CoilsLocked = True
+        self.update_frmIRMARM('Coil locked = True')
+            
+        # Update the program form status bar
+        self.parent.displayStatusBar('IRM Config')
+        
+        if (self.parent.modConfig.IRMSystem == "APS"):                        
+            # APS IRM System is pre-calibrated.          
+            self.parent.ADwin.TrySetRelays_ADwin('IRM Axial', True)
+            time.sleep(2)           # Allow time for relay to switch //5/10/17          
+            self.FireIRM(Gauss)
+          
+        else:
+            if ((Gauss < 0) and self.parent.modConfig.EnableIRMBackfield):
+                self.SetIRMBackFieldMode(True)
+                Gauss = -Gauss
+                
+                PulseVoltsOut = self.ConvertGaussToPulseVolts(Gauss)
+                MCCVoltsOut = self.ConvertPulseVoltsToMCCVolts(PulseVoltsOut)
+                PulseVoltsOut = -1 * PulseVoltsOut
+                
+            else:            
+                self.SetIRMBackFieldMode(False)
+                PulseVoltsOut = self.ConvertGaussToPulseVolts(Gauss)
+                MCCVoltsOut = self.ConvertPulseVoltsToMCCVolts(PulseVoltsOut)
+                        
+        if (MCCVoltsOut < 0):
+            MCCVoltsOut = 0
+        elif (MCCVoltsOut > 10):
+            MCCVoltsOut = 10
+        
+        if (self.parent.modConfig.IRMSystem != "APS"):     
+            self.FireIRM(PulseVoltsOut)
+            
+        fireIRMAtField = self.ConvertMCCVoltsToPulseVolts(MCCVoltsOut)
+        # return true field
+        
+        # Update the program form status bar
+        self.parent.displayStatusBar('')
+        
+        # Last, unlock the coil selection
+        self.CoilsLocked = False
+        self.update_frmIRMARM('Coil locked = False')
+        
+        return fireIRMAtField
 
     '''
         If the user has set that the IRM trim is wired such that it is
@@ -635,10 +691,10 @@ class IrmArmControl(SerialPortDevice):
             
         if enabling:
             self.IRMBackfieldMode = True
-            self.queue.put('IRMControl:Back Field Mode = True')
+            self.update_frmIRMARM('Back Field Mode = True')
         else:
             self.IRMBackfieldMode = False
-            self.queue.put('IRMControl:Back Field Mode = False')
+            self.update_frmIRMARM('Back Field Mode = False')
         
         return
     
@@ -647,14 +703,12 @@ class IrmArmControl(SerialPortDevice):
     def NotifySensorError(self, Temp1, Temp2):
                 
         # Create Error message
-        ErrorMessage = "Warning:AF Temperature sensors reading temperature below minimum limit.\n"
+        ErrorMessage = "AF Temperature sensors reading temperature below minimum limit.\n"
         ErrorMessage += "Sensor #1 Temp = " + "{:.2f}".format(Temp1) + " " + self.modConfig.Tunits + "\n"
         ErrorMessage += "Sensor #2 Temp = " + "{:.2f}".format(Temp2) + " " + self.modConfig.Tunits + "\n"
         ErrorMessage += "Execution has been paused. Please come in and check the temperature\n" 
         ErrorMessage += "sensor box.  The two 9V batteries may need to be replaced, or the switch may need to be turned on."
-        
-        self.queue.put(ErrorMessage)
-        
+        self.parent.displayWarning(ErrorMessage)        
         return
     
     '''
@@ -682,9 +736,9 @@ class IrmArmControl(SerialPortDevice):
     def chargeIRM(self, StartTime, TargetVoltage, DaqControlVoltage, CalibrationMode):
         # Turn off trim / voltage bleed
         self.parent.ADwin.DoDAQIO(self.modConfig.IRMTrim, boolValue=self.TrimOnOff(False))        
-        self.queue.put("IRMControl:IRM Status = Charging")            
+        self.update_frmIRMARM("IRM Status = Charging")      
         # Update Program status Bar
-        self.queue.put("Program Status:Charging...   0%")
+        self.parent.displayStatusBar("Charging...   0%")
                 
         # Wait only 0.1 seconds
         time.sleep(0.1)
@@ -715,11 +769,11 @@ class IrmArmControl(SerialPortDevice):
             lblIRMStatus = "Charging... " + "{:.2f}".format(PercentDone)
             
             # Update Program form
-            self.queue.put("Program Status:" + lblIRMStatus)
+            self.parent.displayStatusBar(lblIRMStatus)
                                                             
             # Read in the poweramp pulse_volts
             txtMCCIRMPowerAmpVoltageIn = ":Read Voltage = {:.2f}".format(readVoltage)
-            self.queue.put("IRMControl:IRM Status = " + lblIRMStatus + txtMCCIRMPowerAmpVoltageIn)
+            self.update_frmIRMARM("IRM Status = " + lblIRMStatus + txtMCCIRMPowerAmpVoltageIn)
 
             # If this IRM pulse is being run in calibration mode,
             # need to update the directions caption on frmIRM_VoltageCalibration
@@ -732,18 +786,18 @@ class IrmArmControl(SerialPortDevice):
                 self.IRMInterrupt = False
                 
                 # Update program status bar
-                self.queue.put("Program Status:Charging... Interrupted!")
-                self.queue.put("IRMControl:IRM Status = Charge Interrupted")
+                self.parent.displayStatusBar("Charging... Interrupted!")
+                self.update_frmIRMARM("IRM Status = Charge Interrupted")
                 
                 # Pause 2 seconds
                 time.sleep(2)
                 
                 # Wipe the status bars clean
-                self.queue.put("Program Status:")
+                self.parent.displayStatusBar("")
                 
                     
         # Update program status bar
-        self.queue.put("Program Status:Charging... Done!")
+        self.parent.displayStatusBar("Charging... Done!")
         return True
     
     '''
@@ -753,7 +807,7 @@ class IrmArmControl(SerialPortDevice):
         
         # Turn on trim / voltage bleed
         self.parent.ADwin.DoDAQIO(self.modConfig.IRMTrim, boolValue=self.TrimOnOff(True))
-        self.queue.put("IRMControl:IRM Trim = On")
+        self.update_frmIRMARM("IRM Trim = On")
     
         # Loop until capacitor voltage is less than 3 V
         irm_pulse_data = IRMData()
@@ -781,11 +835,11 @@ class IrmArmControl(SerialPortDevice):
             lblIRMStatus = "Trimming... " + PercentDone
             
             # Update Program form
-            self.queue.put("Program Status:" + lblIRMStatus)
+            self.parent.displayStatusBar(lblIRMStatus)
                                                             
             # Read in the poweramp pulse_volts
             txtMCCIRMPowerAmpVoltageIn = ":Read Voltage = {:.2f}".format(readVoltage)
-            self.queue.put("IRMControl:IRM Status = " + lblIRMStatus + txtMCCIRMPowerAmpVoltageIn)
+            self.update_frmIRMARM("IRM Status = " + lblIRMStatus + txtMCCIRMPowerAmpVoltageIn)
             
             # Same for either system
             self.IRMInterrupt = self.parent.checkInterruptRequest()
@@ -793,14 +847,14 @@ class IrmArmControl(SerialPortDevice):
                 self.IRMInterrupt = False
                                                                                
                 # Update program status bar
-                self.queue.put("Program Status:Trimming... Interrupted!")
-                self.queue.put("IRMControl:IRM Status = Trim Interrupted")
+                self.parent.displayStatusBar("Trimming... Interrupted!")
+                self.update_frmIRMARM("IRM Status = Trim Interrupted")
                 
                 # Pause 2 seconds
                 time.sleep(2)
                 
                 # Wipe the status bars clean
-                self.queue.put("Program Status:")
+                self.parent.displayStatusBar("")
                         
             # Pause 50 ms
             time.sleep(0.05)
@@ -808,7 +862,7 @@ class IrmArmControl(SerialPortDevice):
         # We're ready to fire the IRM coils at charge voltage = 0
         # Turn off trim / voltage bleed
         self.parent.ADwin.DoDAQIO(self.modConfig.IRMTrim, boolValue=self.TrimOnOff(False))
-        self.queue.put("IRMControl:IRM Trim = Off")
+        self.update_frmIRMARM("IRM Trim = Off")
         
         return True
 
@@ -823,20 +877,21 @@ class IrmArmControl(SerialPortDevice):
             if (self.modConfig.EnableT1 or self.modConfig.EnableT2):
                  
                 while ((Temp1 >= self.modConfig.Thot) or (Temp2 >= self.modConfig.Thot)):                     
-                    self.queue.put('IRMControl:Temp Hot')
+                    self.update_frmIRMARM('Temp Hot')
                      
                     # Loop until the temperature which was above Thot decreases at least 5 degrees before restarting
                     while ((Temp1 >= (self.modConfig.Thot - 5)) or (Temp2 >= (self.modConfig.Thot - 5))):                         
                         time.sleep(1)
                         Temp1, Temp2 = self.GetCoilTemperatures()
              
-            self.queue.put('IRMControl:Temp Normal')
+            self.update_frmIRMARM('Temp Normal')
             
-        self.parent.checkProgramHaltRequest()            
+        if self.parent.checkProgramHaltRequest():
+            return
                     
         # First, lock the Coil selection
         self.CoilsLocked = True
-        self.queue.put('IRMControl:Coil locked = True')
+        self.update_frmIRMARM('Coil locked = True')
         
         if ((not self.modConfig.EnableAxialIRM) and (not self.modConfig.EnableTransIRM)):
             return
@@ -870,9 +925,9 @@ class IrmArmControl(SerialPortDevice):
             
         # Convert back to Capacitor Volts for the displays on frmIRMARM
         TargetVoltage = self.ConvertMCCVoltsToPulseVolts(DaqControlVoltage)
-        txtOut = 'IRMControl:Volts Out = ' + "{:.1f}".format(TargetVoltage)
+        txtOut = 'Volts Out = ' + "{:.1f}".format(TargetVoltage)
         txtOut += ':Peak Field = ' + "{:.1f}".format(self.ConvertPulseVoltsToGauss(TargetVoltage))
-        self.queue.put(txtOut)
+        self.update_frmIRMARM(txtOut)
         
         DaqControlVoltage = DaqControlVoltage * self.CalculateAscBoostMultiplier(TargetVoltage)
         
@@ -886,13 +941,13 @@ class IrmArmControl(SerialPortDevice):
             ErrorMessage += "IRM Backfield Enabled = " + str(self.modConfig.EnableIRMBackfield) + "\n"
             ErrorMessage += "Axial IRM Enabled = " + str(self.modConfig.EnableAxialIRM) + "\n"
             ErrorMessage += "Transverse IRM Enabled = " + str(self.modConfig.EnableTransIRM)
-            self.queue.put('IRMControl:Error:' + ErrorMessage)
+            self.update_frmIRMARM('Error:' + ErrorMessage)
             
             self.parent.Flow_Pause()
                                    
         # Clear pulse_volts
         self.parent.ADwin.DoDAQIO(self.modConfig.IRMVoltageOut, numValue=0)
-        self.queue.put("IRMControl:Read Voltage = 0" + txtOut)
+        self.update_frmIRMARM("Read Voltage = 0" + txtOut)
         
         # Wait for pulse_volts clear command to process through
         time.sleep(0.05)
@@ -906,16 +961,16 @@ class IrmArmControl(SerialPortDevice):
         
         # Set Voltage to new IRM output pulse_volts target
         self.parent.ADwin.DoDAQIO(self.modConfig.IRMVoltageOut, numValue=DaqControlVoltage)
-        self.queue.put("IRMControl:Read Voltage = " + "{:.2f}".format(pulse_volts))
+        self.update_frmIRMARM("Read Voltage = " + "{:.2f}".format(pulse_volts))
                 
         # Wait again for pulse_volts set command to process
         time.sleep(0.1)
         
         # Update Status Panel
-        self.queue.put("Program Status:IRM @ " + "{:.2f}".format(TargetVoltage) + " Volts")
+        self.parent.displayStatusBar("IRM @ " + "{:.2f}".format(TargetVoltage) + " Volts")
         
         self.parent.ADwin.DoDAQIO(self.modConfig.IRMTrim, boolValue=self.TrimOnOff(False))
-        self.queue.put("IRMControl:IRM Trim = Off")
+        self.update_frmIRMARM("IRM Trim = Off")
                 
         self.stop_charging_change_threshold_in_percent = 0.1
         self.stop_trimming_change_threshold_in_percent = 0.5
@@ -944,12 +999,12 @@ class IrmArmControl(SerialPortDevice):
         self.IRMPeakVoltage = readVoltage
         
         # Update program status bar and frmIRMARM display
-        self.queue.put("Program Status:Firing!")
-        self.queue.put("IRMControl:IRM Status = Firing")
+        self.parent.displayStatusBar("Firing!")
+        self.update_frmIRMARM("IRM Status = Firing")
                     
         # Close the TTL switch to connect the IRM circuit
         self.parent.ADwin.DoDAQIO(self.modConfig.IRMFire, boolValue=False)
-        self.queue.put('IRMControl:IRM Fire = On')
+        self.update_frmIRMARM('IRM Fire = On')
         
         # Pause while the IRM pulse
         # goes through the AF Coil
@@ -974,12 +1029,12 @@ class IrmArmControl(SerialPortDevice):
         self.parent.ADwin.DoDAQIO(self.modConfig.IRMFire, boolValue=True)
         self.parent.ADwin.DoDAQIO(self.modConfig.IRMVoltageOut, numValue=0)            
         
-        #Update program status bar - IRM Pulse done
-        self.queue.put("Program Status:")
+        # Update program status bar - IRM Pulse done
+        self.parent.displayStatusBar("")
                 
         # Last, unlock the coil selection
         self.CoilsLocked = False
-        self.queue.put('IRMControl:IRM Fire = Off:Read Voltage = 0:IRM Status = :Coil locked = False')
+        self.update_frmIRMARM('IRM Fire = Off:Read Voltage = 0:IRM Status = :Coil locked = False')
     
         return
 
@@ -1023,7 +1078,8 @@ class IrmArmControl(SerialPortDevice):
     '''
     def IRM_FireField(self, target_level):
         # Catch Flow Pause or Flow Halt
-        self.parent.checkProgramHaltRequest()
+        if self.parent.checkProgramHaltRequest():
+            return
 
         # Tell APS IRM to execute pulse
         self.executeApsIrmPulse()
@@ -1035,14 +1091,15 @@ class IrmArmControl(SerialPortDevice):
                 return
             
             # Catch Flow Pause or Flow Halt
-            self.parent.checkProgramHaltRequest()
+            if self.parent.checkProgramHaltRequest():
+                return
             
             # Send warning message
-            warningMessage = 'Warning: Over ' + str(APS_GET_RESPONSE_SERIAL_COMM_TIMEOUT_IN_SECONDS)
+            warningMessage = 'Over ' + str(APS_GET_RESPONSE_SERIAL_COMM_TIMEOUT_IN_SECONDS)
             warningMessage += ' seconds have elapsed since the IRM Fire Command was sent '
             warningMessage += 'for an IRM Pulse at ' + target_level + ' ' + self.modConfig.AFUnits + ' and '
             warningMessage += ' no ' + APS_DONE_STRING + ' response has been received from the APS IRM Device.'
-            self.queue.put(warningMessage)
+            self.parent.displayWarning(warningMessage)
             time.sleep(1)           
                              
         return
@@ -1052,10 +1109,10 @@ class IrmArmControl(SerialPortDevice):
     def IRM_SetField(self, Gauss, pauseFire):
         # First, lock the Coil selection
         self.CoilsLocked = True
-        self.queue.put('IRMControl:Coil locked = True')
+        self.update_frmIRMARM('Coil locked = True')
         
         outField = 0
-        txtPulseVolts = 'IRMControl'
+        txtPulseVolts = ''
         if (self.modConfig.IRMSystem == "APS"):                        
             # APS IRM System is pre-calibrated.          
             self.parent.ADwin.TrySetRelays_ADwin('IRM Axial', True)    
@@ -1075,7 +1132,7 @@ class IrmArmControl(SerialPortDevice):
                 PulseVoltsOut = self.ConvertGaussToPulseVolts(Gauss)
                 MCCVoltsOut = self.ConvertPulseVoltsToMCCVolts(PulseVoltsOut)
         
-            txtPulseVolts += ':Volts Out = ' + "{:.2f}".format(PulseVoltsOut)            
+            txtPulseVolts += 'Volts Out = ' + "{:.2f}".format(PulseVoltsOut) + ':'            
             if (MCCVoltsOut < 0):
                 MCCVoltsOut = 0
             elif (MCCVoltsOut > 10):
@@ -1085,7 +1142,7 @@ class IrmArmControl(SerialPortDevice):
                 
         # Last, unlock the coil selection
         self.CoilsLocked = False
-        self.queue.put(txtPulseVolts + ':Coil locked = False:Set Field = Done:IRM Status = Done')
+        self.update_frmIRMARM(txtPulseVolts + 'Coil locked = False:Set Field = Done:IRM Status = Done')
         
         return outField
 
@@ -1112,9 +1169,9 @@ class IrmArmControl(SerialPortDevice):
             voltage = self.modConfig.ARMVoltMax
         
         # Display the new bias voltage
-        txtBiasField = 'IRMControl:Bias Field = '
+        txtBiasField = 'Bias Field = '
         txtBiasField += "{:.2f}".format(voltage/self.modConfig.ARMVoltGauss)
-        self.queue.put(txtBiasField)
+        self.update_frmIRMARM(txtBiasField)
         
         # Zero the ARM Bias voltage on the ARM Box
         self.parent.ADwin.DoDAQIO(self.modConfig.ARMVoltageOut, numValue=0)
@@ -1135,7 +1192,7 @@ class IrmArmControl(SerialPortDevice):
             self.parent.ADwin.DoDAQIO(self.modConfig.ARMVoltageOut, numValue=voltage)
             txtMCCARMVout = txtMCCARMSet + ':ARM V = '
             txtMCCARMVout += "{:.2f}".format(voltage)
-            self.queue.put('IRMControl:' + txtMCCARMVout)
+            self.update_frmIRMARM(txtMCCARMVout)
             
             # Wait 1 second to allow the ARM charge to settle
             time.sleep(1)
@@ -1152,7 +1209,7 @@ class IrmArmControl(SerialPortDevice):
             # fromt the ARM coils
             self.parent.ADwin.DoDAQIO(self.modConfig.ARMSet, boolValue=True)
             txtMCCARMSet = txtMCCARMVout + ":ARM Set = Off"
-            self.queue.put('IRMControl:' + txtMCCARMSet)
+            self.update_frmIRMARM(txtMCCARMSet)
         
         return
     
@@ -1172,7 +1229,7 @@ class IrmArmControl(SerialPortDevice):
             txtTemp += ':Temp2 = ' + "{:.2f}".format(Temp2)
         
         if (txtTemp != ''):
-            self.queue.put('IRMControl' + txtTemp)
+            self.update_frmIRMARM(txtTemp)
         
         return
     
@@ -1194,4 +1251,27 @@ class IrmArmControl(SerialPortDevice):
         self.parent.ADwin.DoDAQIO(channelConfig, boolValue=mode)
         return
     
+    '''
+    '''
+    def IRMCenteringPos(self, field=0):
+        return self.parent.modConfig.IRMPos
+    
+'''
+'''    
+if __name__=='__main__':
+    try:    
+        pathName = os.getcwd() + '\\'
+        irmControl = IrmArmControl(9600, pathName, 'COM12', 'Irm', modConfig=None)
+        
+        irmControl.openDevice()
+        
+        irmControl.SendApsIrmCommand_AndThenWait600msec(APS_IRM_SET_LOWRANGE + str(200))          
+        time.sleep(1)
+              
+        irmControl.closeDevice()
+        print('Done !!!')
+        
+    except Exception as e:
+        print('Error!! ' + str(e))
+
     

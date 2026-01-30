@@ -21,6 +21,15 @@ class AF_2GControl(SerialPortDevice):
         self.modConfig = modConfig
         if (comPort != None):
             SerialPortDevice.__init__(self, baudRate, 'AF_2GControl', pathName, comPort, Label, modConfig)
+            
+        self.txtWaitingTime = 0
+        self.currentDelay = 0
+       
+    '''--------------------------------------------------------------------------------------------
+                        
+                        public API Functions
+                        
+    --------------------------------------------------------------------------------------------'''        
         
     '''
     ' Find X (input to AF) from field
@@ -114,4 +123,47 @@ class AF_2GControl(SerialPortDevice):
             
         return
     
+    '''
+    '''
+    def Connect(self):
+        self.PortOpen = self.openDevice()
+        return
+    
+    '''
+    '''
+    def ExecuteRamp(self, Mode, 
+                    AFCoilSystem = -128, 
+                    Amplitude = -1.0,
+                    Delay = -1, 
+                    RampRate = -1):
+                           
+        print('TODO: AF_2GControl.ExecuteRamp')        
+        return
+    
+    '''
+    '''
+    def ConfigureDelay(self, Delay):
+        print('TODO: AF_2GControl.ConfigureDelay')
+        return
+   
+    
+    '''
+    '''
+    def CycleWithHold(self, HoldTime = 0, 
+                      AFCoilSystem = -128, 
+                      Amplitude = -1.0, 
+                      RampRate = -1):
+        
+        olddelay = self.currentDelay
+        
+        if (HoldTime == 0):
+            HoldTime = self.parent.modConfig.AFDelay
+            
+        self.ExecuteRamp("C", AFCoilSystem, Amplitude, HoldTime, RampRate)
+        
+        if (HoldTime != self.parent.modConfig.AFDelay):
+            self.ConfigureDelay(olddelay)
+        
+        return
+   
     

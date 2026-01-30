@@ -23,7 +23,6 @@ class SampleIndexRegistration():
         self.filename = ''
         self.locality = ''
         self.BackupFileDir = ''
-        self._curDemag = ''
         
         self.avgSteps = 0
         
@@ -33,11 +32,12 @@ class SampleIndexRegistration():
         
         self.doUp = False
         self.doBoth = False
-        
-        self.measurementSteps = RockmagSteps(self)
-        
         self.RockmagMode = False
+
+        self._curDemag = ''
+        self._curDemagLong = ''
         
+        self.measurementSteps = RockmagSteps(self, self.parent)                
         self.sampleSet = Samples(self)
         
     '''--------------------------------------------------------------------------------------------
@@ -58,6 +58,21 @@ class SampleIndexRegistration():
             self._curDemag = self.measurementSteps.CurrentStep.DemagStepLabel
             
         return self._curDemag
+    
+    @property
+    def curDemagLong(self):
+        return self._curDemagLong
+    
+    @curDemagLong.getter
+    def curDemagLong(self):
+        if (self.measurementSteps.Count == 0):
+            return self._curDemagLong
+            
+        else:
+            self._curDemagLong = self.measurementSteps.CurrentStep.DemagStepLabelLong
+            
+        return self._curDemagLong
+
                         
     '''
     '''
@@ -104,8 +119,9 @@ class SampleIndexRegistrations():
         self.Item = []
         self.SampleHolderIndex = None
         self.SampleHolderIndexTag = '!Holder'
-
+        
         self._Count = 0
+        self.MakeSampleHolder()
 
     '''--------------------------------------------------------------------------------------------
                         
@@ -142,6 +158,16 @@ class SampleIndexRegistrations():
                 samples = item
         
         return samples
+
+    '''
+    '''
+    def IsValidFile(self, filename):
+        isValidFile = False
+        
+        if (len(self.GetItem(filename).filename) > 0):
+            isValidFile = True 
+        
+        return isValidFile
     
     '''
     '''
@@ -224,8 +250,8 @@ class SampleIndexRegistrations():
         self.SampleHolderIndex.avgSteps = 1
         self.SampleHolderIndex.doUp = True
         self.SampleHolderIndex.doBoth = False
-        self.SampleHolderIndex.measurementSteps = RockmagSteps(self)
-        self.SampleHolderIndex.sampleSet = Samples()
+        self.SampleHolderIndex.measurementSteps = RockmagSteps(self, self.parent)
+        self.SampleHolderIndex.sampleSet = Samples(parent=self.SampleHolderIndex)
         
         '''    
             (March 10, 2011 - I Hilburn)
@@ -245,7 +271,7 @@ class SampleIndexRegistrations():
             With error checking in case a change is made to the code
             that eliminates the SampleHolder global variable
         '''
-        self.parent.modConfig.processData.SampleHolder = self.SampleHolderIndex.sampleSet.getItemWithKey("Holder")
+        self.parent.SampleHolder = self.SampleHolderIndex.sampleSet.getItemWithKey("Holder")
         return
     
     '''

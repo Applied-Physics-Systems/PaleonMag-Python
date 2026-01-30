@@ -31,7 +31,7 @@ class frmAFTuner(wx.Frame):
         self.SetSize((400, 305))
         self.SetTitle('MCC AF Tuner')
         self.Centre()
-        self.Show(True)
+        return
 
 #===================================================================================================
 # Main Module
@@ -40,6 +40,7 @@ if __name__=='__main__':
     try:    
         app = wx.App(False)
         frame = frmAFTuner(parent=None)
+        frame.Show(True)
         app.MainLoop()    
         
     except Exception as e:

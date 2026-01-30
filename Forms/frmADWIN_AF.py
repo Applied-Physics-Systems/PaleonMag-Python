@@ -80,7 +80,6 @@ class frmADWIN_AF(wx.Frame):
         self.SetSize((500, 690))
         self.SetTitle('ADWIN AF Ramp')
         self.Centre()
-        self.Show(True)
     
     '''
     '''
@@ -700,7 +699,7 @@ class frmADWIN_AF(wx.Frame):
     def onShow(self, event):
                 
         if (self.parent != None):
-            self.parent.NOCOMM_Flag = False
+            self.parent.modConfig.processData.NOCOMM_MODE = False
             self.parent.modConfig.processData.adwinEnable = True
 
             coilSelection = self.getCoilRBtnSelection() 
@@ -727,8 +726,8 @@ class frmADWIN_AF(wx.Frame):
     def onClosed(self, event):
         if (self.parent != None):
             if self.parent.panelList:
-                if 'ADWinAFControl' in self.parent.panelList.keys():          
-                    del self.parent.panelList['ADWinAFControl']
+                if 'frmADWIN_AF' in self.parent.panelList.keys():          
+                    del self.parent.panelList['frmADWIN_AF']
                 
         self.Destroy()
         
@@ -740,6 +739,7 @@ if __name__=='__main__':
     try:    
         app = wx.App(False)
         frame = frmADWIN_AF(parent=None)
+        frame.Show(show=True)
         app.MainLoop()    
         
     except Exception as e:

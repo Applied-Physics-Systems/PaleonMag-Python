@@ -47,7 +47,7 @@ class ModChanger():
         maxValue =self.parent.modConfig.SlotMax
         newpos = self.parent.displayInputForm(message, title, inputValue, minValue, maxValue)
 
-        self.parent.motors.SetChangerHole(int(newpos))
+        self.parent.motors.SetChangerHole(int(float(newpos)))
         self.parent.currentPosInitialized = True
         return
         

@@ -297,7 +297,7 @@ class frmIRMARM(wx.Frame):
     '''
     def onShow(self, event):
         if (self.parent != None):
-            self.parent.NOCOMM_Flag = False
+            self.parent.modConfig.processData.NOCOMM_MODE = False
             self.parent.modConfig.processData.irmArmEnable = True
             self.parent.modConfig.processData.adwinEnable = True
         
@@ -391,6 +391,13 @@ class frmIRMARM(wx.Frame):
                 else:
                     self.polarityChkBox.SetValue(False)                
                     
+            elif 'Coil Type = ' in eachEntry:
+                coilType = eachEntry.strip().replace('Coil Type = ', '')
+                if 'Axial' in coilType:
+                    self.axialRBtn.SetValue(True)
+                else:
+                    self.transRBtn.SetValue(True)
+                    
             elif 'Set Field = Done' in eachEntry:
                 self.fireFieldBtn.Enable(True)
                             
@@ -412,7 +419,7 @@ if __name__=='__main__':
         
         testUnit = frmTestUnit()
         irmARMControl = frmIRMARM(parent=testUnit)
-        testUnit.panelList['IRMControl'] = irmARMControl
+        testUnit.panelList['frmIRMARM'] = irmARMControl
         irmARMControl.Show(True)        
         app.MainLoop()    
         

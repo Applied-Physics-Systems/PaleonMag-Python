@@ -32,6 +32,7 @@ class SerialPortDevice():
         self.modConfig = modConfig
         self.PortOpen = False 
         self.comPortValidFlag = False
+        self.interruptReadLineFlag = False
         try:            
             self.DeviceDictionary = {}
             # Build dictionary for the instrument
@@ -199,10 +200,34 @@ class SerialPortDevice():
         while keepReading:
             readCharacters = self.serialDevice.read(self.serialDevice.in_waiting).decode('utf-8')
             readLine += readCharacters
-            if (('\x04' in readLine) or ('\n' in readLine) or ('\r' in readLine) or ('\0' in readLine)):
+            if (('\x04' in readLine) or ('\n' in readLine) or ('\r' in readLine) or ('\0' in readLine) or self.interruptReadLineFlag):
                 keepReading = False 
                     
         return readLine 
+
+    #===================================================================================================
+    # Read an interger from the device
+    #---------------------------------------------------------------------------------------------------
+    def readFloat(self):
+        respStr = self.readLine()
+        try:
+            readValue = float(respStr)
+        except:
+            readValue = 0.0
+            
+        return readValue
+
+    #===================================================================================================
+    # Read an interger from the device
+    #---------------------------------------------------------------------------------------------------
+    def readInt(self):
+        respStr = self.readLine()
+        try:
+            readValue = int(respStr)
+        except:
+            readValue = 0
+            
+        return readValue
 
     #===================================================================================================
     # Read a line from the device
@@ -318,7 +343,7 @@ class SerialPortDevice():
 if __name__=='__main__':
     try:    
         currentPath = os.getcwd()
-        Test = SerialPortDevice(9600, 'Watlow_Oven', currentPath)
+        Test = SerialPortDevice(9600, 'IrmArmControl', currentPath)
         serialData = Test.waitForData()
         print(serialData)
         Test.closeDevice()

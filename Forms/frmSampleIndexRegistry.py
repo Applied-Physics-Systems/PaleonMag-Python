@@ -364,20 +364,20 @@ class frmSampleIndexRegistry(wx.Frame):
             
             # Check to see if any of the RockMag steps need their susceptibility to be measured
             for i in range(0, self.workingSamIndex.measurementSteps.Count):            
-                    if ((self.workingSamIndex.measurementSteps.Item[i][0].MeasureSusceptibility or \
+                    if ((self.workingSamIndex.measurementSteps.Item[i].MeasureSusceptibility or \
                         self.MeasSusc) and self.parent.modConfig.EnableSusceptibility):                    
                         self.MeasSusc = True
                         break
                         
                     elif not self.parent.modConfig.EnableSusceptibility:                    
                         self.MeasSusc = False
-                        self.workingSamIndex.measurementSteps.Item[i][0].MeasureSusceptibility = False
+                        self.workingSamIndex.measurementSteps.Item[i].MeasureSusceptibility = False
             
             if (self.chkSAMdoUp.GetValue() and (self.workingSamIndex.measurementSteps.Count > 1)):
                 self.chkSAMdoDown.SetValue(False)
             
         elif (self.demagType == 'Other:'):
-            self.workingSamIndex.measurementSteps = RockmagSteps()
+            self.workingSamIndex.measurementSteps = RockmagSteps(self, self.parent)
             self.workingSamIndex.measurementSteps.Add(self.txtSAMSetDemag.GetValue(), \
                                                       self.get_Int(self.txtSAMSetDemagLevel), \
                                                       MeasureSusceptibility = \
@@ -386,7 +386,7 @@ class frmSampleIndexRegistry(wx.Frame):
             self.workingSamIndex.RockmagMode = True         # False (March 2008 L Carporzen) Always write the RMG file
             
         else:
-            self.workingSamIndex.measurementSteps = RockmagSteps()
+            self.workingSamIndex.measurementSteps = RockmagSteps(self, self.parent)
             self.workingSamIndex.RockmagMode = True         # False (March 2008 L Carporzen) Always write the RMG file
             self.workingSamIndex.measurementSteps.Add(self.demagType, \
                                                       self.get_Int(self.txtSAMSetDemagLevel), \
@@ -744,8 +744,8 @@ class frmSampleIndexRegistry(wx.Frame):
     def onClose(self, event):
         if (self.parent != None):
             if self.parent.panelList:
-                if 'RegistryControl' in self.parent.panelList.keys():          
-                    del self.parent.panelList['RegistryControl']
+                if 'frmSampleIndexRegistry' in self.parent.panelList.keys():          
+                    del self.parent.panelList['frmSampleIndexRegistry']
                 
         self.Destroy()
 

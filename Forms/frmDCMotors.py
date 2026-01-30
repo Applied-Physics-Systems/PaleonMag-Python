@@ -490,8 +490,8 @@ class frmDCMotors(wx.Frame):
     def onClosed(self, event):
         if (self.parent != None):
             if self.parent.panelList:
-                if 'MotorControl' in self.parent.panelList.keys():          
-                    del self.parent.panelList['MotorControl']
+                if 'frmDCMotors' in self.parent.panelList.keys():          
+                    del self.parent.panelList['frmDCMotors']
                 
         self.Destroy()
         return
@@ -500,7 +500,7 @@ class frmDCMotors(wx.Frame):
     '''
     def onShow(self, event):
         if (self.parent != None):
-            self.parent.NOCOMM_Flag = False
+            self.parent.modConfig.processData.NOCOMM_MODE = False
             self.parent.modConfig.processData.motorsEnable = True
         return
         
@@ -513,7 +513,7 @@ if __name__=='__main__':
         
         testUnit = frmTestUnit()
         motorControl = frmDCMotors(parent=testUnit)
-        testUnit.panelList['MotorControl'] = motorControl        
+        testUnit.panelList['frmDCMotors'] = motorControl        
         motorControl.Show(True)
         app.MainLoop()    
         

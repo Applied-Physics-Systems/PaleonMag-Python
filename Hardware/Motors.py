@@ -147,9 +147,10 @@ class Motors():
     '''
         Move the UpDown motor
     '''
-    def upDownMove(self, position, speed, waitingForStop=True):
+    def UpDownMove(self, position, speed, waitingForStop=True):
         if (self.parent != None): 
-            self.parent.checkProgramHaltRequest()
+            if self.parent.checkProgramHaltRequest():
+                return
                 
         movementSign = 1
         startingPos = self.upDown.readPosition()
@@ -193,7 +194,7 @@ class Motors():
             
             up_down_position = self.upDown.readPosition()
             if (abs(up_down_position) > (abs(self.changerX.SampleBottom) + 50)):
-                self.upDownMove(self.upDown.SampleTop, 0)
+                self.UpDownMove(self.upDown.SampleTop, 0)
                 
             upDownPosition = self.upDown.readPosition()
             if (abs(upDownPosition) >= (abs(self.modConfig.SampleBottom) + 50)):
@@ -398,7 +399,7 @@ class Motors():
         
     '''--------------------------------------------------------------------------------------------
                         
-                        Motor Control Task Functions
+                        Public API Functions
                         
     --------------------------------------------------------------------------------------------'''
     '''
@@ -410,7 +411,8 @@ class Motors():
     def HomeToTop(self):        
         # No homing to top if the program has been halted
         if (self.parent != None):
-            self.parent.checkProgramHaltRequest()
+            if self.parent.checkProgramHaltRequest():
+                return
         
         stop_state = False
         if self.modConfig.DCMotorHomeToTop_StopOnTrue:
@@ -421,7 +423,7 @@ class Motors():
             current_updown_pos = self.upDown.readPosition()
             # If the current position is larger than 1cm, set the current position as the new Zero Target
             if (abs(current_updown_pos) > (self.modConfig.UpDownMotor1cm/10)):
-                self.upDown.zeroTargetPos()
+                self.upDown.ZeroTargetPos()
             return 
                     
         # If up/down position is greater than the sample bottom, use the normal lift speed
@@ -443,7 +445,7 @@ class Motors():
             raise ValueError('Homed to top but did not hit switch!')
             
         upDownPos = self.upDown.readPosition()
-        self.upDown.zeroTargetPos()
+        self.upDown.ZeroTargetPos()
         
         return upDownPos
             
@@ -488,7 +490,8 @@ class Motors():
             xStatus = self.changerX.checkInternalStatus(4)
             yStatus = self.changerY.checkInternalStatus(5)
             if (self.parent != None):
-                self.parent.checkProgramHaltRequest()
+                if self.parent.checkProgramHaltRequest():
+                    return
                         
         # At this point, if not hit the limit switches for XY yet, set error
         xStatus = self.changerX.checkInternalStatus(4)
@@ -528,7 +531,8 @@ class Motors():
             xStatus = self.changerX.checkInternalStatus(5)
             yStatus = self.changerY.checkInternalStatus(6) 
             if (self.parent != None):
-                self.parent.checkProgramHaltRequest()
+                if self.parent.checkProgramHaltRequest():
+                    return
         
         xStatus = self.changerX.checkInternalStatus(5)
         yStatus = self.changerY.checkInternalStatus(6)
@@ -542,9 +546,9 @@ class Motors():
             raise ValueError(errorMessage)
         
         else:
-            self.changerX.zeroTargetPos()
+            self.changerX.ZeroTargetPos()
             time.sleep(0.25)
-            self.changerY.zeroTargetPos()
+            self.changerY.ZeroTargetPos()
             time.sleep(0.25)
             
             xPos = self.changerX.readPosition()
@@ -564,7 +568,7 @@ class Motors():
         self.upDown.moveMotor(self.modConfig.SampleBottom, self.modConfig.LiftSpeedSlow)
         currentPos = self.UpDownHeight()
         
-        self.upDown.zeroTargetPos()
+        self.upDown.ZeroTargetPos()
         
         self.upDown.relabelPos(currentPos)
         self.upDown.setTorque(self.modConfig.UpDownTorqueFactor, 
@@ -642,7 +646,7 @@ class Motors():
                 self.changerX.relabelPos(curpos % fullLoop)
             
             curhole = self.ChangerHole()
-            self.modConfig.queue.put('MotorControl:Data: curHole: ' + str(curhole))
+            self.modConfig.queue.put('frmDCMotors:Data: curHole: ' + str(curhole))
             
             # Because OneStep is negative, the criteria was never reach (always <0 and not >0.02) till the asolute value (May 2007 L Carporzen)
             if ((abs(curpos - target) / abs(self.modConfig.OneStep)) > 0.02):
@@ -684,7 +688,7 @@ class Motors():
             curposY = self.changerY.readPosition()
             
             curhole = self.ChangerHole()
-            self.modConfig.queue.put('MotorControl:Data: curHole: ' + str(curhole))
+            self.modConfig.queue.put('frmDCMotors:Data: curHole: ' + str(curhole))
             
             # Because OneStep is negative, the criteria was never reach (always <0 and not >0.02) till the asolute value (May 2007 L Carporzen)
             if (((abs(curposX - targetX) / abs(self.modConfig.OneStep)) > 0.02) or ((abs(curposY - targetY) / abs(self.modConfig.OneStep)) > 0.02)):
@@ -718,7 +722,7 @@ class Motors():
            
     '''
     '''
-    def setTurningMotorAngle(self, angle):
+    def SetTurningMotorAngle(self, angle):
         # Get the sign of the turning motor full rotation setting
         turnSign = np.sign(self.modConfig.TurningMotorFullRotation)
         
@@ -757,14 +761,14 @@ class Motors():
                 pos = pos - abs(self.modConfig.TurningMotorFullRotation)
         
         self.turning.relabelPos(pos)
-        self.modConfig.queue.put('MotorControl:Data: TurningAngle: ' + str(self.convertPosToAngle(pos)))
+        self.modConfig.queue.put('frmDCMotors:Data: TurningAngle: ' + str(self.convertPosToAngle(pos)))
         # If TurningMotorAngle != angle Then RelabelPos MotorTurning, pos
         # TurningAngleBox = angle
         return pos
      
     '''
     '''
-    def turningMotorRotate(self, angle, waitingForStop=True):
+    def TurningMotorRotate(self, angle, waitingForStop=True):
         startingPos = self.turning.readPosition()
         startingangle = self.TurningMotorAngle()
         
@@ -799,7 +803,7 @@ class Motors():
         
         CurAngle = CurAngle - int(CurAngle / 360) * 360     # Integer division
         if (CurAngle != self.TurningMotorAngle()): 
-            self.setTurningMotorAngle(CurAngle)
+            self.SetTurningMotorAngle(CurAngle)
             
         return                
     
@@ -811,20 +815,20 @@ class Motors():
             activeAngle = self.TurningMotorAngle()
             CurAngle = activeAngle - int(activeAngle / 360) * 360
             if (CurAngle != activeAngle): 
-                self.setTurningMotorAngle(CurAngle)
+                self.SetTurningMotorAngle(CurAngle)
                 
             activeAngle = self.TurningMotorAngle()
             if (CurAngle != activeAngle): 
-                self.setTurningMotorAngle(CurAngle)
+                self.SetTurningMotorAngle(CurAngle)
                 
             if (abs(CurAngle) > 10):
                 target = 360
             else:
                 target = 0
             
-            self.turningMotorRotate(target)
+            self.TurningMotorRotate(target)
             self.turning.waitForMotorStop()
-            self.setTurningMotorAngle(0)
+            self.SetTurningMotorAngle(0)
             CurAngle = self.TurningMotorAngle()
         else:
             startingPos = self.turning.readPosition()
@@ -833,6 +837,15 @@ class Motors():
             self.turning.moveMotor(target, abs(self.modConfig.TurningMotor1rps * speedRPS), False)
             
         return
+    
+    '''
+    '''
+    def TurningMotorAngleOffset(self, angle):
+        self.TurningMotorRotate(angle)      # (November 2009 L Carporzen) change - angle to + angle for clarity
+        self.SetTurningMotorAngle(angle)
+        self.turning.ZeroTargetPos()
+        return
+   
     
     '''
     '''

@@ -252,7 +252,7 @@ class frmPlots(wx.Frame):
         print('TODO: onOpenFile')
         return
     
-        '''
+    '''
     '''
     def onClosed(self, event):
         # Immediately stop the timer

@@ -22,12 +22,21 @@ class MSControl(SerialPortDevice):
         self.PortOpen = False 
                 
         SerialPortDevice.__init__(self, baudRate, 'MSControl', pathName, comPort, Label, modConfig)
+
+    '''
+    '''
+    def zeroMeasurement(self):
+        cmdStr = 'Z'
+        self.sendString(cmdStr + '\r')
+        self.modConfig.queue.put('frmSusceptibilityMeter:Output Text = ' + cmdStr)
+        return
         
     '''
     '''
     def makeMeasurement(self):
-        cmdStr = 'M\r'
-        self.sendString(cmdStr)
+        cmdStr = 'M'
+        self.sendString(cmdStr + '\r')
+        self.modConfig.queue.put('frmSusceptibilityMeter:Output Text = ' + cmdStr)
         time.sleep(0.01)
         respStr = self.readLine()
         

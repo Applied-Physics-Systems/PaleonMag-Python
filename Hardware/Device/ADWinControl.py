@@ -22,14 +22,13 @@ from Process.ProcessData import ProcessData
 from Modules.modConfig import ModConfig
 from Modules.modConfig import WaveForm
 from Modules.modAF_DAQ import ModAF_DAQ
+from Modules.modAF_DAQ import coil_type
 
 MsecsBetweenBootAndInit = 300/1000
 MsecsBetweenInitAndRun = 300/1000
 MsecsBetweenRampEndAndReadRampOutputs = 300/1000
 
 NoiseLevel = 5
-
-Coil_Type = Enum('Coil_Type', ['Axial', 'Transverse', 'IRMAxial', 'IRMTrans', 'Unknown'])
 
 
 class ADWinControl():
@@ -244,26 +243,26 @@ class ADWinControl():
         
         all_up_byte = (2 ** 6) - 1
         
-        if (CoilType == Coil_Type.Axial):
+        if (CoilType == coil_type.Axial):
             if (status_byte == all_up_byte - (2 ** (self.modConfig.AFAxialRelay.ChanNum))):            
                 correctFlag = True                
             else:                
                 correctFlag = False
                 
-        elif (CoilType == Coil_Type.Transverse):
+        elif (CoilType == coil_type.Transverse):
             if (status_byte == all_up_byte - (2 ** (self.modConfig.AFTransRelay.ChanNum))):            
                 correctFlag = True                
             else:                
                 correctFlag = False
                 
-        elif (CoilType == Coil_Type.IRMAxial):
+        elif (CoilType == coil_type.IRMAxial):
             if (status_byte == (not (2 ** (self.modConfig.AFAxialRelay.ChanNum))) and
                                 (2 ** (self.modConfig.AFTransRelay.ChanNum))):            
                 correctFlag = True                
             else:                
                 correctFlag = False
                 
-        elif (CoilType == Coil_Type.IRMTrans):
+        elif (CoilType == coil_type.IRMTrans):
             if (status_byte == (not (2 ** (self.modConfig.AFTransRelay.ChanNum))) and
                                 (2 ** (self.modConfig.AFAxialRelay.ChanNum))):            
                 correctFlag = True                
@@ -631,7 +630,7 @@ class ADWinControl():
             if (self.modConfig.processData.ADwin_monitorTrigVolt > monMax):
                 self.modConfig.processData.ADwin_monitorTrigVolt = monMax
             respStr = "{:.1f}".format(self.modConfig.processData.ADwin_monitorTrigVolt)
-            self.modConfig.queue.put('ADWinAFControl:Peak Monitor Voltage = ' + respStr)
+            self.modConfig.queue.put('frmADWIN_AF:Peak Monitor Voltage = ' + respStr)
             
         else:
             # Check to make sure the monitor voltage is below the max monitor voltage for
@@ -640,13 +639,13 @@ class ADWinControl():
             if (self.modConfig.processData.ADwin_monitorTrigVolt > monMax):
                 self.modConfig.processData.ADwin_monitorTrigVolt = monMax
                 respStr = "{:.1f}".format(self.modConfig.processData.ADwin_monitorTrigVolt)
-                respStr = 'ADWinAFControl:Peak Monitor Voltage = ' + respStr
+                respStr = 'frmADWIN_AF:Peak Monitor Voltage = ' + respStr
                 
             if (calDone):
                 self.modConfig.processData.ADwin_peakField = self.modAF_DAQ.FindFieldFromVolts(self.modConfig.processData.ADwin_monitorTrigVolt,
                                                                                                activeCoilSystem)
                 if (respStr == ''):
-                    respStr = 'ADWinAFControl'
+                    respStr = 'frmADWIN_AF'
                 respStr += ':Peak Field = ' + "{:.1f}".format(self.modConfig.processData.ADwin_peakField)
                 
             if (respStr != ''):
@@ -701,7 +700,7 @@ class ADWinControl():
             elif ((self.ActiveCoilSystem == self.modConfig.TransverseCoilSystem) and (self.modConfig.processData.ADwin_rampPeakVoltage > self.modConfig.AfTransRampMax)):
                 self.modConfig.processData.ADwin_rampPeakVoltage = self.modConfig.AfTransRampMax
             
-            respStr = 'ADWinAFControl:Peak Ramp Voltage = ' + "{:.1f}".format(self.modConfig.processData.ADwin_rampPeakVoltage)
+            respStr = 'frmADWIN_AF:Peak Ramp Voltage = ' + "{:.1f}".format(self.modConfig.processData.ADwin_rampPeakVoltage)
             self.modConfig.queue.put(respStr)
             
         return
@@ -771,7 +770,7 @@ class ADWinControl():
             respStr += ':Peak Ramp Voltage = ' + str(PeakValue)
             # Set Ramp Down mode = 0 (use slope instead of # periods)
             RampDownMode = 0
-        self.modConfig.queue.put('ADWinAFControl:' + respStr)
+        self.modConfig.queue.put('frmADWIN_AF:' + respStr)
         
         return RampDownMode, chkClippingTest 
     
@@ -803,7 +802,7 @@ class ADWinControl():
         self.modConfig.waveForms['AFMONITOR'].SineFreqMin = Freq
         
         # Update the ADWIN AF form
-        self.modConfig.queue.put('ADWinAFControl:Frequency = ' + "{:.1f}".format(Freq))
+        self.modConfig.queue.put('frmADWIN_AF:Frequency = ' + "{:.1f}".format(Freq))
         
         return Freq
     
@@ -912,7 +911,7 @@ class ADWinControl():
         self.modConfig.processData.rampDownSlope = self.modConfig.waveForms['AFRAMPDOWN'].Slope
     
         # Update Up and Down slope on the GUI
-        guiStr = 'ADWinAFControl'
+        guiStr = 'frmADWIN_AF'
         guiStr += ':Up Slope = ' + "{:.6f}".format(self.modConfig.processData.rampUpSlope)
         guiStr += ':Down Slope = ' + "{:.6f}".format(self.modConfig.processData.rampDownSlope)
         self.modConfig.queue.put(guiStr)
@@ -939,7 +938,7 @@ class ADWinControl():
         
 
         # Update the form with this IORate
-        respStr = 'ADWinAFControl:Ramp Rate = ' + "{:.1f}".format(IORate)
+        respStr = 'frmADWIN_AF:Ramp Rate = ' + "{:.1f}".format(IORate)
         
         # Update the TimeSteps of all three ADWIN AF wave objects
         self.modConfig.waveForms['AFRAMPUP'].TimeStep = 1 / IORate
@@ -987,7 +986,7 @@ class ADWinControl():
             RampMode = 1
     
         # Display this duration on the form
-        respStr = 'ADWinAFControl:Ramp Up Duration = ' + "{:.1f}".format(self.modConfig.waveForms['AFRAMPUP'].Duration)
+        respStr = 'frmADWIN_AF:Ramp Up Duration = ' + "{:.1f}".format(self.modConfig.waveForms['AFRAMPUP'].Duration)
         respStr += ':Ramp Down Duration = ' + "{:.1f}".format(self.modConfig.waveForms['AFRAMPDOWN'].Duration)
         respStr += ':Total Ramp Duration = ' + "{:.1f}".format(self.modConfig.waveForms['AFMONITOR'].Duration)
         self.modConfig.queue.put(respStr)
@@ -1023,14 +1022,14 @@ class ADWinControl():
             Temp2 = self.DoDAQIO(self.modConfig.AnalogT2)        
             Temp2 = Temp2 * self.modConfig.TSlope - self.modConfig.Toffset
     
-        tempStr = 'ADWinAFControl'
+        tempStr = 'frmADWIN_AF'
         tempStr += ':T1 = ' + "{:.2f}".format(Temp1)
         tempStr += ':T2 = ' + "{:.2f}".format(Temp2)
         self.modConfig.queue.put(tempStr)
 
         # Check Temperature to see if it is not zeroed (gone within 20 deg of -1 * Toffset)
         if not self.ValidSensorTemp(Temp1, Temp2):
-            tempStr = 'ADWinAFControl:LowTemp:AF Temperature sensors reading temperature below minimum limit.'
+            tempStr = 'frmADWIN_AF:LowTemp:AF Temperature sensors reading temperature below minimum limit.'
             self.modConfig.queue.put(tempStr)
 
         return Temp1, Temp2
@@ -1045,7 +1044,7 @@ class ADWinControl():
             outRangeFlag = False
             while ((Temp1 >= self.modConfig.Thot) or (Temp2 >= self.modConfig.Thot)):
                 if not outRangeFlag: 
-                    tempStr = 'ADWinAFControl:HighTemp = Too hot! The AF\ndegaussing unit is\nabove ' + "{:.1f}".format(self.modConfig.Thot) 
+                    tempStr = 'frmADWIN_AF:HighTemp = Too hot! The AF\ndegaussing unit is\nabove ' + "{:.1f}".format(self.modConfig.Thot) 
                     self.modConfig.queue.put(tempStr)
                     outRangeFlag = True
                 
@@ -1055,7 +1054,7 @@ class ADWinControl():
                     Temp1, Temp2 = self.getCoilTemperature()
 
             if outRangeFlag:
-                tempStr = 'ADWinAFControl:Clear = '
+                tempStr = 'frmADWIN_AF:Clear = '
                 self.modConfig.queue.put(tempStr)
         
         return
@@ -1064,16 +1063,16 @@ class ADWinControl():
     '''
     def setCoilType(self):
         if (self.ActiveCoilSystem == self.modConfig.AxialCoilSystem):
-            coilType = Coil_Type.Axial
+            coilType = coil_type.Axial
             self.ramp_inputs.Coil = 'Axial'
         elif (self.ActiveCoilSystem == self.modConfig.TransverseCoilSystem):
-            coilType = Coil_Type.Transverse
+            coilType = coil_type.Transverse
             self.ramp_inputs.Coil = 'Transverse'
         elif (self.ActiveCoilSystem == self.modConfig.IRMAxialCoilSystem):
-            coilType = Coil_Type.IRMAxial
+            coilType = coil_type.IRMAxial
             self.ramp_inputs.Coil = 'IRM Axial'
         else:
-            coilType = Coil_Type.Unknown
+            coilType = coil_type.Unknown
             self.ramp_inputs.Coil = 'Unknown'
             
         return coilType
@@ -1103,7 +1102,7 @@ class ADWinControl():
     def verifyAFRelayPosition(self, CoilType):
     
         if not self.IsCorrect_AFRelay_position(CoilType):
-            if (CoilType == Coil_Type.IRMAxial):
+            if (CoilType == coil_type.IRMAxial):
                 relayStatus = self.TrySetRelays_ADwin(CoilType.name, True)       # True = use backfield
             else:
                 relayStatus = self.TrySetRelays_ADwin(CoilType.name)
@@ -1345,7 +1344,7 @@ class ADWinControl():
             raise ValueError('Fail to set all relays to default position')
         
         # Unlock the coils
-        respStr = 'ADWinAFControl:Coil Status = False'
+        respStr = 'frmADWIN_AF:Coil Status = False'
         self.modConfig.queue.put(respStr)
         
         self.ramp_in_progress = False

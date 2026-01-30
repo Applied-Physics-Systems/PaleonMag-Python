@@ -25,14 +25,18 @@ from Forms.frmSampleIndexRegistry import frmSampleIndexRegistry
 from Forms.frmSQUID import frmSQUID
 from Forms.frmVacuum import frmVacuum
 from Forms.frmADWIN_AF import frmADWIN_AF
+from Forms.frmAF_2G import frmAF_2G
 from Forms.frmIRMARM import frmIRMARM
 from Forms.frmMeasure import frmMeasure
 from Forms.frmChanger import frmChanger
+from Forms.frmStats import frmStats
+from Forms.frmSusceptibilityMeter import frmSusceptibilityMeter
 
 from Hardware.DevicesControl import DevicesControl
 
 from ClassModules.SampleIndexRegistration import SampleIndexRegistrations
 from ClassModules.SampleCommand import SampleCommands
+from ClassModules.Sample import Sample
 
 from Modules.modMeasure import modMeasure
 from Modules.modFlow import modFlow
@@ -41,7 +45,7 @@ from Modules.modChanger import ModChanger
 
 from Process.PaleoThread import PaleoThread
 
-VersionNumber = 'Version 0.00.28'
+VersionNumber = 'Version 0.00.29'
 
 ID_DC_MOTORS        = 0
 ID_FILE_REGISTRY    = 1
@@ -53,6 +57,8 @@ ID_SQUID            = 6
 ID_VACUUM           = 7
 ID_DEMAG_AF         = 8
 ID_IRM_ARM          = 9
+ID_VIEW_MEASUREMENT = 10
+ID_SUSCEPTIBILITY   = 11
 
 
 '''
@@ -63,7 +69,6 @@ class MainForm(wx.Frame):
     classdocs
     '''
     messageStr = ''
-    NOCOMM_Flag = False
     progressColor = 'None'
     panelList = {}
     config = None
@@ -96,10 +101,14 @@ class MainForm(wx.Frame):
         self.magControl = frmMagnetometerControl(parent=self)
         self.vacuumControl = frmVacuum(parent=self)
         self.frmMeasure = frmMeasure(parent=self)
+        self.frmStats = frmStats(parent=self)
         self.MainChanger = frmChanger(parent=self)
+        self.frmAF_2G = frmAF_2G(parent=self)
+        self.frmADWIN_AF = frmADWIN_AF(parent=self)
 
         self.SampleIndexRegistry = SampleIndexRegistrations(parent=self)
-        self.SampQueue = SampleCommands()
+        self.SampQueue = SampleCommands(parent=self)
+        self.SampleHolder = Sample()
         
         self.modMeasure = modMeasure()
         self.modFlow = modFlow(parent=self)
@@ -176,7 +185,7 @@ class MainForm(wx.Frame):
         daqItem = wx.MenuItem(diagMenu, wx.ID_NEW, text = "DAQ Comm", kind = wx.ITEM_NORMAL)
         diagMenu.Append(daqItem)
 
-        bridgeItem = wx.MenuItem(diagMenu, wx.ID_NEW, text = "Susceptibility Bridge", kind = wx.ITEM_NORMAL)
+        bridgeItem = wx.MenuItem(diagMenu, ID_SUSCEPTIBILITY, text = "Susceptibility Bridge", kind = wx.ITEM_NORMAL)
         diagMenu.Append(bridgeItem)
 
         vrmItem = wx.MenuItem(diagMenu, wx.ID_NEW, text = "VRM Data Collection", kind = wx.ITEM_NORMAL)
@@ -201,9 +210,21 @@ class MainForm(wx.Frame):
     '''
     def createViewMenu(self):
         viewMenu = wx.Menu()
+                
+        viewMenu.AppendCheckItem(wx.ID_NEW, "Status Bar")
+        self.viewMeasurementWindow = viewMenu.AppendCheckItem(ID_VIEW_MEASUREMENT, "Measurement Window")
+        viewMenu.AppendCheckItem(wx.ID_NEW, "Sample Changer Master List")
+        viewMenu.AppendCheckItem(wx.ID_NEW, "Command Queue")
+        viewMenu.AppendCheckItem(wx.ID_NEW, "Step Monitor")
+        viewMenu.AppendCheckItem(wx.ID_NEW, "Debug")
         
-        statusBar = wx.MenuItem(viewMenu, wx.ID_NEW, text = "Status Bar", kind = wx.ITEM_NORMAL)
-        viewMenu.Append(statusBar)
+        # Append a separator
+        viewMenu.AppendSeparator()
+        
+        viewMenu.AppendCheckItem(wx.ID_NEW, "Settings ...")
+        viewMenu.AppendCheckItem(wx.ID_NEW, "Calibrate Rod / Run U-Channel Sample")
+        viewMenu.AppendCheckItem(wx.ID_NEW, "Date File Save Settings")
+        viewMenu.AppendCheckItem(wx.ID_NEW, "Options ...")
         
         return viewMenu 
         
@@ -270,7 +291,7 @@ class MainForm(wx.Frame):
         # Set the font for the status bar
         self.statusBar.SetFont(font)        
         # set text to status bar
-        if self.NOCOMM_Flag:
+        if self.modConfig.processData.NOCOMM_MODE:
             self.updateCommStatus("NoCOMM mode on")
         else:
             self.updateCommStatus("NoCOMM mode off")
@@ -297,6 +318,7 @@ class MainForm(wx.Frame):
         return
 
     '''
+        Display status message in Status Bar
     '''
     def updateTaskStatus(self, statusMessage):
         self.statusBar.SetStatusText(statusMessage, 2)
@@ -308,6 +330,16 @@ class MainForm(wx.Frame):
         self.statusBar.SetStatusText(statusMessage, 4)
         return
         
+    '''
+        frmProgram.mnuViewMeasurement.Enabled = True
+        frmProgram.mnuViewMeasurement.Checked = True
+    '''
+    def updateViewMeasurementWindow(self, enableFlag):
+        self.viewMeasurementWindow.Enable(enableFlag)
+        self.viewMeasurementWindow.Check(enableFlag)
+            
+        return
+    
     '''--------------------------------------------------------------------------------------------
                         
                         Initialization Functions
@@ -316,7 +348,7 @@ class MainForm(wx.Frame):
     '''
     '''
     def System_Initialize(self):
-        if not self.NOCOMM_Flag:
+        if not self.modConfig.processData.NOCOMM_MODE:
             self.modConfig.processData.motorsEnable = True
             self.modConfig.processData.vacuumEnable = True
             self.modConfig.processData.irmArmEnable = True
@@ -336,9 +368,9 @@ class MainForm(wx.Frame):
     '''
     def Magnetometer_Initialize(self):
         self.magControl.Show()
-        self.panelList['MagnetometerControl'] = self.magControl                    
+        self.panelList['frmMagnetometerControl'] = self.magControl                    
                 
-        if not self.NOCOMM_Flag:
+        if not self.modConfig.processData.NOCOMM_MODE:
             # Configure SQUID
             self.pushTaskToQueue([self.devControl.SQUID_CONFIGURE, ['A']])
             
@@ -401,7 +433,7 @@ class MainForm(wx.Frame):
         self.devControl.closeDevices()
         
         # Set paramters from INI file
-        self.NOCOMM_Flag = self.modConfig.NoCommMode 
+        self.modConfig.processData.NOCOMM_MODE = self.modConfig.NoCommMode 
         return
     
     '''
@@ -428,7 +460,7 @@ class MainForm(wx.Frame):
             noCommStr += ' and can be turn off by clicking on the "Turn off NOCOMM mode" button in the Main program window'
             dlg = wx.MessageBox(noCommStr, style=wx.YES_NO|wx.CENTER, caption='PaleonMag')
             if (dlg == wx.YES):
-                self.NOCOMM_Flag = True
+                self.modConfig.processData.NOCOMM_MODE = True
 
     '''
     '''
@@ -463,7 +495,7 @@ class MainForm(wx.Frame):
         
     '''
     def pushTaskToQueue(self, taskFunction):        
-        if not self.NOCOMM_Flag:
+        if not self.modConfig.processData.NOCOMM_MODE:
             self.statusBar.SetBackgroundColour(wx.NullColour)
             self.setStatusColor('Red')
             self.updateProgressStatus("Task running ...")
@@ -508,60 +540,63 @@ class MainForm(wx.Frame):
             self.messageBox.AppendText("TODO"+"\n")
             
         elif (menuID == ID_DC_MOTORS):
-            if not 'MotorControl' in self.panelList.keys():
+            if not 'frmDCMotors' in self.panelList.keys():
                 dcMotorControl = frmDCMotors(parent=self)
                 dcMotorControl.Show()
-                self.panelList['MotorControl'] = dcMotorControl
+                self.panelList['frmDCMotors'] = dcMotorControl
 
         elif (menuID == ID_SQUID):
-            if not 'SQUIDControl' in self.panelList.keys():
+            if not 'frmSQUID' in self.panelList.keys():
                 SQUIDControl = frmSQUID(parent=self)
                 SQUIDControl.Show()
-                self.panelList['SQUIDControl'] = SQUIDControl
+                self.panelList['frmSQUID'] = SQUIDControl
 
         elif (menuID == ID_VACUUM):
-            if not 'VacuumControl' in self.panelList.keys():
+            if not 'frmVacuum' in self.panelList.keys():
                 self.vacuumControl.Show()
-                self.panelList['VacuumControl'] = self.vacuumControl
+                self.panelList['frmVacuum'] = self.vacuumControl
             
         elif (menuID == ID_NOCOMM_OFF):
             self.statusBar.SetBackgroundColour(wx.NullColour)
-            if self.NOCOMM_Flag:  
-                self.NOCOMM_Flag = False
+            if self.modConfig.processData.NOCOMM_MODE:  
+                self.modConfig.processData.NOCOMM_MODE = False
                 self.updateCommStatus('NoCOMM mode off')
                 self.toolbar.SetToolNormalBitmap(id=ID_NOCOMM_OFF, bitmap=wx.Bitmap('.\\Resources\\NoCommOff.png'))
             else:
-                self.NOCOMM_Flag = True
+                self.modConfig.processData.NOCOMM_MODE = True
                 self.updateCommStatus('NoCOMM mode on')
                 self.toolbar.SetToolNormalBitmap(id=ID_NOCOMM_OFF, bitmap=wx.Bitmap('.\\Resources\\NoCommOn.png'))
             
         elif (menuID == ID_MAG_CONTROL):
-            if not 'MagnetometerControl' in self.panelList.keys():
-                magControl = frmMagnetometerControl(parent=self)
-                magControl.Show()
-                self.panelList['MagnetometerControl'] = magControl                    
+            if not 'frmMagnetometerControl' in self.panelList.keys():
+                self.magControl.Show()
+                self.panelList['frmMagnetometerControl'] = self.magControl                    
 
         elif (menuID == ID_FILE_REGISTRY):
-            if not 'RegistryControl' in self.panelList.keys():
+            if not 'frmSampleIndexRegistry' in self.panelList.keys():
                 registryControl = frmSampleIndexRegistry(parent=self)
                 registryControl.Show()
-                self.panelList['RegistryControl'] = registryControl                    
+                self.panelList['frmSampleIndexRegistry'] = registryControl                    
             
         elif (menuID == ID_DEMAG_AF):
-            if not 'ADWinAFControl' in self.panelList.keys():
-                demagAfControl = frmADWIN_AF(parent=self)
-                demagAfControl.Show()
-                self.panelList['ADWinAFControl'] = demagAfControl
+            if not 'frmADWIN_AF' in self.panelList.keys():
+                self.frmADWIN_AF.Show()
+                self.panelList['frmADWIN_AF'] = self.frmADWIN_AF
                 
         elif (menuID == ID_IRM_ARM):
-            if not 'IRM_ARM_Control' in self.panelList.keys():
+            if not 'frmIRMARM' in self.panelList.keys():
                 irmARMControl = frmIRMARM(parent=self)
                 irmARMControl.Show()
-                self.panelList['IRMControl'] = irmARMControl
-            
+                self.panelList['frmIRMARM'] = irmARMControl
+                    
+        elif (menuID == ID_SUSCEPTIBILITY):
+            if not 'frmSusceptibilityMeter' in self.panelList.keys():
+                susceptibilityControl = frmSusceptibilityMeter(parent=self)
+                susceptibilityControl.Show()
+                self.panelList['frmSusceptibilityMeter'] = susceptibilityControl
             
         elif (menuID == ID_QUIT_EXIT):
-            if not self.NOCOMM_Flag:
+            if not self.modConfig.processData.NOCOMM_MODE:
                 if (self.paleoThread.process != None): 
                     self.paleoThread.process.terminate()
             self.Close(force=False)

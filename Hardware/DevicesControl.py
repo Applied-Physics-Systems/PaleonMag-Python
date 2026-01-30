@@ -13,17 +13,26 @@ from Hardware.Device.SQUIDControl import SQUIDControl
 from Hardware.Device.VacuumControl import VacuumControl
 from Hardware.Device.ADWinControl import ADWinControl
 from Hardware.Device.GaussMeterControl import GaussMeterControl
+from Hardware.Device.MSControl import MSControl
 
 from Process.ProcessData import ProcessData
-from Modules.modConfig import ModConfig
+from Process.DataExchange import DataExchange
 
+from Modules.modConfig import ModConfig
 from Modules.modChanger import ModChanger
+from Modules.modAF_DAQ import ModAF_DAQ
+from Modules.modMeasure import modMeasure
+
+from ClassModules.SampleIndexRegistration import SampleIndexRegistrations
+from ClassModules.SampleCommand import SampleCommands
+from ClassModules.Sample import Sample
 
 DEVICE_MOTORS               = 0x0
 DEVICE_IRM                  = 0x1
 DEVICE_SQUID                = 0x2
 DEVICE_VACUUM               = 0x3
 DEVICE_AF                   = 0x4
+DEVICE_MEASUREMENT          = 0x5
 DEVICE_SYSTEM               = 0xF
 
 class DevicesControl():
@@ -52,7 +61,6 @@ class DevicesControl():
     MOTOR_READ_HOLE         = 0x0014
     MOTOR_RESET             = 0x0015    
     MOTOR_STOP              = 0x0016
-    MOTOR_NEAREST_HOLE      = 0x0017
     
     IRM_ARM_INIT            = 0x1001
     IRM_SET_BIAS_FIELD      = 0x1002
@@ -83,6 +91,8 @@ class DevicesControl():
     AF_CLEAN_COIL           = 0x4003
     AF_START_RAMP           = 0x4004
     AF_SET_RELAYS_DEFAULT   = 0x4005
+    
+    MEASUREMENT_MANUAL_HOLDER   = 0x5001
         
     SYSTEM_DISCONNECT       = 0xF001
     
@@ -108,7 +118,6 @@ class DevicesControl():
                 MOTOR_READ_HOLE: 'Read Hole',
                 MOTOR_RESET: 'Reset',
                 MOTOR_STOP: 'Stop',                
-                MOTOR_NEAREST_HOLE: 'Changer to the nearest hole',
                 IRM_ARM_INIT: 'Initialize IRM/ARM',
                 IRM_SET_BIAS_FIELD: 'Set ARM Bias Field',
                 IRM_FIRE: 'Discharge IRM device',                
@@ -132,7 +141,8 @@ class DevicesControl():
                 AF_SWITCH_COIL: 'Switch AF Coil',
                 AF_REFRESH_T: 'AF Refresh Temperature',
                 AF_CLEAN_COIL: 'AF Clean Coils',
-                AF_START_RAMP: 'AF Start Ramp'}
+                AF_START_RAMP: 'AF Start Ramp',
+                MEASUREMENT_MANUAL_HOLDER: 'Run Magnetometer Control - Manual Measure Holder'}
             
     modConfig = None
     
@@ -162,6 +172,12 @@ class DevicesControl():
         self.DCMotorHomeToTop_StopOnTrue = False
         self.processQueue = None
         self.gaussMeter = GaussMeterControl()
+        
+        self.SampQueue = SampleCommands(parent=self)
+        self.SampleHolder = Sample()
+        self.SampleIndexRegistry = SampleIndexRegistrations(parent=self)
+        self.modAF_DAQ = ModAF_DAQ(self.currentPath, parent=self)
+        
                     
     '''
         Set parameter from INI files for each motor
@@ -169,6 +185,7 @@ class DevicesControl():
     def setDevicesConfig(self, modConfig):  
         self.modConfig = modConfig
         self.modChanger = ModChanger(self)
+        self.modMeasure = modMeasure(parent=self)        
         message = self.openDevices()
         
         return message
@@ -189,7 +206,7 @@ class DevicesControl():
             else:
                 try:            
                     message += label + ': ' + comPort  
-                    device = IrmArmControl(9600, self.currentPath, comPort, label, self.modConfig)
+                    device = IrmArmControl(9600, self.currentPath, comPort, label, self)
                 except:
                     message += ' Failed to open'
                     self.devicesAllGoodFlag = False
@@ -222,7 +239,7 @@ class DevicesControl():
         return device, message + '\n'
 
     '''
-        Open UART serial communication port for motor
+        Open UART serial communication port for SQUID
     '''
     def openSQUIDComm(self, device, label, portLabel):        
         comPort = 'COM' + self.modConfig.processData.config['COMPorts'][portLabel]
@@ -236,7 +253,37 @@ class DevicesControl():
         else:
             try:            
                 message += label + ': ' + comPort  
-                device = SQUIDControl(1200, self.currentPath, comPort, label, self.modConfig)
+                device = SQUIDControl(1200, self.currentPath, comPort, label, parent=self)
+            except:
+                message += ' Failed to open'
+                self.devicesAllGoodFlag = False
+                
+        return device, message + '\n'
+
+    '''
+        Open UART serial communication port for Susceptibility
+    '''
+    def openSusceptibilityComm(self, device, label, portLabel):        
+        self.modConfig.COMPortSusceptibility = self.modConfig.getConfig_Int(self.modConfig.processData.config, 'COMPorts', portLabel, -1)
+        comPort = 'COM' + str(self.modConfig.COMPortSusceptibility)
+        SusceptibilitySettings = self.modConfig.processData.config['COMPorts']['SusceptibilitySettings']   #1200,N,8,2
+        settingsList = SusceptibilitySettings.split(',')
+        try:
+            baudRate = int(settingsList[0])
+        except:
+            baudRate = 1200
+            
+        message = ''
+        if (device != None):
+            if (device.openDevice()):
+                message += device.label + ' opened' 
+            else:
+                message += device.label + ' fail to open'
+                self.devicesAllGoodFlag = False
+        else:
+            try:            
+                message += label + ': ' + comPort  
+                device = MSControl(baudRate, self.currentPath, comPort, label, self.modConfig)
             except:
                 message += ' Failed to open'
                 self.devicesAllGoodFlag = False
@@ -273,6 +320,13 @@ class DevicesControl():
             message += respStr    
             if (self.SQUID != None):
                 self.deviceList.append(self.SQUID)
+                
+        if (self.modConfig.processData.susceptibilityEnable):
+            self.susceptibility, respStr = self.openSusceptibilityComm(self.susceptibility, 'Susceptibility', 'COMPortSusceptibility')
+            message += respStr    
+            if (self.susceptibility != None):
+                self.deviceList.append(self.susceptibility)
+            
                 
         if (self.modConfig.processData.adwinEnable): 
             try:
@@ -354,7 +408,6 @@ class DevicesControl():
                 for _ in range(0, queueSize):
                     message = self.processQueue.get_nowait()
                     if 'Program_Halted' in message:
-                        self.Flow_Pause()
                         return True
                 
             return False
@@ -393,6 +446,23 @@ class DevicesControl():
                 
         return message
       
+    '''--------------------------------------------------------------------------------------------
+                        
+                     Messaging Functions
+                        
+    --------------------------------------------------------------------------------------------'''
+    '''
+    '''
+    def displayStatusBar(self, messageStr):
+        self.modConfig.queue.put('Program Status:' + messageStr)
+        return
+    
+    '''
+    '''
+    def displayWarning(self, messageStr):
+        self.modConfig.queue.put('Warning:' + messageStr)
+        return
+    
     '''
         Request the main form process to display input form
         Wait until it receive data or program halt
@@ -437,6 +507,26 @@ class DevicesControl():
             self.Flow_Pause()
             
         return
+
+    '''
+    '''
+    def sendEmailNotification(self, message):
+        self.modConfig.queue.put('EmailNotification:' + message)
+        return
+
+    '''--------------------------------------------------------------------------------------------
+                        
+                     Parsing input parameter Functions
+                        
+    --------------------------------------------------------------------------------------------'''                             
+    def parseManualHolderParams(self, params):
+        try:
+            self.ADwin.AF2GControl.txtWaitingTime = int(params['frmAF_2G_txtWaitingTime'])
+        except:
+            self.ADwin.AF2GControl.txtWaitingTime = 0
+        self.modMeasure.frmMeasure_lblDemag = params['frmMeasure_lblDemag']
+        self.ADwin.Verbose = params['frmADWIN_AF_Verbose']
+        return
     
     '''--------------------------------------------------------------------------------------------
                         
@@ -465,8 +555,8 @@ class DevicesControl():
                                    pause=True)
             
             xPos, yPos = self.motors.HomeToCenter()
-            self.modConfig.queue.put('MotorControl:Data: xPos: ' + str(xPos))
-            self.modConfig.queue.put('MotorControl:Data: yPos: ' + str(yPos))
+            self.modConfig.queue.put('frmDCMotors:Data: xPos: ' + str(xPos))
+            self.modConfig.queue.put('frmDCMotors:Data: yPos: ' + str(yPos))
 
         elif (taskID[0] == self.MOTOR_MOVE):
             motorStr = taskID[1][0]
@@ -487,7 +577,7 @@ class DevicesControl():
             motorStr = taskID[1][0]
             activeMotor = self.motors.getActiveMotor(motorStr)
             if (activeMotor != None):
-                activeMotor.zeroTargetPos()
+                activeMotor.ZeroTargetPos()
 
         elif (taskID[0] == self.MOTOR_POLL):
             motorStr = taskID[1][0]
@@ -538,11 +628,11 @@ class DevicesControl():
 
         elif (taskID[0] == self.MOTOR_CHANGE_TURN_ANGLE):
             angle = taskID[1][0]
-            self.motors.turningMotorRotate(angle)
+            self.motors.TurningMotorRotate(angle)
 
         elif (taskID[0] == self.MOTOR_CHANGE_HEIGHT):
             height = taskID[1][0]
-            self.motors.upDownMove(height, 0)
+            self.motors.UpDownMove(height, 0)
             
         elif (taskID[0] == self.MOTOR_LOAD):
             self.motors.MoveToCorner()
@@ -555,22 +645,19 @@ class DevicesControl():
 
         elif (taskID[0] == self.MOTOR_READ_ANGLE):
             angle = self.motors.TurningMotorAngle()
-            self.modConfig.queue.put('MotorControl:TurningAngle = ' + str(angle))
+            self.modConfig.queue.put('frmDCMotors:TurningAngle = ' + str(angle))
 
         elif (taskID[0] == self.MOTOR_READ_HOLE):
             curHole = self.motors.ChangerHole()
-            self.modConfig.queue.put('MotorControl:LastHole = ' + str(curHole))
+            self.modConfig.queue.put('frmDCMotors:LastHole = ' + str(curHole))
 
         elif (taskID[0] == self.MOTOR_RESET):
             self.motors.reset()
 
         elif (taskID[0] == self.MOTOR_STOP):
             self.motors.stop()
-            
-        elif (taskID[0] == self.MOTOR_NEAREST_HOLE):
-            self.modChanger.Changer_NearestHole()
-                
-        return 'MotorControl'
+                            
+        return 'frmDCMotors'
 
     '''
     '''
@@ -611,7 +698,7 @@ class DevicesControl():
                 setState = taskID[1][0]
                 self.ADwin.DoDAQIO(self.modConfig.ARMSet, boolValue=setState)
                                                 
-        return 'IRMControl'
+        return 'frmIRMARM'
 
     '''
     '''
@@ -620,45 +707,45 @@ class DevicesControl():
         if (taskID[0] == self.SQUID_READ_COUNT):
             activeAxis = taskID[1][0]
             cmdStr, respStr = self.SQUID.readCount(activeAxis)
-            self.modConfig.queue.put('SQUIDControl:' + cmdStr + ':' + respStr)
+            self.modConfig.queue.put('frmSQUID:' + cmdStr + ':' + respStr)
 
         elif (taskID[0] == self.SQUID_READ_DATA):
             activeAxis = taskID[1][0]
             cmdStr, respStr = self.SQUID.readData(activeAxis)
-            self.modConfig.queue.put('SQUIDControl:' + cmdStr + ':' + respStr)
+            self.modConfig.queue.put('frmSQUID:' + cmdStr + ':' + respStr)
             
         elif (taskID[0] == self.SQUID_READ_RANGE):
             activeAxis = taskID[1][0]
-            cmdStr, respStr = self.SQUID.readRange(activeAxis)
-            self.modConfig.queue.put('SQUIDControl:' + cmdStr + ':' + respStr)
+            cmdStr, respStr = self.SQUID.ReadRange(activeAxis)
+            self.modConfig.queue.put('frmSQUID:' + cmdStr + ':' + respStr)
 
         elif (taskID[0] == self.SQUID_RESET_COUNT):
             activeAxis = taskID[1][0]
             cmdStr, respStr = self.SQUID.resetCount(activeAxis)
-            self.modConfig.queue.put('SQUIDControl:' + cmdStr + ':' + respStr)
+            self.modConfig.queue.put('frmSQUID:' + cmdStr + ':' + respStr)
 
         elif (taskID[0] == self.SQUID_CONFIGURE):
             activeAxis = taskID[1][0]
             cmdStr, respStr = self.SQUID.configure(activeAxis)
-            self.modConfig.queue.put('SQUIDControl:' + cmdStr + ':' + respStr)
+            self.modConfig.queue.put('frmSQUID:' + cmdStr + ':' + respStr)
             
         elif (taskID[0] == self.SQUID_CHANGE_RATE):
             activeAxis = taskID[1][0]
             rateLabel = taskID[1][1]
             cmdStr, respStr = self.SQUID.changeRate(activeAxis, rateLabel)
-            self.modConfig.queue.put('SQUIDControl:' + cmdStr + ':' + respStr)
+            self.modConfig.queue.put('frmSQUID:' + cmdStr + ':' + respStr)
 
         elif (taskID[0] == self.SQUID_SET_CFG):
             activeAxis = taskID[1][0]
             cfgLabel = taskID[1][1]
             cmdStr, respStr = self.SQUID.setCfg(activeAxis, cfgLabel)
-            self.modConfig.queue.put('SQUIDControl:' + cmdStr + ':' + respStr)
+            self.modConfig.queue.put('frmSQUID:' + cmdStr + ':' + respStr)
             
         elif (taskID[0] == self.SQUID_READ):
             cmdStr, respStr = self.SQUID.getResponse()
-            self.modConfig.queue.put('SQUIDControl:' + cmdStr + ':' + respStr)
+            self.modConfig.queue.put('frmSQUID:' + cmdStr + ':' + respStr)
                 
-        return 'SQUIDControl'
+        return 'frmSQUID'
 
     '''
     '''
@@ -666,7 +753,7 @@ class DevicesControl():
 
         if (taskID[0] == self.VACUUM_INIT):
             cmdStr, respStr = self.vacuum.init(self.ADwin)                        
-            self.modConfig.queue.put('VacuumControl:' + cmdStr + ':' + respStr)
+            self.modConfig.queue.put('frmVacuum:' + cmdStr + ':' + respStr)
             
         elif (taskID[0] == self.VACUUM_SET_CONNECT):
             mode = taskID[1][0]
@@ -674,7 +761,7 @@ class DevicesControl():
             if 'On' in mode:
                 switch = True
             cmdStr, respStr = self.vacuum.valveConnect(switch)
-            self.modConfig.queue.put('VacuumControl:' + cmdStr + ':' + respStr)
+            self.modConfig.queue.put('frmVacuum:' + cmdStr + ':' + respStr)
 
         elif (taskID[0] == self.VACUUM_SET_MOTOR):
             mode = taskID[1][0]
@@ -682,17 +769,17 @@ class DevicesControl():
             if 'On' in mode:
                 switch = True
             cmdStr, respStr = self.vacuum.motorPower(self.ADwin, switch)
-            self.modConfig.queue.put('VacuumControl:' + cmdStr + ':' + respStr)
+            self.modConfig.queue.put('frmVacuum:' + cmdStr + ':' + respStr)
             
         elif (taskID[0] == self.VACUUM_RESET):
             cmdStr, respStr = self.vacuum.reset()        
-            self.modConfig.queue.put('VacuumControl:' + cmdStr + ':' + respStr)
+            self.modConfig.queue.put('frmVacuum:' + cmdStr + ':' + respStr)
 
         elif (taskID[0] == self.VACUUM_SET_DEGAUSSER):
             mode = taskID[1][0]
             self.vacuum.degausserCooler(mode)
         
-        return 'VacuumControl'
+        return 'frmVacuum'
 
     '''
     '''
@@ -704,7 +791,7 @@ class DevicesControl():
             
         elif (taskID[0] == self.AF_REFRESH_T):
             temp1, temp2 = self.ADwin.refreshTs()
-            self.modConfig.queue.put('ADWinAFControl:' + temp1 + ':' + temp2)
+            self.modConfig.queue.put('frmADWIN_AF:' + temp1 + ':' + temp2)
             
         elif (taskID[0] == self.AF_SET_RELAYS_DEFAULT):
             self.ADwin.TrySetAllRelaysToDefaultPosition_ADwin()
@@ -718,7 +805,7 @@ class DevicesControl():
                                    ClipTest = False, 
                                    Verbose=Verbose)
             
-            self.modConfig.queue.put('ADWinAFControl:Active Coil = Transverse')
+            self.modConfig.queue.put('frmADWIN_AF:Active Coil = Transverse')
     
             self.ADwin.executeRamp(self.modConfig.TransverseCoilSystem, 
                                    self.modConfig.AfTransMax, 
@@ -767,7 +854,21 @@ class DevicesControl():
                                        Verbose = Verbose,
                                        DoDCFieldRecord = DoDCFieldRecord)
 
-        return 'ADWinAFControl'
+        return 'frmADWIN_AF'
+
+    '''
+    '''
+    def runMeasurementTask(self, taskID):
+        deviceID = 'frmMagnetometerControl'
+        
+        if (taskID[0] == self.MEASUREMENT_MANUAL_HOLDER):            
+            deviceID = 'frmMagnetometerControl'
+            self.parseManualHolderParams(taskID[1][0])
+            self.SampleHolder = DataExchange.loadSampleHolder(taskID[1][1], self.SampleHolder, self) 
+            self.SampleIndexRegistry = DataExchange.loadSampleIndexRegistry(taskID[1][2], self.SampleIndexRegistry, self)
+            self.modMeasure.Manual_MeasureHolder()
+            
+        return deviceID
 
     '''
     '''
@@ -832,7 +933,10 @@ class DevicesControl():
 
             elif (deviceID == DEVICE_AF):
                 deviceStr = self.runAFTask(taskID)
-                
+                            
+            elif (deviceID == DEVICE_MEASUREMENT):
+                deviceStr = self.runMeasurementTask(taskID)
+
             elif (deviceID == DEVICE_SYSTEM):
                 deviceStr = self.runSystemTask(taskID)
                                             

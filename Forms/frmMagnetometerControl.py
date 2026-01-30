@@ -6,6 +6,8 @@ Created on Nov 7, 2024
 import wx
 import numpy as np
 
+from Process.DataExchange import DataExchange
+
 class AutoPage(wx.Panel):
     def __init__(self, noteBook, parent, mainForm):
         wx.Panel.__init__(self, noteBook)
@@ -279,6 +281,16 @@ class ManualPage(wx.Panel):
         self.cmdManRun.Enable(False)
         return
 
+    '''
+    '''
+    def getManualHolderParams(self):
+        manualHolderParams = {}
+        manualHolderParams['frmAF_2G_txtWaitingTime'] = self.mainForm.frmAF_2G.txtWaitingTime.GetValue()
+        manualHolderParams['frmMeasure_lblDemag'] = self.mainForm.frmMeasure.lblDemag.GetValue()
+        manualHolderParams['frmADWIN_AF_Verbose'] = self.mainForm.frmADWIN_AF.debugChkBox.GetValue()
+        
+        return manualHolderParams
+
     '''--------------------------------------------------------------------------------------------
                         
                         Event Handler Functions
@@ -321,51 +333,18 @@ class ManualPage(wx.Panel):
             self.mainForm.FLAG_MagnetUse = True # Notify that we're using magnetometer
             
             self.DisableMagnetCmds()            # Disable buttons that use magnetometer
+            try:
+                self.mainForm.SampleHolder.SampleHeight = int(float(self.txtSampleHeight.GetValue()) * self.mainForm.modConfig.UpDownMotor1cm)
+            except:
+                self.mainForm.SampleHolder.SampleHeight = 0
+
+            manualHolderParams = self.getManualHolderParams()
+            sampleHolderParams = DataExchange.parseSampleHolder(self.mainForm.SampleHolder)
+            sampleIndexRegistryParams = DataExchange.parseSampleIndexRegistry(self.mainForm.SampleIndexRegistry)
+            self.mainForm.pushTaskToQueue([self.mainForm.devControl.MEASUREMENT_MANUAL_HOLDER, [manualHolderParams, 
+                                                                                                sampleHolderParams, 
+                                                                                                sampleIndexRegistryParams]])
             
-            self.mainForm.pushTaskToQueue([self.mainForm.devControl.MOTOR_NEAREST_HOLE, [None]])
-            
-            self.mainForm.pushTaskToQueue([self.mainForm.paleoThread.SHOW_FORMS, ['frmMeasure', 'cmdManHolder_Click']])
-                        
-            '''========================================================================================================
-            '            '(March 10, 2011 - I Hilburn)
-            '            'This code has been commented out as it is being applied even when the
-            '            'user has not selected for the susceptibility measurements to be performed
-            '            'New code has been added in MeasureTreatAndRead in
-            '            'modMeasure to ensure that the susceptibility lagTime is set during the appropriate
-            '            'Holder measurements
-            ''--------------------------------------------------------------------------------------------------------
-            '            If COMPortSusceptibility > 0 And EnableSusceptibility Then frmSusceptibilityMeter.LagTime
-            ========================================================================================================'''
-            
-            '''
-            ' reset SampleHolder step type to NRM, just in case
-            SampleHolder.Parent.measurementSteps(1).StepType = "NRM"
-            SampleHolder.Parent.measurementSteps(1).Level = 0
-    
-    '        Motor_MoveLoadToZero         ' Lower sample to zero position
-            'MotorUpDn_Move ZeroPos, 2
-            
-            Measure_TreatAndRead SampleHolder, False ' Read Holder
-    
-    '        Motor_MoveZeroToLoad         ' Raise sample back to load position
-            
-            MotorUpDn_Move 0, 2
-            HolderMeasured = True        ' Set the "holder measured" flag
-            
-            'DisplayStatus (5)            ' Waiting for motor to stop...
-     '       Motor_WaitStop ("UPDOWN")              ' Wait for motor
-            'DisplayStatus (-1)           ' Clear status bar
-            
-            frmProgram.StatBarNew vbNullString
-            
-            FLAG_MagnetUse = False       ' Notify that we stopped
-            
-            EnableMagnetCmds
-            
-            SampleHolder.SampleHeight = 0
-        
-        End If
-        '''
         return
     
     '''
@@ -477,9 +456,36 @@ class frmMagnetometerControl(wx.Frame):
         comboBoxHeight = 22
         self.scaleList = ['1.0', '0.1']
         self.cmbSusceptibilityScaleFactor = wx.ComboBox(panel, value='', pos=(XOri + XOffset, YOri + YOffset), size=(comboBoxLength, comboBoxHeight), choices=self.scaleList)
-        self.cmbSusceptibilityScaleFactor.SetSelection(1)
+        self.cmbSusceptibilityScaleFactor.SetValue(str(self.parent.modConfig.SusceptibilityScaleFactor))
+        self.cmbSusceptibilityScaleFactor.Bind(wx.EVT_COMBOBOX, self.onChangeScaleFactor)
         
         return             
+
+    '''
+        Serice request from DeviceControl thread
+    '''
+    def updateGUI(self, messageList):
+        if ('Show frmMeasure' in messageList[0]):
+            if (len(messageList) >= 2):
+                functionID = messageList[1]
+                self.parent.frmMeasure.initForm(functionID)
+                self.parent.frmMeasure.Show()
+                if not 'frmMeasure' in self.parent.panelList.keys():
+                    self.parent.panelList['frmMeasure'] = self.parent.frmMeasure
+                    
+        elif ('cmdManHolder_End' in messageList[0]):
+            self.mainForm.FLAG_MagnetUse = False                      # Notify that we stopped        
+            self.EnableMagnetCmds()
+                            
+        return
+    
+    '''
+        Handle cleanup if neccessary
+    '''
+    def runEndTask(self):
+        return
+
+    
 
     '''--------------------------------------------------------------------------------------------
                         
@@ -491,7 +497,16 @@ class frmMagnetometerControl(wx.Frame):
                         
                         Event Handler Functions
                         
-    --------------------------------------------------------------------------------------------'''       
+    --------------------------------------------------------------------------------------------'''     
+    '''
+    '''
+    def onChangeScaleFactor(self, event):
+        try:
+            self.parent.modConfig.SusceptibilityScaleFactor = float(self.cmbSusceptibilityScaleFactor.GetValue()) 
+        except:
+            self.parent.modConfig.SusceptibilityScaleFactor = 0.1
+        return
+      
     '''
     '''
     def onPageChanged(self, event):
@@ -504,8 +519,8 @@ class frmMagnetometerControl(wx.Frame):
     def onClose(self, event):
         if (self.parent != None):
             if self.parent.panelList:
-                if 'MagnetometerControl' in self.parent.panelList.keys():          
-                    del self.parent.panelList['MagnetometerControl']
+                if 'frmMagnetometerControl' in self.parent.panelList.keys():          
+                    del self.parent.panelList['frmMagnetometerControl']
                 
         self.Destroy()
         
@@ -513,8 +528,12 @@ class frmMagnetometerControl(wx.Frame):
     '''
     def onShow(self, event):
         if (self.parent != None):
-            self.parent.NOCOMM_Flag = False
+            self.parent.modConfig.processData.NOCOMM_MODE = False
             self.parent.modConfig.processData.motorsEnable = True
+            self.parent.modConfig.processData.susceptibilityEnable = True
+            self.parent.modConfig.processData.adwinEnable = True
+            self.parent.modConfig.processData.irmArmEnable = True
+            self.parent.modConfig.processData.squidEnable = True
         return
         
     '''--------------------------------------------------------------------------------------------

@@ -3,7 +3,6 @@ Created on Oct 31, 2024
 
 @author: hd.nguyen
 '''
-from ClassModules.Sample import Sample
 
 class ProcessData():
     '''
@@ -14,6 +13,7 @@ class ProcessData():
         Constructor
         '''
         self.config = None
+        self.NOCOMM_MODE = False
         self.frmSettingsVisible = False
         self.frmSettingsOptions2Visible = False
         self.frmSettingsChkOverrideHomeToTop_ForMoveMotorAbsoluteXY = False
@@ -30,9 +30,12 @@ class ProcessData():
         self.irmArmEnable = False
         self.squidEnable = False
         self.adwinEnable = False
-        
-        self.SampleHolder = Sample()
-        
+        self.susceptibilityEnable = False
+        self.SampleHandlerCurrentHole = 1
+        self.SampleNameCurrent = ''
+        self.SampleStepCurrent = ''
+        self.EnableHolderMomentTooHighRemeasurements = False
+                
         self.PortOpen = {'UpDown': False,
                          'Turning': False,
                          'ChangerX': False,
