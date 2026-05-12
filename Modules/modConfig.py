@@ -200,6 +200,9 @@ class ModConfig():
     def parseConfig(self, config):
         self.processData.config = config
         self.NoCommMode = self.getConfig_Bool(config, 'Program', 'NoCommMode', False)
+        self.DefaultBackupDrive = config['Program']['DefaultBackupDrive'].strip()
+        if (self.DefaultBackupDrive == ''):
+            self.DefaultBackupDrive = 'C'
 
         self.SlotMin = self.getConfig_Int(config, 'SampleChanger', 'SlotMin', 1)
         self.SlotMax = self.getConfig_Int(config, 'SampleChanger', 'SlotMax', 200)

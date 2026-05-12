@@ -23,7 +23,7 @@ from Modules.modChanger import ModChanger
 from Modules.modAF_DAQ import ModAF_DAQ
 from Modules.modMeasure import modMeasure
 
-from ClassModules.SampleIndexRegistration import SampleIndexRegistrations
+from ClassModules.SampleIndexRegistration import SampleIndexRegistration, SampleIndexRegistrations
 from ClassModules.SampleCommand import SampleCommands
 from ClassModules.Sample import Sample
 
@@ -93,6 +93,7 @@ class DevicesControl():
     AF_SET_RELAYS_DEFAULT   = 0x4005
     
     MEASUREMENT_MANUAL_HOLDER   = 0x5001
+    MEASUREMENT_MANUAL_SAMPLE   = 0x5002
         
     SYSTEM_DISCONNECT       = 0xF001
     
@@ -142,7 +143,8 @@ class DevicesControl():
                 AF_REFRESH_T: 'AF Refresh Temperature',
                 AF_CLEAN_COIL: 'AF Clean Coils',
                 AF_START_RAMP: 'AF Start Ramp',
-                MEASUREMENT_MANUAL_HOLDER: 'Run Magnetometer Control - Manual Measure Holder'}
+                MEASUREMENT_MANUAL_HOLDER: 'Run Magnetometer Control - Manual Measure Holder',
+                MEASUREMENT_MANUAL_SAMPLE: 'Run Magnetometer Control - Manual Measure Sample'}
             
     modConfig = None
     
@@ -165,10 +167,8 @@ class DevicesControl():
         '''
         Constructor
         '''
-        self.currentPath = os.getcwd()
-        if 'Forms' in self.currentPath:
-            self.currentPath = self.currentPath.replace('\\Forms', '')
-        self.currentPath += '\\Hardware\\Device\\'        
+        self.currentPath = os.path.dirname(os.path.abspath(__file__))
+        self.currentPath += '\\Device\\'        
         self.DCMotorHomeToTop_StopOnTrue = False
         self.processQueue = None
         self.gaussMeter = GaussMeterControl()
@@ -231,7 +231,7 @@ class DevicesControl():
         else:
             try:            
                 message += label + ': ' + comPort  
-                device = VacuumControl(9600, self.currentPath, comPort, label, self.modConfig)
+                device = VacuumControl(9600, self.currentPath, comPort, label, self)
             except:
                 message += ' Failed to open'
                 self.devicesAllGoodFlag = False
@@ -446,6 +446,37 @@ class DevicesControl():
                 
         return message
       
+    '''
+    '''
+    def waitForDataFromGUI(self):
+        dataStruct = None
+        pauseFlag = True
+        while pauseFlag:
+            try:
+                queueSize = self.processQueue.qsize()
+                if (queueSize > 0):
+                    for _ in range(0, queueSize):                
+                        message = self.processQueue.get_nowait()
+                        if isinstance(message, dict):
+                            if (message['DataType'] == 'SampleHolder'):
+                                sampleRegistry = SampleIndexRegistration(self)
+                                dataStruct = Sample(parent=sampleRegistry)
+                                dataStruct = DataExchange.loadSampleHolder(message, dataStruct, self)
+                            
+                            elif (message['DataType'] == 'SampleIndexRegistry'):
+                                dataStruct = SampleIndexRegistrations()
+                                dataStruct = DataExchange.loadSampleIndexRegistration(message, dataStruct, self)
+              
+                            pauseFlag = False
+                        else:
+                            time.sleep(0.1)
+                else:
+                    time.sleep(0.1)
+            except:
+                time.sleep(0.1)
+
+        return dataStruct
+      
     '''--------------------------------------------------------------------------------------------
                         
                      Messaging Functions
@@ -486,7 +517,7 @@ class DevicesControl():
     
     '''
     '''
-    def displayMessageBox(self, caption=None, message=None, flashing=None, postMessageHandler=None, pause=False):
+    def displayMessageBox(self, caption=None, message=None, flashing=None, postMessageHandler=None, pause=False, buttons='YES_NO'):
         sendMessage = 'MessageBox'
 
         if (caption != None):
@@ -500,6 +531,8 @@ class DevicesControl():
 
         if (postMessageHandler != None):
             sendMessage += ':HandlerStr = ' + postMessageHandler
+            
+        sendMessage += ':Buttons = ' + buttons
                       
         self.modConfig.queue.put(sendMessage)
           
@@ -512,6 +545,13 @@ class DevicesControl():
     '''
     def sendEmailNotification(self, message):
         self.modConfig.queue.put('EmailNotification:' + message)
+        return
+
+    '''
+        Set background color of the main panel for warning
+    '''
+    def SetCodeLevel(self, codeStr):
+        self.modConfig.queue.put('SetCodeLevel:' + codeStr)
         return
 
     '''--------------------------------------------------------------------------------------------
@@ -752,7 +792,7 @@ class DevicesControl():
     def runVacuumTask(self, taskID):
 
         if (taskID[0] == self.VACUUM_INIT):
-            cmdStr, respStr = self.vacuum.init(self.ADwin)                        
+            cmdStr, respStr = self.vacuum.init()                        
             self.modConfig.queue.put('frmVacuum:' + cmdStr + ':' + respStr)
             
         elif (taskID[0] == self.VACUUM_SET_CONNECT):
@@ -768,7 +808,7 @@ class DevicesControl():
             switch = False
             if 'On' in mode:
                 switch = True
-            cmdStr, respStr = self.vacuum.motorPower(self.ADwin, switch)
+            cmdStr, respStr = self.vacuum.MotorPower(switch)
             self.modConfig.queue.put('frmVacuum:' + cmdStr + ':' + respStr)
             
         elif (taskID[0] == self.VACUUM_RESET):
@@ -868,6 +908,12 @@ class DevicesControl():
             self.SampleIndexRegistry = DataExchange.loadSampleIndexRegistry(taskID[1][2], self.SampleIndexRegistry, self)
             self.modMeasure.Manual_MeasureHolder()
             
+        elif (taskID[0] == self.MEASUREMENT_MANUAL_SAMPLE):
+            chkVacuum = taskID[1][0]
+            specName = taskID[1][1]
+            self.modMeasure.Holder = DataExchange.loadMeasurementBlock(taskID[1][2])
+            self.modMeasure.Manual_MeasureSample(chkVacuum, specName)
+            
         return deviceID
 
     '''
@@ -891,7 +937,7 @@ class DevicesControl():
                     self.ADwin.AF2GControl.Disconnect()
                 
             if (self.vacuum != None):                
-                self.vacuum.init(self.ADwin)
+                self.vacuum.init()
                 self.vacuum.Disconnect()                
 
             if (self.susceptibility != None):

@@ -5,8 +5,6 @@ Created on Oct 22, 2024
 '''
 import wx
 
-from Forms.frmTestUnit import frmTestUnit
-
 class frmDCMotors(wx.Frame):
     '''
     classdocs
@@ -511,9 +509,7 @@ if __name__=='__main__':
     try:    
         app = wx.App(False)
         
-        testUnit = frmTestUnit()
-        motorControl = frmDCMotors(parent=testUnit)
-        testUnit.panelList['frmDCMotors'] = motorControl        
+        motorControl = frmDCMotors(parent=None)
         motorControl.Show(True)
         app.MainLoop()    
         

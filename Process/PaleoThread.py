@@ -11,6 +11,7 @@ from Forms.frmFlashingStatus import frmFlashingStatus
 
 from Hardware.DevicesControl import DevicesControl
 from Modules.modConfig import ModConfig
+from Process.DataExchange import DataExchange
 
 devControl = DevicesControl()
 
@@ -59,12 +60,17 @@ class PaleoThread():
     classdocs
     '''    
     END_OF_SEQUENCE     = 0xFFFF
+    PRE_THREAD_PROCESS  = 0xFFFE
+    
+    FRM_MAGNETOMETER_MAN_RUN = 0x0001
+    
     ENDTASK_SYSTEM_INIT = 0
     ENDTASK_MAG_INIT    = 1
 
     FLASH_DISPLAY_OFF_TIME = 10
 
     mainQueue = None
+    processQueue = None
     process = None    
     taskQueue = []        
     backgroundRunningFlag = False
@@ -87,26 +93,37 @@ class PaleoThread():
     '''
     def handleMessageBox(self, endMessage):
         messageList = endMessage.split(':')
-        captionStr = ''
+        captionStr = 'PaleoMag'
         messageStr = None
         handlerStr = ''
+        buttonStyle = wx.YES_NO|wx.CENTER
         for message in messageList:
             if 'CaptionStr = ' in message:
                 captionStr = message.replace('CaptionStr = ', '')
-            if 'MessageStr = ' in message:
+            elif 'MessageStr = ' in message:
                 messageStr = message.replace('MessageStr = ', '')
                 messageStr = messageStr.replace(';', '\n')
-            if 'FlashingStr = ' in message:
+            elif 'FlashingStr = ' in message:
                 self.flashingMessage = message.replace('FlashingStr = ', '')
-            if 'HandlerStr = ' in message:
+            elif 'HandlerStr = ' in message:
                 handlerStr = message.replace('HandlerStr = ', '')
+            elif 'Buttons = ' in message:
+                buttonStr = message.replace('Buttons = ', '')
+                if 'YES_NO' in buttonStr:
+                    buttonStyle = wx.YES_NO|wx.CENTER
+                elif 'OK' in buttonStr:
+                    buttonStyle = wx.OK|wx.CENTER
+                else:
+                    buttonStyle = wx.YES_NO|wx.CENTER
                 
         if (messageStr != None):
             self.backgroundRunningFlag = False
-            dlg = wx.MessageBox(messageStr, style=wx.YES_NO|wx.CENTER, caption=captionStr)
+            dlg = wx.MessageBox(parent=self.parent, message=messageStr, style=buttonStyle, caption=captionStr)
             if (dlg == wx.YES):
                 if (handlerStr == 'HomeToCenter'):
                     self.processQueue.put('Continue Flow:')
+            elif (dlg == wx.OK):
+                self.processQueue.put('Continue Flow:')
                                     
             else:
                 self.processQueue.put('Task Aborted')
@@ -188,6 +205,19 @@ class PaleoThread():
         return
 
     '''
+    '''
+    def handleSetCodeLevel(self, endMessage):
+        messageList = endMessage.split(':')
+        if (messageList[1] == 'CodeOrange'):
+            self.parent.messageBox.SetBackgroundColour('Orange')
+        elif (messageList[1] == 'CodeRed'):
+            self.parent.messageBox.SetBackgroundColour('Red')
+        elif (messageList[1] == 'CodeBlue'):
+            self.parent.messageBox.SetBackgroundColour('Cyan')
+            
+        return
+
+    '''
         If the number of message greater than 2,
         Else display the waring message in the dialog message box 
     '''
@@ -238,33 +268,69 @@ class PaleoThread():
             self.parent.timer.Stop()
             
         return
+
+    '''
+    '''
+    def handleDictionaryType(self, messageDict):
+        try:
+            selectedForm = messageDict['Form'] 
+            if selectedForm in self.parent.panelList.keys():
+                self.parent.panelList[selectedForm].updateGUI(messageDict)
+        except:
+            return
+        
+        return
     
     '''
     '''
     def parseDeviceMessages(self, endMessage):
-        if ('Task Completed' in endMessage):
-            self.handleTaskCompleted(endMessage)
-                                        
-        elif ('Error:' in endMessage):
-            self.handleErrorMessage(endMessage)
-                
-        elif ('MessageBox:' in endMessage):
-            self.handleMessageBox(endMessage)
-                
-        elif ('InputBox:' in endMessage):
-            self.handleInputBox(endMessage)
+        if isinstance(endMessage, dict):
+            self.handleDictionaryType(endMessage)
             
-        elif ('Warning:' in endMessage):
-            self.handleWarningMessage(endMessage)
-                
-        elif ('Program Status:' in endMessage):
-            self.handleProgramStatus(endMessage)
-                
         else:
-            self.handleTaskMessage(endMessage)
+            if ('Task Completed' in endMessage):
+                self.handleTaskCompleted(endMessage)
+                                            
+            elif ('Error:' in endMessage):
+                self.handleErrorMessage(endMessage)
+                    
+            elif ('MessageBox:' in endMessage):
+                self.handleMessageBox(endMessage)
+                    
+            elif ('InputBox:' in endMessage):
+                self.handleInputBox(endMessage)
+                
+            elif ('Warning:' in endMessage):
+                self.handleWarningMessage(endMessage)
+                    
+            elif ('Program Status:' in endMessage):
+                self.handleProgramStatus(endMessage)
+    
+            elif ('SetCodeLevel:' in endMessage):
+                self.handleSetCodeLevel(endMessage)
+                    
+            else:
+                self.handleTaskMessage(endMessage)
                                                                                 
         return
         
+    '''
+    '''
+    def sendData(self, dataType, dataStruc):
+        if (dataType == 'Sample'):
+            dataHolder = DataExchange.parseSampleHolder(dataStruc)
+            
+        self.processQueue.put(dataHolder)
+        return
+
+    '''
+        before running a task in a queue, sometime there is a need to update the data
+    '''
+    def runPreThreadProcess(self, taskID):
+        if (taskID == self.FRM_MAGNETOMETER_MAN_RUN):
+            self.parent.magControl.manualPage.setMeasurementManualSample()
+        return
+
     '''--------------------------------------------------------------------------------------------
                         
                         Multiprocessing Functions
@@ -288,11 +354,15 @@ class PaleoThread():
             
             elif (sequenceType == self.ENDTASK_MAG_INIT):          
                 self.parent.FLAG_MagnetInit = True        # We're done initializing
-                self.parent.registryControl.Show()
-                self.parent.panelList['frmSampleIndexRegistry'] = self.parent.registryControl
+                self.parent.frmSampleIndexRegistry.Show()
+                self.parent.panelList['frmSampleIndexRegistry'] = self.parent.frmSampleIndexRegistry
             self.parent.updateProgressStatus('Tasks Completed')
             self.parent.setStatusColor('Green')
                     
+        elif (taskID == self.PRE_THREAD_PROCESS):
+            runFlag = False
+            self.runPreThreadProcess(processFunction[1])
+            
         else:
             if (taskID in self.parent.devControl.messages.keys()):
                 self.parent.appendMessageBox(self.parent.devControl.messages[taskID] + '\n')

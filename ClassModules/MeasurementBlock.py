@@ -4,7 +4,8 @@ Created on Nov 3, 2025
 @author: hd.nguyen
 '''
 import math
-import numpy as np
+
+from Modules.modVector3d import modVector3d
 
 from ClassModules.Cartesian3D import Cartesian3D
 
@@ -33,14 +34,19 @@ class MeasurementBlock():
             sample = Cartesian3D()
             self.Holder.append(sample)
                 
-        self._AverageMagnitude = 0.0        
         self.Direction = 1
         self.sKey = ''
-                
+        
+        # Hung_Debug
+        self.HungDebug_X = [0.0]*4
+        self.HungDebug_Y = [0.0]*4
+        self.HungDebug_Z = [0.0]*4
+                        
         self._isUp = True
         self._HolderFVal = 0.0
         self._FischerSD = 0.0
         self._Kappa = 0.0
+        self._AverageMagnitude = 0.0        
         self._Average = Cartesian3D()
         self._sum = Cartesian3D()
         self._sumSqs = Cartesian3D()
@@ -148,8 +154,11 @@ class MeasurementBlock():
         for i in range(0, 4):
             workingvector = self.CorrectedSample(i)
             self._sum.X += workingvector.X
+            self.HungDebug_X[i] = workingvector.X
             self._sum.Y += workingvector.Y
+            self.HungDebug_Y[i] = workingvector.Y
             self._sum.Z += workingvector.Z
+            self.HungDebug_Z[i] = workingvector.Z
 
         return self._sum
         
@@ -259,7 +268,6 @@ class MeasurementBlock():
             
         return correctedHolder 
    
-
     '''
     '''
     def CorrectedSample(self, i):
@@ -362,14 +370,17 @@ class MeasurementBlocks():
         self._HolderFVal = 0.0
         self._Kappa = 0.0
         self._FischerSD = 0.0
+        self._ErrorHorizontal = 0.0
+        self._UpToDown = 0.0
         
         self._Count = None
         self._VectSum = Cartesian3D()
         self._VectAvg = Cartesian3D()
         self._VectSD = Cartesian3D()
         self._VectInd = Cartesian3D()
+        self._MomentVector = Cartesian3D()
         self._AverageBlock = MeasurementBlock()
-            
+                    
     '''--------------------------------------------------------------------------------------------
                         
                         properties
@@ -557,6 +568,19 @@ class MeasurementBlocks():
         return self._Moment
 
     @property
+    def MomentVector(self):
+        return self._MomentVector
+
+    @MomentVector.getter
+    def MomentVector(self):
+        workingvector = self.VectAvg
+        self._MomentVector.X = workingvector.X * self.parent.modConfig.RangeFact
+        self._MomentVector.Y = workingvector.Y * self.parent.modConfig.RangeFact
+        self._MomentVector.Z = workingvector.Z * self.parent.modConfig.RangeFact
+        
+        return self._MomentVector
+
+    @property
     def HolderFVal(self):
         return self._HolderFVal
 
@@ -672,6 +696,59 @@ class MeasurementBlocks():
             self._Kappa = (N - 1) / (N - r)
         
         return self._Kappa
+
+    @property
+    def ErrorHorizontal(self):
+        return self._ErrorHorizontal
+    
+    @ErrorHorizontal.getter
+    def ErrorHorizontal(self):
+        
+        dataUp = self.DirectionalSubset(True)
+        datadown = self.DirectionalSubset(False)
+    
+        if ((datadown.Count == 0) or (dataUp.Count == 0)):
+            self._ErrorHorizontal = 0
+        else:
+            self._ErrorHorizontal = modVector3d.RadToDeg((modVector3d.Atan2(dataUp.VectAvg.X, dataUp.VectAvg.Y) - \
+                                                          modVector3d.Atan2(datadown.VectAvg.X, datadown.VectAvg.Y)))
+        
+        return self._ErrorHorizontal
+
+    @property
+    def UpToDown(self):
+        return self._UpToDown
+    
+    @UpToDown.getter
+    def UpToDown(self):
+        dataUp = self.DirectionalSubset(True)
+        datadown = self.DirectionalSubset(False)
+    
+        datadownmag = datadown.VectAvg.mag
+        dataupmag = dataUp.VectAvg.mag
+        if (datadownmag == 0):
+            self._UpToDown = 0
+            return self._UpToDown 
+        
+        self._UpToDown = dataupmag / datadownmag    
+        return self._UpToDown
+
+    '''--------------------------------------------------------------------------------------------
+                        
+                        Internal Functions
+                        
+    --------------------------------------------------------------------------------------------'''
+    def DirectionalSubset(self, isUp):
+        directionalSubset = MeasurementBlocks()
+        cnt = self.Count
+        if (cnt == 0):
+            return
+        
+        for i in range(0, cnt):
+            if (self.Item[i].isUp == isUp):
+                directionalSubset.Item.append(self.Item[i])
+                    
+        return directionalSubset
     
     '''--------------------------------------------------------------------------------------------
                         
@@ -702,5 +779,13 @@ class MeasurementBlocks():
         # Return the object created        
         return objNewMember
                 
+    '''
+    '''
+    def Assimilate(self, blocks):
+        workingBlock = MeasurementBlock()
+        for workingBlock in blocks.Item:
+            self.Add(workingBlock)        
+    
+        return
     
         

@@ -7,7 +7,13 @@ import wx
 import numpy as np
 
 from Process.DataExchange import DataExchange
+from Modules.modProg import modProg
 
+'''
+    -------------------------------------------------------------------------------------------------
+    -------------------------------------------------------------------------------------------------
+    -------------------------------------------------------------------------------------------------
+'''
 class AutoPage(wx.Panel):
     def __init__(self, noteBook, parent, mainForm):
         wx.Panel.__init__(self, noteBook)
@@ -47,6 +53,8 @@ class AutoPage(wx.Panel):
 
 '''
     -------------------------------------------------------------------------------------------------
+    -------------------------------------------------------------------------------------------------
+    -------------------------------------------------------------------------------------------------
 '''
 class ManualPage(wx.Panel):
     def __init__(self, noteBook, parent, mainForm):
@@ -79,7 +87,7 @@ class ManualPage(wx.Panel):
         self.cmdManRun.Bind(wx.EVT_BUTTON, self.cmdManRun_Click)
         self.cmdManRun.Enable(False)
         
-        self.vacuumOnChkBox = wx.CheckBox(self, label='Keep The Vacuum On', pos=(XOri, YOri + 3*YOffset + 12))
+        self.chkVacuum = wx.CheckBox(self, label='Keep The Vacuum On', pos=(XOri, YOri + 3*YOffset + 12))
         self.cmdOpenSampleFile = wx.Button(self, label='Open Sample File', pos=(XOri + XOffset, YOri + 3*YOffset + 5), size=(btnLength, btnHeight))
         self.cmdOpenSampleFile.Bind(wx.EVT_BUTTON, self.onOpenSampleFile)
         self.cmdOpenSampleFile.Enable(False)
@@ -89,14 +97,6 @@ class ManualPage(wx.Panel):
                         Internal Functions
                         
     --------------------------------------------------------------------------------------------'''
-    def getFloat(self, textBox):
-        try:
-            floatValue = float(textBox.GetValue())
-        except:
-            floatValue = 0.0
-            
-        return floatValue
-
     '''
         This procedure enables the commands that require use of the
         magnetometer once the magnetometer is initialized.  We know when
@@ -135,11 +135,11 @@ class ManualPage(wx.Panel):
         if (sampleName == ''):
             return
         
-        self.mainForm.registryControl.frmPlots.RefreshSamples()
-        self.mainForm.registryControl.frmPlots.cmbSamples.SetValue(sampleName)
-        self.mainForm.registryControl.frmPlots.ZOrder()
-        self.mainForm.registryControl.frmPlots.Show()
-        self.mainForm.registryControl.frmPlots.SetFocus()
+        self.mainForm.frmSampleIndexRegistry.frmPlots.RefreshSamples()
+        self.mainForm.frmSampleIndexRegistry.frmPlots.cmbSamples.SetValue(sampleName)
+        self.mainForm.frmSampleIndexRegistry.frmPlots.ZOrder()
+        self.mainForm.frmSampleIndexRegistry.frmPlots.Show()
+        self.mainForm.frmSampleIndexRegistry.frmPlots.SetFocus()
         return
     
     '''
@@ -157,7 +157,7 @@ class ManualPage(wx.Panel):
         status = False
      
         # Store the sample height to local variable in CM's
-        SampleHeight = self.getFloat(self.txtSampleHeight)
+        SampleHeight = modProg.getFloat(self.txtSampleHeight.GetValue())
         
         # First check to see if the the SampleMotorUnits have the correct sign
         if (np.sign(SampleHeight) == np.sign(self.mainForm.modConfig.MeasPos)):        
@@ -280,7 +280,7 @@ class ManualPage(wx.Panel):
         self.cmdManHolder.Enable(False)
         self.cmdManRun.Enable(False)
         return
-
+    
     '''
     '''
     def getManualHolderParams(self):
@@ -290,6 +290,48 @@ class ManualPage(wx.Panel):
         manualHolderParams['frmADWIN_AF_Verbose'] = self.mainForm.frmADWIN_AF.debugChkBox.GetValue()
         
         return manualHolderParams
+
+    '''--------------------------------------------------------------------------------------------
+                        
+                        GUI Event Functions
+                        
+    --------------------------------------------------------------------------------------------'''
+    '''
+        cmdManRun_Click function is splited into GUI and device control.
+        This function setup the GUI for cmdManRun_Click function after 
+        making sure that cmdManHolder_Click function has been excecuted.  
+    '''
+    def SetUp_cmdManRun(self):
+        if self.mainForm.modFlow.Prog_halted:
+            return                              # (September 2007 L Carporzen) New version of the Halt button
+        
+        self.mainForm.FLAG_MagnetUse = True     # Notify that we're using magnetometer
+        self.DisableMagnetCmds()                # Disable buttons that use magnetometer
+
+        self.mainForm.updateViewMeasurementWindow(True)     # Update menu bar
+        specName = self.cmbManSample.GetValue()
+        specParent = self.mainForm.SampleIndexRegistry.SampleFileByIndex(self.cmbManSample.GetCurrentSelection())
+        specimen = self.mainForm.SampleIndexRegistry.GetItem(specParent).sampleSet.GetItem(specName)
+        SampleHeight = modProg.getFloat(self.txtSampleHeight.GetValue()) * self.mainForm.modConfig.UpDownMotor1cm
+        specimen.SampleHeight = SampleHeight
+        self.mainForm.frmMeasure.clearData()
+        self.mainForm.frmMeasure.HideStats()
+        self.mainForm.frmMeasure.InitEqualArea()              # (August 2007 L Carporzen) Equal area plot
+        self.mainForm.frmMeasure.ZOrder()
+        self.mainForm.frmMeasure.Show()
+        dataDict = {'avgSteps': specimen.parent.avgSteps,
+                    'curDemagLong': specimen.parent.curDemagLong,
+                    'doUp': specimen.parent.doUp,
+                    'doBoth': specimen.parent.doBoth,
+                    'filename': specimen.parent.filename}
+        self.mainForm.frmMeasure.SetFields(dataDict)
+        self.mainForm.frmMeasure.SetSample(self.cmbManSample.GetValue())
+        self.mainForm.updateTaskStatus("Measuring...")
+        self.mainForm.frmMeasure.ZOrder()
+        self.mainForm.frmMeasure.Show()
+        
+        self.mainForm.paleoThread.sendData('Sample', specimen)        
+        return
 
     '''--------------------------------------------------------------------------------------------
                         
@@ -350,7 +392,45 @@ class ManualPage(wx.Panel):
     '''
     '''
     def cmdManRun_Click(self, event=None):
-        print('TODO: onCmdManRun')
+                
+        if (self.mainForm.SampleIndexRegistry.Count == 0):
+            wx.MessageBox("Please press Add to registry...", caption="Warning!")    # (September 2007 L Carporzen) Need to have something in the registry
+            return
+        
+        self.mainForm.pushTaskToQueue([self.mainForm.devControl.VACUUM_SET_MOTOR, ['On']])
+        
+        '''
+            (March 2011, I Hilburn)
+            Do a sample height check:
+            1) Test to see if the sign of the sample height is correct for the sign of the Motor UpDown position
+            2) Test to see, if AF, ARM, IRM, or susceptibility steps are involved if the Sample Height is too large
+               for the sample to be raised high enough to reach the needed motor up down position.
+        '''
+        if not self.SampleHeightCheck(True):
+            return
+        
+        if not self.mainForm.FLAG_MagnetUse:
+            if not self.mainForm.HolderMeasured:
+                # We haven't measured the holder yet. Query user.
+                ret = wx.MessageBox(parent=self.mainForm, message="The holder has not been measured yet, measure it now?", style=wx.OK|wx.CANCEL|wx.CENTER, caption="Continue?")
+                if (ret == wx.OK):
+                    self.cmdManHolder_Click()
+                else:
+                    return
+                        
+            self.mainForm.pushTaskToQueue([self.mainForm.paleoThread.PRE_THREAD_PROCESS, self.mainForm.paleoThread.FRM_MAGNETOMETER_MAN_RUN])
+                    
+        if not self.chkVacuum.GetValue():
+            self.mainForm.pushTaskToQueue([self.mainForm.devControl.VACUUM_SET_MOTOR, ['Off']])
+        return
+    
+    '''
+    '''
+    def setMeasurementManualSample(self):
+        chkVacuum = self.chkVacuum.GetValue()
+        specName = self.cmbManSample.GetValue()
+        holderDict = DataExchange.parseMeasurementBlock(self.mainForm.frmMeasure.Holder)
+        self.mainForm.pushTaskToQueue([self.mainForm.devControl.MEASUREMENT_MANUAL_SAMPLE, [chkVacuum, specName, holderDict]])
         return
     
     '''
@@ -370,7 +450,10 @@ class ManualPage(wx.Panel):
         self.DataAnalysis_SampleFile(filename)
         return
 
+
 '''
+    -------------------------------------------------------------------------------------------------
+    -------------------------------------------------------------------------------------------------
     -------------------------------------------------------------------------------------------------
 '''
 class frmMagnetometerControl(wx.Frame):
@@ -474,8 +557,18 @@ class frmMagnetometerControl(wx.Frame):
                     self.parent.panelList['frmMeasure'] = self.parent.frmMeasure
                     
         elif ('cmdManHolder_End' in messageList[0]):
-            self.mainForm.FLAG_MagnetUse = False                      # Notify that we stopped        
-            self.EnableMagnetCmds()
+            self.parent.FLAG_MagnetUse = False                      # Notify that we stopped        
+            self.parent.HolderMeasured = True                       # Set the "holder measured" flag
+            self.manualPage.EnableMagnetCmds()
+                                    
+        elif ('SetUp_cmdManRun' in messageList[0]):
+            self.manualPage.SetUp_cmdManRun()
+            
+        elif ('cmdManRun_End' in messageList[0]):
+            self.parent.frmStats.Hide()
+            self.parent.frmMeasure.Hide()
+            self.parent.FLAG_MagnetUse = False                      # Notify that we're done
+            self.manualPage.EnableMagnetCmds()
                             
         return
     

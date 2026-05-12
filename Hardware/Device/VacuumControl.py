@@ -14,14 +14,19 @@ class VacuumControl(SerialPortDevice):
     '''
 
 
-    def __init__(self, baudRate, pathName, comPort, Label, modConfig=None):
+    def __init__(self, baudRate, pathName, comPort, Label, parent=None):
         '''
         Constructor
         '''        
         self.label = Label
         self.PortOpen = False
+        self.parent = parent
                 
-        SerialPortDevice.__init__(self, baudRate, 'VacuumControl', pathName, comPort, Label, modConfig)
+        self.VacuumMotorOn = False
+        self.VacuumMotorOff = True
+        self.MotorPowered = False
+                
+        SerialPortDevice.__init__(self, baudRate, 'VacuumControl', pathName, comPort, Label, self.parent.modConfig)
         
     '''
     '''
@@ -34,6 +39,9 @@ class VacuumControl(SerialPortDevice):
         time.sleep(0.01)
         
         respStr = self.readLine()
+        
+        self.VacuumMotorOn = True
+        self.MotorPowered = True
         
         return cmdStr, respStr
         
@@ -49,6 +57,9 @@ class VacuumControl(SerialPortDevice):
         time.sleep(0.01)
         
         respStr = self.readLine()
+        
+        self.VacuumMotorOff = True
+        self.MotorPowered = False
         
         return cmdStr, respStr
 
@@ -79,18 +90,41 @@ class VacuumControl(SerialPortDevice):
         respStr = self.readLine()
         
         return cmdStr, respStr
+    
+    '''
+    '''
+    def ValveConnect(self, mode):
+        if not self.parent.modConfig.EnableVacuum:
+            return
+        
+        if mode:
+            self.setValveConnect()
+            '''
+                now the digital lines
+                (July 2010 - I Hilburn) Replaces old frmMCC with frmDAQ_Comm using the Channel object variables
+            '''            
+            self.parent.ADwin.DoDAQIO(self.parent.modConfig.VacuumToggleA, True)
+        else:
+            self.clearValveConnect()
+            '''
+                now the digital lines
+                (July 2010 - I Hilburn) Replaces old frmMCC with frmDAQ_Comm using the Channel object variables
+            '''            
+            self.parent.ADwin.DoDAQIO(self.parent.modConfig.VacuumToggleA, True)
+            
+        return
         
     '''
     '''
-    def DegausserCooler(self, ADwin, switch):
+    def DegausserCooler(self, switch):
         # If vacuum module not enabled, exit sub
         if not self.modConfig.EnableDegausserCooler:
             return
         
         if switch:
-            ADwin.DoDAQIO(self.modConfig.DegausserToggle, True)
+            self.parent.ADwin.DoDAQIO(self.modConfig.DegausserToggle, True)
         else:
-            ADwin.DoDAQIO(self.modConfig.DegausserToggle, False)
+            self.parent.ADwin.DoDAQIO(self.modConfig.DegausserToggle, False)
         
         return
                     
@@ -101,60 +135,60 @@ class VacuumControl(SerialPortDevice):
     --------------------------------------------------------------------------------------------'''
     '''
     '''
-    def valveConnect(self, ADwin, switch):
+    def valveConnect(self, switch):
         if not self.modConfig.EnableVacuum:
             return
 
         if switch:
             cmdStr, respStr = self.setValveConnect()
-            ADwin.DoDAQIO(self.modConfig.VacuumToggleA, boolValue=True)
+            self.parent.ADwin.DoDAQIO(self.modConfig.VacuumToggleA, boolValue=True)
         else:
             cmdStr, respStr = self.clearValveConnect()
-            ADwin.DoDAQIO(self.modConfig.VacuumToggleA, boolValue=False)
+            self.parent.ADwin.DoDAQIO(self.modConfig.VacuumToggleA, boolValue=False)
             
         return cmdStr, respStr
         
     '''
     '''
-    def motorPower(self, ADwin, switch):
+    def MotorPower(self, switch):
         if not self.modConfig.EnableVacuum:
             return
         
         if switch:
             cmdStr, respStr = self.setVacuumOn()
-            ADwin.DoDAQIO(self.modConfig.MotorToggle, boolValue=True)
+            self.parent.ADwin.DoDAQIO(self.modConfig.MotorToggle, boolValue=True)
         else:
             cmdStr, respStr = self.setVacuumOff()
-            ADwin.DoDAQIO(self.modConfig.MotorToggle, boolValue=False)
+            self.parent.ADwin.DoDAQIO(self.modConfig.MotorToggle, boolValue=False)
         
         return cmdStr, respStr
         
     '''
     '''
-    def degausserCooler(self, ADwin, mode):
+    def degausserCooler(self, mode):
         if not self.modConfig.EnableDegausserCooler:
             return
         
         if 'On' in mode:
-            ADwin.DoDAQIO(self.modConfig.DegausserToggle, boolValue=True)
+            self.parent.ADwin.DoDAQIO(self.modConfig.DegausserToggle, boolValue=True)
         else:
-            ADwin.DoDAQIO(self.modConfig.DegausserToggle, boolValue=False)
+            self.parent.ADwin.DoDAQIO(self.modConfig.DegausserToggle, boolValue=False)
         
         return
    
     '''
     '''
-    def init(self, ADwin):
+    def init(self):
         self.reset()
-        self.valveConnect(ADwin, False)
-        self.motorPower(ADwin, False)
-        self.DegausserCooler(ADwin, False)
+        self.valveConnect(False)
+        self.MotorPower(False)
+        self.DegausserCooler(False)
         
         time.sleep(0.2)
         
-        self.valveConnect(ADwin, False)
-        cmdStr, respStr = self.motorPower(ADwin, False)
-        self.DegausserCooler(ADwin, False)
+        self.valveConnect(False)
+        cmdStr, respStr = self.MotorPower(False)
+        self.DegausserCooler(False)
         
         return cmdStr, respStr
     

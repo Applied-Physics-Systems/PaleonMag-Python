@@ -16,6 +16,8 @@ from Hardware.Device.DAQControl import DAQControl
 from ClassModules.AF_Ramp_Error import AF_Ramp_Error
 from ClassModules.AF_Ramp_Error import AFErrorTypeEnum
 
+from Modules.modConfig import Channel
+
 class modStatusCode(Enum):
     CodeRed     = "Red"             # EMERGENCY!
     CodeOrange  = "Orange"          # Attention required
@@ -245,7 +247,11 @@ class ModAF_DAQ(DAQControl):
     def runTask(self, taskID):
         if (taskID == 0):
             data = self.Get_ADC(0)
-            print(data)            
+            print(data)
+            
+        elif (taskID == 1):
+            DigOut_Chan = Channel('VAC OUT', 1, 'DO', 100, 1)
+            self.DigitalOut(DigOut_Chan, 1)            
         
 #===================================================================================================
 # Main Module
@@ -253,9 +259,10 @@ class ModAF_DAQ(DAQControl):
 if __name__=='__main__':
     try:    
         currentPath = os.getcwd()
+        currentPath = currentPath.replace('Modules', 'Hardware\\Device\\')
         daqUtil = ModAF_DAQ(currentPath)
         
-        daqUtil.runTask(0)
+        daqUtil.runTask(1)
         
         print('Done !!!')
         

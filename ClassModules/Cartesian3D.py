@@ -132,6 +132,30 @@ class Cartesian3D():
             
         return atan
     
+    '''
+        Pubic API Functions
+    '''        
+    '''
+        Format X, Y, Z
+    '''
+    def WriteString(self):
+        xStr = "{:.7E}".format(self.X)
+        yStr = "{:.7E}".format(self.Y)
+        zStr = "{:.7E}".format(self.Z)
+        writeString = xStr + "," + yStr + "," + zStr
+        
+        return writeString
+
+    '''
+    '''    
+    def ReadString(self, cartesianString):        
+        parseArray = cartesianString.split(",")
+        if (len(parseArray) >= 3):
+            self.X = float(parseArray[0])
+            self.Y = float(parseArray[1])
+            self.Z = float(parseArray[2])
+        return
+    
 #===================================================================================================
 # Main Module
 #---------------------------------------------------------------------------------------------------

@@ -3,11 +3,13 @@ Created on Sep 24, 2025
 
 @author: hd.nguyen
 '''
+import os
 import wx
 import time
 import math
 
 import numpy as np
+from pathlib import Path
 
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg as FigureCanvas
@@ -15,6 +17,10 @@ from matplotlib.animation import FuncAnimation
 from matplotlib.patches import Circle
 
 import matplotlib.patches as patches
+
+from Modules.modProg import modProg
+from ClassModules.MeasurementBlock import MeasurementBlock
+from Process.DataExchange import DataExchange
 
 LIGHT_PURPLE = wx.Colour(203, 195, 227)
 LIGHT_GREEN = wx.Colour(144, 238, 144)
@@ -36,37 +42,105 @@ class frmMeasure(wx.Frame):
             super(frmMeasure, self).__init__(parent, wx.NewIdRef())
         self.parent = parent   
         
+        self.Holder = MeasurementBlock()
+        self.BOX1_LENGTH = 0
+        self.BOX2_LENGTH = 0
+        self.BOX3_LENGTH = 0
+        self.BOX1_HEIGHT = 0
         self.InitUI()        
                 
     '''
     '''
     def InitUI(self):
-        panel = wx.Panel(self)
+        self.panel = wx.Panel(self)
         
         XOri = 10
         YOri = 10
-        VSizer1, box1Length, box1Height = self.GUI_MeasureInfo(panel, XOri, YOri)        
+        VSizer1, self.BOX1_LENGTH, self.BOX1_HEIGHT = self.GUI_MeasureInfo(self.panel, XOri, YOri)        
         
-        XOri += box1Length + 10
-        VSizer2, box2Length, _ = self.GUI_PlotBox(panel, XOri, YOri)
+        XOri += self.BOX1_LENGTH + 10
+        VSizer2, self.BOX2_LENGTH, _ = self.GUI_PlotBox(self.panel, XOri, YOri)
         
-        XOri += box2Length + 10
-        VSizer3, box3Length, _ = self.GUI_CreateControl(panel, XOri, YOri)
+        XOri += self.BOX2_LENGTH + 10
+        VSizer3, self.BOX3_LENGTH, _ = self.GUI_CreateControl(self.panel, XOri, YOri)
         
         HSizer = wx.BoxSizer(wx.HORIZONTAL)
         HSizer.Add(VSizer1, 0, wx.ALL, 5)
         HSizer.Add(VSizer2, 0, wx.ALL, 5)
         HSizer.Add(VSizer3, 0, wx.ALL, 5)
-        panel.SetSizer(HSizer)        
+        self.panel.SetSizer(HSizer)
 
         # Add event handler on OnClose
         self.Bind(wx.EVT_CLOSE, self.onClosed)
 
-        panelLength = box1Length + box2Length + box3Length + 30
-        panelHeight =  box1Height + 10
-        self.SetSize((panelLength, panelHeight))
+        # Add event handler on OnShow
+        self.Bind(wx.EVT_SHOW, self.onShow)
+
+        self.GUI_DisplayData()
         self.SetTitle('Measurement Window')
         self.Centre()
+        return
+
+    '''
+    '''
+    def GUI_placeTopRight(self):
+        if (self.parent != None):
+            parent_size = self.parent.GetSize()
+            panel_size = self.GetSize()
+            
+            XPosition = parent_size.GetWidth() - panel_size.GetWidth() - 40
+            if (XPosition < 0):
+                XPosition = 0
+            YPosition = 100
+            self.SetPosition((XPosition, YPosition))
+        return
+
+    '''
+    '''
+    def GUI_DisplayAll(self):
+        panelLength = self.BOX1_LENGTH + self.BOX2_LENGTH + self.BOX3_LENGTH + 30
+        panelHeight =  self.BOX1_HEIGHT + 10
+        self.SetSize((panelLength, panelHeight))
+        
+        self.GUI_placeTopRight()
+        return
+
+    '''
+    '''
+    def GUI_DisplayWithPlot(self):
+        panelLength = self.BOX1_LENGTH + self.BOX2_LENGTH + 40
+        panelHeight =  self.BOX1_HEIGHT - 160
+
+        # Keep the Zijderveld plot if it's already open        
+        panel_size = self.GetSize()
+        if (panel_size.GetWidth() < panelLength): 
+            self.SetSize((panelLength, panelHeight))
+            
+            self.GUI_placeTopRight()
+        return
+
+    '''
+    '''
+    def GUI_DisplayWithStats(self):
+        panelLength = self.BOX1_LENGTH + self.BOX2_LENGTH + 40
+        panelHeight =  self.BOX1_HEIGHT + 10
+        
+        # Keep the Zijderveld plot if it's already open        
+        panel_size = self.GetSize()
+        if (panel_size.GetWidth() <= panelLength):         
+            self.SetSize((panelLength, panelHeight))
+            
+            self.GUI_placeTopRight()
+        return
+
+    '''
+    '''
+    def GUI_DisplayData(self):
+        panelLength = self.BOX1_LENGTH + 30
+        panelHeight =  self.BOX1_HEIGHT - 160
+        self.SetSize((panelLength, panelHeight))
+        
+        self.GUI_placeTopRight()
         return
 
     '''
@@ -100,13 +174,36 @@ class frmMeasure(wx.Frame):
     '''
     '''
     def GUI_MomentX(self, panel, XOri, YOri):
+        YOri += 10
+
+        # 1. Define the StaticBox Sizer
+        sb_sizer = wx.StaticBoxSizer(self.MomentXBox, wx.VERTICAL)
+        
+        # 2. Create the Matplotlib Figure and Canvas
+        # Tip: Set a small initial figsize to allow the sizer to take control        
+        self.MomentXFig = Figure(figsize=(1, 1))
+        self.MomentX = self.MomentXFig.add_subplot(111, aspect='equal') # 1 row, 1 column, 1st subplot
+        self.MomentXFig.subplots_adjust(left=0, right=1, top=1, bottom=0)
+
+        # Parent the canvas to the static box                        
+        self.MomentXCanvas = FigureCanvas(self.MomentXBox, -1, self.MomentXFig)       
+        self.MomentX.set_axis_off()
+                
+        # 3. Add to sizer with expansion flags
+        sb_sizer.Add(self.MomentXCanvas, 1, wx.EXPAND | wx.ALL, 5)
+        self.MomentXCanvas.Hide()
+                
+        # Control
         txtBoxLength = 75
         txtBoxHeight = 20
         
         XOffset = txtBoxLength + 10 
         YOffset = 17 
         xTexOffset = int(txtBoxLength/2) - 2
+        
+        self.ChkAllSteps = wx.CheckBox(panel, label='Display steps above current', pos=(XOri+XOffset, YOri))
                         
+        YOri += 90
         self.lblWarning= wx.StaticText(panel, label="It's up to you to retry manually that measurement !!!", pos=(XOri + xTexOffset, YOri))
         # Get the current font of the static text
         current_font = self.lblWarning.GetFont()
@@ -139,9 +236,14 @@ class frmMeasure(wx.Frame):
         
         self.lblRed = wx.StaticText(panel, label='Orange = order of magnitude (1 - 5) of the moment, be attentive ...', pos=(XOri, YOri + 5*YOffset))
         self.lblRed.Hide()
-        self.lblOrange = wx.StaticText(panel, label='Red = noise higher than 5 times the moment, I am not redoing it ...', pos=(XOri, YOri  + 7*YOffset))
+        self.lblOrange = wx.StaticText(panel, label='Red = noise higher than 5 times the moment, I am not redoing it ...', pos=(XOri, YOri  + 6*YOffset))
         self.lblOrange.Hide()
-        return
+
+        # Finalize layout
+        VSizer = wx.BoxSizer(wx.VERTICAL)
+        VSizer.Add(sb_sizer, 1, wx.EXPAND | wx.ALL, 5)
+        
+        return VSizer
     
     '''
     '''
@@ -167,28 +269,52 @@ class frmMeasure(wx.Frame):
     
         # Create the animation
         self.updatePlot = FuncAnimation(self.figure, self.updatePolarPlot, frames=200, interval=500, blit=False)
-        
-        staticBox1 = wx.StaticBox(panel, -1, '', pos=(XOri, YOri), size=(boxLength, box1Height))
+                
+        self.MomentXBox = wx.StaticBox(panel, -1, '', pos=(XOri, YOri), size=(boxLength, box1Height))
         # Compute the position of YOri
-        _, height = self.figure.get_size_inches()
+        _, height = self.figure.get_size_inches()        
         XOri += 10
         YOri += int(height*self.figure.dpi) + 10        
-        self.MomentX = wx.StaticText(panel, label='', pos=(XOri, YOri))
-        self.GUI_MomentX(panel, XOri, YOri)
+        MomentXSize = self.GUI_MomentX(panel, XOri, YOri)
         
         VSizer = wx.BoxSizer(wx.VERTICAL)
         VSizer.Add(self.canvas, 1, wx.EXPAND)
-        VSizer.Add(staticBox1, 1, wx.EXPAND)
+        VSizer.Add(MomentXSize, 1, wx.EXPAND)
 
         YOri += box1Height + 10
         return VSizer, boxLength, YOri
 
     '''
     '''
+    def GUI_ZijderveldPlot(self, panel, XOri, YOri):
+        self.zijFigure = Figure(figsize=(3, 3))
+        self.Zijderveld = self.zijFigure.add_subplot(111, aspect='equal') # 1 row, 1 column, 1st subplot
+        self.zijCanvas = FigureCanvas(panel, -1, self.zijFigure)       
+        self.zijFigure.subplots_adjust(left=0, right=1, top=1, bottom=0)
+                
+        # Initial data
+        self.zij_line, = self.Zijderveld.plot([-1, 1], [-1, 1], color='red', lw=2)
+    
+        # Create the animation
+        self.updateZijPlot = FuncAnimation(self.zijFigure, self.updateZijderveldPlot, frames=200, interval=500, blit=False)
+        self.Zijderveld.cla()
+    
+        self.Zijderveld.set_xlim(0, 1)
+        self.Zijderveld.set_ylim(0, 1)
+        self.Zijderveld.set_axis_off()
+
+        VSizer = wx.BoxSizer(wx.VERTICAL)
+        VSizer.Add(self.zijCanvas, 1, wx.EXPAND)
+        
+        return VSizer
+
+    '''
+    '''
     def GUI_CreateControl(self, panel, XOri, YOri):
         boxLength = 340
         boxHeight = 300                                        
-        staticBox1 = wx.StaticBox(panel, -1, '', pos=(XOri, YOri), size=(boxLength, boxHeight))
+        wx.StaticBox(panel, -1, '', pos=(XOri, YOri), size=(boxLength, boxHeight))
+        staticBox1 = self.GUI_ZijderveldPlot(panel, XOri, YOri)
         
         XOri += 10
         YOri += boxHeight + 10 
@@ -209,18 +335,24 @@ class frmMeasure(wx.Frame):
         wx.StaticText(panel, label='Previous Steps', pos=(XOri + txtBoxXOffset, YOri + YOffset + 5))
         
         txtBoxXOffset += 100
-        radioBtn1 = wx.RadioButton(panel, 11, label = 'Core Coordinates', pos = (XOri + txtBoxXOffset, YOri + YOffset), style = wx.RB_GROUP) 
-        wx.RadioButton(panel, 22, label = 'Geographic Coordinates',pos = (XOri + txtBoxXOffset, YOri + 2*YOffset)) 
-        wx.RadioButton(panel, 33, label = 'Bedding Coordinates',pos = (XOri + txtBoxXOffset, YOri + 3*YOffset))
-        radioBtn1.SetValue(True)
+        self.optCore = wx.RadioButton(panel, 11, label = 'Core Coordinates', pos = (XOri + txtBoxXOffset, YOri + YOffset), style = wx.RB_GROUP) 
+        self.optGeographic = wx.RadioButton(panel, 22, label = 'Geographic Coordinates',pos = (XOri + txtBoxXOffset, YOri + 2*YOffset)) 
+        self.optBedding = wx.RadioButton(panel, 33, label = 'Bedding Coordinates',pos = (XOri + txtBoxXOffset, YOri + 3*YOffset))
+        self.optCore.SetValue(True)
         self.Bind(wx.EVT_RADIOBUTTON, self.onRGroupChanges)
                 
-        self.magnitudeChkBox = wx.CheckBox(panel, label='Moment Magnitude', pos=(XOri, YOri + 3*YOffset))
-        self.magnitudeChkBox.SetForegroundColour(wx.RED)
-        self.magnitudeChkBox.SetValue(True) 
-        self.susceptibilityChkBox = wx.CheckBox(panel, label='Susceptibility', pos=(XOri, YOri + 4*YOffset))
-        self.susceptibilityChkBox.SetForegroundColour(wx.BLUE)
-        self.susceptibilityChkBox.SetValue(True) 
+        self.ChkM = wx.CheckBox(panel, label='Moment Magnitude', pos=(XOri, YOri + 3*YOffset))
+        self.ChkM.SetForegroundColour(wx.RED)
+        self.ChkM.SetValue(True) 
+        self.ChkX = wx.CheckBox(panel, label='Susceptibility', pos=(XOri, YOri + 4*YOffset))
+        self.ChkX.SetForegroundColour(wx.BLUE)
+        self.ChkX.SetValue(True) 
+
+        messageStr = 'Geographic and bedding coordinates are read in the\n'
+        messageStr += 'sample file, it could be not valid if you changed the\n'
+        messageStr += 'orientation parameters since the previous measurements.'       
+        self.lblOrientation = wx.StaticText(panel, label=messageStr, pos=(XOri, YOri + 6*YOffset))
+        self.lblOrientation.Hide()
         
         YOri += 5
         txtBoxXOffset = 260
@@ -228,8 +360,8 @@ class frmMeasure(wx.Frame):
         btnLength = 40
         btnHeight = 25        
         cmdHideZij = wx.Button(panel, label='Hide', pos=(XOri + txtBoxXOffset, YOri + 2*YOffset + 5), size=(btnLength, btnHeight))        
-        cmdHideZij.Bind(wx.EVT_BUTTON, self.cmdHideZij_Click)        
-        
+        cmdHideZij.Bind(wx.EVT_BUTTON, self.cmdHideZij_Click)    
+                
         # Create sizer
         VSizer = wx.BoxSizer(wx.VERTICAL)
         VSizer.Add(staticBox1, 1, wx.EXPAND)
@@ -469,6 +601,11 @@ class frmMeasure(wx.Frame):
         return self.line,
 
     '''
+    '''
+    def updateZijderveldPlot(self, frame):                
+        return self.zij_line,
+
+    '''
         This procedure hides the statistics frame and resizes
         the measurement window
     '''
@@ -498,6 +635,8 @@ class frmMeasure(wx.Frame):
         This function clears all the currently displayed data.
     '''
     def clearData(self):        
+        self.GUI_DisplayData()
+        
         self.cmdPrint.Enable(True)
         self.lblMeasXZero0.SetValue('')
         self.lblMeasYZero0.SetValue('')
@@ -532,19 +671,6 @@ class frmMeasure(wx.Frame):
 
     '''
     '''
-    def placeTopRight(self):
-        parent_size = self.parent.GetSize()
-        panel_size = self.GetSize()
-        
-        XPosition = parent_size.GetWidth() - panel_size.GetWidth() - 40
-        if (XPosition < 0):
-            XPosition = 0
-        YPosition = 100
-        self.SetPosition((XPosition, YPosition))
-        return
-
-    '''
-    '''
     def ZOrder(self):
         return 
 
@@ -558,125 +684,15 @@ class frmMeasure(wx.Frame):
         self.clearStats()                
         return
 
-    '''
-    '''
-    def getInt(self, valueStr):
-        try:
-            valueInt = int(valueStr)
-        except:
-            valueInt = 0
-            
-        return valueInt
-
-    '''
-    '''
-    def getFloat(self, valueStr):
-        try:
-            valueFloat = float(valueStr)
-        except:
-            valueFloat = 0
-            
-        return valueFloat
-
-    '''
-    '''
-    def getBool(self, valueStr):
-        if 'True' in valueStr:
-            valueBool = True
-        else:
-            valueBool = False
-            
-        return valueBool
-
-    '''
-        Now select the proper format for printing out this range
-        information based on the TESTIT variable
-    '''
-    def FormatNumber(self, testit):
-        if ((testit >= 1000000) or (testit <= -100000)):
-            frmt = str(int(testit))  
-        elif ((testit >= 100000) or (testit <= -10000)):
-            frmt = '{:.1f}'.format(testit)
-        elif ((testit >= 10000) or (testit <= -1000)):
-            frmt = '{:.2f}'.format(testit)
-        elif ((testit >= 1000) or (testit <= -100)):
-            frmt = '{:.3f}'.format(testit)
-        elif ((testit >= 100) or (testit <= -10)):
-            frmt = '{:.4f}'.format(testit)
-        elif ((testit >= 10) or (testit <= -1)):
-            frmt = '{:.5f}'.format(testit)
-        else:
-            frmt = '{:.5f}'.format(testit)
-        
-        return frmt 
-
-    '''--------------------------------------------------------------------------------------------
-                        
-                        Event Handler Functions
-                        
-    --------------------------------------------------------------------------------------------'''
-    '''
-    '''
-    def cmdHide_Click(self, event):
-        print('TODO: frmMeasure.cmdHide_Click')
-        return
-
-    '''
-    '''
-    def cmdPrint_Click(self, event):
-        print('TODO: frmMeasure.cmdPrint_Click')
-        return
-    
-    '''
-    '''
-    def buttonHalt_Click(self, event):
-        print('TODO: frmMeasure.buttonHalt_Click')
-        return
-    
-    '''
-    '''
-    def buttonPause_Click(self, event):
-        print('TODO: frmMeasure.buttonPause_Click')
-        return
-
-    '''
-    '''
-    def cmdShowPlots_Click(self, event):
-        print('TODO: frmMeasure.cmdShowPlots_Click')
-        return
-
-    '''
-    '''
-    def cmdStats_Click(self, event):
-        print('TODO: frmMeasure.cmdStats_Click')
-        return
-        
-    '''
-    '''
-    def onClosed(self, event):
-        # Immediately stop the timer
-        self.updatePlot.event_source.stop()
-        self.canvas.Destroy()
-        self.Destroy()
-        return
-        
-    '''
-    '''
-    def onRGroupChanges(self, event):
-        print('TODO: frmMeasure.onRGroupChanges')
-        return
-    
-    '''
-    '''
-    def cmdHideZij_Click(self, event):
-        print('TODO: frmMeasure.cmdHideZij_Click')
-        return
-
     '''--------------------------------------------------------------------------------------------
                         
                         Update GUI Functions
                         
-    --------------------------------------------------------------------------------------------'''    
+    --------------------------------------------------------------------------------------------'''   
+    def ShowStatsForm(self):
+        self.parent.frmStats.Show()
+        return
+
     '''
     '''
     def updateFlowStatus(self):
@@ -687,41 +703,30 @@ class frmMeasure(wx.Frame):
         This procedure sets some of the information in the
         fields on this form.  It is called by frmMagnetometerControl.
     '''
-    def SetFields(self, dataList):
-        steps = 0
-        demag = ''
-        isUp = False
-        isBoth = False
-        DataFileName = ''
-        for eachItem in dataList:
-            if ('avgSteps' in eachItem):
-                steps = self.getInt(eachItem.replace('avgSteps = ', ''))
-            elif ('curDemagLong' in eachItem):
-                demag = eachItem.replace('curDemagLong = ', '')
-            elif ('doUp' in eachItem):
-                isUp = self.getBool(eachItem.replace('doUp = ', ''))
-            elif ('doBoth' in eachItem):
-                isBoth = self.getBool(eachItem.replace('doBoth = ', ''))
-            elif ('filename' in eachItem):
-                DataFileName = eachItem.replace('filename = ', '')
+    def SetFields(self, dataDict):
+        avgSteps = dataDict['avgSteps']
+        curDemagLong = dataDict['curDemagLong']
+        doUp = dataDict['doUp']
+        doBoth = dataDict['doBoth']
+        filename = dataDict['filename']
     
-        self.lblAvgCycles.SetValue(str(steps))
-        self.lblDemag.SetValue(demag)
-        self.parent.frmStats.lblAvgCycles.SetValue(str(steps))
-        self.parent.frmStats.lblDemag.SetValue(demag)
-        if isUp: 
+        self.lblAvgCycles.SetValue(str(avgSteps))
+        self.lblDemag.SetValue(curDemagLong)
+        self.parent.frmStats.lblAvgCycles.SetValue(str(avgSteps))
+        self.parent.frmStats.lblDemag.SetValue(curDemagLong)
+        if doUp: 
             self.lblMeasDir.SetValue("U") 
         else: 
             self.lblMeasDir.SetValue("D")
             
-        if isBoth: 
+        if doBoth: 
             self.lblDirs.SetValue("U/D")
         else: 
             self.lblDirs.SetValue(self.lblMeasDir.GetValue())
             
         self.parent.frmStats.lblDirs.SetValue(self.lblDirs.GetValue())
-        self.lblDataFileName.SetValue(DataFileName)
-        self.parent.frmStats.lblDataFileName.SetValue(DataFileName)
+        self.lblDataFileName.SetValue(filename)
+        self.parent.frmStats.lblDataFileName.SetValue(filename)
         self.lblCupNumber.SetValue(str(self.parent.modConfig.processData.SampleHandlerCurrentHole))
         return
     
@@ -730,23 +735,12 @@ class frmMeasure(wx.Frame):
         appropriate fields in the form. 'num' designates which
         fields to display into
     '''
-    def showData(self, dataList):
-        datX = 0.0
-        datY = 0.0
-        datZ = 0.0
-        num = 0
-        Meascount = 0
-        for eachItem in dataList:
-            if ('datX' in eachItem):
-                datX = self.getFloat(eachItem.replace('datX = ', ''))
-            elif ('datY' in eachItem):
-                datY = self.getFloat(eachItem.replace('datY = ', ''))
-            elif ('datZ' in eachItem):
-                datZ = self.getFloat(eachItem.replace('datZ = ', ''))
-            elif ('num' in eachItem):
-                num = self.getInt(eachItem.replace('num = ', ''))
-            elif ('Meascount' in eachItem):
-                Meascount = self.getInt(eachItem.replace('Meascount = ', ''))
+    def showData(self, dataDict):
+        datX = dataDict['X']
+        datY = dataDict['Y']
+        datZ = dataDict['Z']
+        num = dataDict['num']
+        Meascount = dataDict['Meascount']
                 
         # Show the height of each sample, measured in automatic sample changer mode (June 2007 L Carporzen)
         if (self.lblSampName.GetValue == "Holder"):
@@ -754,39 +748,32 @@ class frmMeasure(wx.Frame):
         else:
             self.lblSampleHeight.SetValue('{:.1f}'.format(self.parent.modConfig.SampleHeight / self.parent.modConfig.UpDownMotor1cm))
         
-        self.lblMeascount = Meascount
+        self.lblMeascount.SetValue(str(Meascount))
         if (num == 0):
             # Show as First Zero data points
-            self.lblMeasXZero[0].SetValue(self.FormatNumber(datX))
-            self.lblMeasYZero[0].SetValue(self.FormatNumber(datY))
-            self.lblMeasZZero[0].SetValue(self.FormatNumber(datZ))
+            self.lblMeasXZero[0].SetValue(modProg.FormatNumber(datX))
+            self.lblMeasYZero[0].SetValue(modProg.FormatNumber(datY))
+            self.lblMeasZZero[0].SetValue(modProg.FormatNumber(datZ))
         if ((num >= 1) and (num <= 4)):
             # Show as Data points
-            self.lblMeasX[num - 1].SetValue(self.FormatNumber(datX))
-            self.lblMeasY[num - 1].SetValue(self.FormatNumber(datY))
-            self.lblMeasZ[num - 1].SetValue(self.FormatNumber(datZ))
+            self.lblMeasX[num - 1].SetValue(modProg.FormatNumber(datX))
+            self.lblMeasY[num - 1].SetValue(modProg.FormatNumber(datY))
+            self.lblMeasZ[num - 1].SetValue(modProg.FormatNumber(datZ))
         if (num == 5):
             # Show as Last Zero data points
-            self.lblMeasXZero[1].SetValue(self.FormatNumber(datX))
-            self.lblMeasYZero[1].SetValue(self.FormatNumber(datY))
-            self.lblMeasZZero[1].SetValue(self.FormatNumber(datZ))
+            self.lblMeasXZero[1].SetValue(modProg.FormatNumber(datX))
+            self.lblMeasYZero[1].SetValue(modProg.FormatNumber(datY))
+            self.lblMeasZZero[1].SetValue(modProg.FormatNumber(datZ))
             
         return
 
     '''
         This function displays angular data in appropriate boxes
     '''
-    def ShowAngDat(self, dataList): 
-        dec = 0.0
-        inc = 0.0
-        num = 0
-        for eachItem in dataList:
-            if ('dec' in eachItem):
-                dec = self.getFloat(eachItem.replace('dec = ', ''))
-            elif ('inc' in eachItem):
-                inc = self.getFloat(eachItem.replace('inc = ', ''))
-            elif ('num' in eachItem):
-                num = self.getInt(eachItem.replace('num = ', ''))
+    def ShowAngDat(self, dataDict): 
+        dec = dataDict['dec']
+        inc = dataDict['inc']
+        num = dataDict['num']
 
         self.lblCalcDec[num - 1].SetValue('{:.1f}'.format(dec))
         self.lblCalcInc[num - 1].SetValue('{:.1f}'.format(inc))
@@ -796,76 +783,44 @@ class frmMeasure(wx.Frame):
         ' This procedure displays statistical information gathered
         ' from a measurement cycle with the magnetometer.
     '''
-    def ShowStats(self, dataList): 
-        X = 0.0
-        Y = 0.0
-        Z = 0.0
-        dec = 0.0
-        inc = 0.0
-        SigDrift = 0.0
-        SigHold = 0.0
-        SigInd = 0.0
-        CSD = 0.0
-        for eachItem in dataList:
-            if ('X' in eachItem):
-                X = self.getFloat(eachItem.replace('X = ', ''))
-            elif ('Y' in eachItem):
-                Y = self.getFloat(eachItem.replace('Y = ', ''))
-            elif ('Z' in eachItem):
-                Z = self.getFloat(eachItem.replace('Z = ', ''))
-            elif ('dec' in eachItem):
-                dec = self.getFloat(eachItem.replace('dec = ', ''))
-            elif ('inc' in eachItem):
-                inc = self.getFloat(eachItem.replace('inc = ', ''))
-            elif ('SigDrift' in eachItem):
-                SigDrift = self.getFloat(eachItem.replace('SigDrift = ', ''))
-            elif ('SigHold' in eachItem):
-                SigHold = self.getFloat(eachItem.replace('SigHold = ', ''))
-            elif ('SigInd' in eachItem):
-                SigInd = self.getFloat(eachItem.replace('SigInd = ', ''))
-            elif ('CSD' in eachItem):
-                CSD = self.getFloat(eachItem.replace('CSD = ', ''))
+    def ShowStats(self, dataDict): 
+        self.GUI_DisplayWithStats()
         
-        self.lblavgx.SetValue(self.FormatNumber(X))
-        self.lblavgy.SetValue(self.FormatNumber(Y))
-        self.lblavgz.SetValue(self.FormatNumber(Z))
+        X = dataDict['X']
+        Y = dataDict['Y']
+        Z = dataDict['Z']
+        dec = dataDict['dec']
+        inc = dataDict['inc']
+        SigDrift = dataDict['SigDrift']
+        SigHold = dataDict['SigHold']
+        SigInd = dataDict['SigInd']
+        CSD = dataDict['CSD']
+        
+        self.lblavgx.SetValue(modProg.FormatNumber(X))
+        self.lblavgy.SetValue(modProg.FormatNumber(Y))
+        self.lblavgz.SetValue(modProg.FormatNumber(Z))
         self.lblavgmag.SetValue('{:.4f}'.format(self.parent.modConfig.RangeFact * math.sqrt(X ** 2 + Y ** 2 + Z ** 2)))
         self.lblAvgDec.SetValue('{:.1f}'.format(dec))
         self.lblAvgInc.SetValue('{:.1f}'.format(inc))
-        self.lblDSigDrift.SetValue(self.FormatNumber(SigDrift))
+        self.lblDSigDrift.SetValue(modProg.FormatNumber(SigDrift))
         self.lblDSigHolder.SetValue('{:.4f}'.format(SigHold))
-        self.lblDSigInduced.SetValue(self.FormatNumber(SigInd))
+        self.lblDSigInduced.SetValue(modProg.FormatNumber(SigInd))
         self.lblCSD.SetValue('{:.2f}'.format(CSD))
         return
     
     '''
     '''
-    def updateStats(self, dataList):
-        MaxX = 0.0
-        MinX = 0.0
-        MaxY = 0.0
-        MinY = 0.0
-        MaxZ = 0.0
-        MinZ = 0.0
-        Vol = 0
-        momentvol = 0.0
-        for eachItem in dataList:
-            if ('MaxX' in eachItem):
-                MaxX = self.getFloat(eachItem.replace('MaxX = ', ''))
-            elif ('MinX' in eachItem):
-                MinX = self.getFloat(eachItem.replace('MinX = ', ''))            
-            elif ('MaxY' in eachItem):
-                MaxY = self.getFloat(eachItem.replace('MaxY = ', ''))
-            elif ('MinY' in eachItem):
-                MinY = self.getFloat(eachItem.replace('MinY = ', ''))
-            elif ('MaxZ' in eachItem):
-                MaxZ = self.getFloat(eachItem.replace('MaxZ = ', ''))
-            elif ('MinZ' in eachItem):
-                MinZ = self.getFloat(eachItem.replace('MinZ = ', ''))
-            elif ('Vol' in eachItem):
-                Vol = self.getInt(eachItem.replace('Vol = ', ''))
-            elif ('momentvol' in eachItem):
-                momentvol = self.getFloat(eachItem.replace('momentvol = ', ''))
+    def updateStats(self, dataDict):
+        self.GUI_DisplayWithStats()
+        
+        MaxX = dataDict['MaxX']
+        MinX = dataDict['MinX']
+        MaxY = dataDict['MaxY']
+        MinY = dataDict['MinY']
+        MaxZ = dataDict['MaxZ']
+        MinZ = dataDict['MinZ']
+        Vol = dataDict['Vol']
+        momentvol = dataDict['momentvol']
                 
         self.lblDeltaX.SetValue('{:.4}'.format(self.parent.modConfig.RangeFact * (MaxX - MinX)))
         self.lblRatioX.SetValue('{:.2f}'.format(self.parent.modConfig.RangeFact * (MaxX - MinX) / (Vol * momentvol)))
@@ -921,7 +876,7 @@ class frmMeasure(wx.Frame):
     '''
         (August 2007 L Carporzen) Equal area plot near the measurement window
     '''
-    def InitEqualArea(self):
+    def InitEqualArea(self):        
         self.axes.cla()
         self.axes.set_xlim(0, 1)
         self.axes.set_ylim(0, 1)
@@ -955,14 +910,11 @@ class frmMeasure(wx.Frame):
     '''
         (August 2007 L Carporzen) Plot of the current 4 measurements (holder not substracted)
     '''
-    def PlotEqualArea(self, dataList):
-        dec = 0.0
-        inc = 0.0
-        for eachItem in dataList:
-            if ('dec' in eachItem):
-                dec = self.getFloat(eachItem.replace('dec = ', ''))
-            elif ('inc' in eachItem):
-                inc = self.getFloat(eachItem.replace('inc = ', ''))
+    def PlotEqualArea(self, dataDict):
+        self.GUI_DisplayWithPlot()
+        
+        dec = dataDict['dec']
+        inc = dataDict['inc']
         
         L0 = 1 / math.sqrt(math.cos(inc * math.pi / 180) * math.cos(dec * math.pi / 180) * math.cos(inc * math.pi / 180) * math.cos(dec * math.pi / 180) + math.cos(inc * math.pi / 180) * math.sin(dec * math.pi / 180) * math.cos(inc * math.pi / 180) * math.sin(dec * math.pi / 180))
         if (inc >= 0):      # Down direction
@@ -992,17 +944,12 @@ class frmMeasure(wx.Frame):
     '''
         (August 2007 L Carporzen) Plot of the averaged measurement (holder substracted)
     '''
-    def AveragePlotEqualArea(self, dataList):
-        dec = 0.0
-        inc = 0.0
-        CSD = 0.0
-        for eachItem in dataList:
-            if ('dec' in eachItem):
-                dec = self.getFloat(eachItem.replace('dec = ', ''))
-            elif ('inc' in eachItem):
-                inc = self.getFloat(eachItem.replace('inc = ', ''))
-            elif ('CSD' in eachItem):
-                CSD = self.getFloat(eachItem.replace('CSD = ', ''))
+    def AveragePlotEqualArea(self, dataDict):
+        self.GUI_DisplayWithPlot()
+        
+        dec = dataDict['dec']
+        inc = dataDict['inc']
+        CSD = dataDict['CSD']
         
         if (CSD > 180): 
             CSD = 0
@@ -1142,6 +1089,654 @@ class frmMeasure(wx.Frame):
                 
         return
 
+    '''
+        (August 2007 L Carporzen) Plot of the previous directions
+        (June 2008 L Carporzen) Link the previous directions
+    '''
+    def PlotHistory(self, dec, inc, dec2, inc2):
+        L0 = 1 / math.sqrt(math.cos(inc * math.pi / 180) * math.cos(dec * math.pi / 180) * math.cos(inc * math.pi / 180) * math.cos(dec * math.pi / 180) + math.cos(inc * math.pi / 180) * math.sin(dec * math.pi / 180) * math.cos(inc * math.pi / 180) * math.sin(dec * math.pi / 180))
+        L02 = 1 / math.sqrt(math.cos(inc2 * math.pi / 180) * math.cos(dec2 * math.pi / 180) * math.cos(inc2 * math.pi / 180) * math.cos(dec2 * math.pi / 180) + math.cos(inc2 * math.pi / 180) * math.sin(dec2 * math.pi / 180) * math.cos(inc2 * math.pi / 180) * math.sin(dec2 * math.pi / 180))
+        if (inc >= 0):      # Down direction
+            L = L0 * math.sqrt(1 - math.sin(inc * math.pi / 180))
+            L2 = L02 * math.sqrt(1 - math.sin(inc2 * math.pi / 180))            
+            center_x = (math.sin(dec * math.pi / 180) * L / L0) / 2 + 0.5
+            center_y = -(math.cos(dec * math.pi / 180) * L / L0) / 2 + 0.5
+            radius = 0.005
+            circle = Circle((center_x, center_y), radius, color='blue', fill=False, linewidth=1)
+            self.axes.add_patch(circle)
+            if ((not (inc2 == 0)) and (not (L02 == 0)) and (not (inc == inc2))):
+                if ((inc / inc2) > 0):
+                    X1 = (math.sin(dec * math.pi / 180) * L / L0) / 2 + 0.5
+                    Y1 = -(math.cos(dec * math.pi / 180) * L / L0) / 2 + 0.5
+                    X2 = (math.sin(dec2 * math.pi / 180) * L2 / L02) / 2 + 0.5
+                    Y2 = -(math.cos(dec2 * math.pi / 180) * L2 / L02) / 2 + 0.5
+                    self.axes.plot([1 - X1, 1 - X2], [Y1, Y2], color='blue')
+            
+        else:       # Up direction
+            L = L0 * math.sqrt(1 + math.sin(inc * math.pi / 180))
+            L2 = L02 * math.sqrt(1 + math.sin(inc2 * math.pi / 180))
+            center_x = (math.sin(dec * math.pi / 180) * L / L0) / 2 + 0.5
+            center_y = -(math.cos(dec * math.pi / 180) * L / L0) / 2 + 0.5
+            radius = 0.005
+            circle = Circle((center_x, center_y), radius, color='red', fill=False, linewidth=1)
+            self.axes.add_patch(circle)
+            if ((not inc2 == 0) and (not L02 == 0) and (not inc == inc2)):
+                if ((inc / inc2) > 0): 
+                    X1 = (math.sin(dec * math.pi / 180) * L / L0) / 2 + 0.5
+                    Y1 = -(math.cos(dec * math.pi / 180) * L / L0) / 2 + 0.5
+                    X2 = (math.sin(dec2 * math.pi / 180) * L2 / L02) / 2 + 0.5
+                    Y2 = -(math.cos(dec2 * math.pi / 180) * L2 / L02) / 2 + 0.5
+                    self.axes.plot([1 - X1, 1 - X2], [Y1, Y2], color='red')
+            
+        return
+    
+   
+
+    '''
+        (August 2007 L Carporzen) Zijderveld diagram near the measurement window & the equal area plot
+    '''
+    def ImportZijRoutine(self, dataDict):
+        self.GUI_DisplayAll()
+        
+        FilePath = dataDict['FilePath'] 
+        crdec = dataDict['crdec'] 
+        crinc = dataDict['crinc']
+        momentvol = dataDict['momentvol'] 
+        refresh = dataDict['refresh']
+        
+        for r in range(0, self.parent.frmSampleIndexRegistry.cmbSampCode.GetCount()):
+            samplepath = ''
+            itemPath = self.parent.frmSampleIndexRegistry.txtDir.GetValue() + "\\"  
+            itemPath += self.parent.frmSampleIndexRegistry.cmbSampCode.Items[r]  
+            itemPath += "\\" + FilePath
+            if Path(itemPath).exists():                
+                if (FilePath == ""): 
+                    return
+                
+                samPath = self.parent.frmSampleIndexRegistry.txtDir.GetValue() + "\\"
+                samPath += self.parent.frmSampleIndexRegistry.cmbSampCode.Items[r] 
+                samPath += "\\" + self.parent.frmSampleIndexRegistry.cmbSampCode.Items[r] + ".sam"
+                if (self.lblDataFileName.GetValue() == samPath): 
+                    samplepath = itemPath                                                
+        
+        if not (len(samplepath) > 0):
+            return
+        else:
+            if (FilePath == ""): 
+                return
+                    
+        if not Path(samplepath + ".rmg").exists():
+            self.ChkX.Hide()
+        else:
+            self.ChkX.Show()        # Allow reading the RMG file for susceptibility versus demagnetization
+
+        if (self.txtZijLines.GetValue() == ''): 
+            self.txtZijLines.SetValue('0')
+        if (modProg.getInt(self.txtZijLines.GetValue()) < 0): 
+            self.txtZijLines.SetValue('0')
+        ZijLines = modProg.getInt(self.txtZijLines.GetValue())      # Nb of previous steps plot for the comparison
+        
+        self.ChkM.Show()
+        self.MomentX.clear()     # Clean the plot
+        
+        # Read the sample file
+        with open(samplepath, 'r', encoding='utf-8') as filenum: 
+            lines = filenum.readlines()            
+        num_rows = len(lines)
+        
+        if (num_rows < ZijLines + 2): 
+            ZijLines = num_rows - 2
+        if (ZijLines < 1): 
+            return
+
+        ZijX = [0]*ZijLines
+        ZijY = [0]*ZijLines
+        ZijZ = [0]*ZijLines
+        MaxZijX = 0.0000000001
+        MaxZijY = 0.0000000001
+        MinZijX = -0.0000000001
+        MinZijY = -0.0000000001
+        p = 0
+        MaxMoment = 0.0000000001
+        MaxDemag = 0
+        MaxSusceptibility = 0.00001
+        MinSusceptibility = 0
+        
+        lblDemagStr = self.lblDemag.GetValue()
+        if ((abs(modProg.getInt(modProg.Right(lblDemagStr, 4))) == 0) and not (modProg.Left(lblDemagStr, 3) == "ARM")):
+            self.MomentXCanvas.Hide()
+            self.ChkM.Hide()
+            self.ChkX.Hide()
+        else:
+            self.MomentXCanvas.Show()
+        
+        if (modProg.Left(lblDemagStr, 3) == "ARM"): 
+            self.ChkAllSteps.SetValue(True)
+        
+        if ((not self.ChkM.GetValue()) and (not self.ChkX.GetValue())):
+            self.MomentXCanvas.Hide()
+
+        # (October 2007 L Carporzen) Susceptibility versus demagnetization below the equal area plot
+        if self.MomentXCanvas.IsShown() and self.ChkX.IsShown():
+            # Read the RMG file
+            with open(samplepath + ".rmg", 'r') as filenum:
+                RMGlines = filenum.readlines()
+            
+            numRMGrows = len(RMGlines)
+            if (numRMGrows > (3 * ZijLines)):
+                SusceLines = 3 * ZijLines
+            else:
+                SusceLines = numRMGrows
+            
+            RMGarray = []
+            for r in range(0, SusceLines):
+                if (RMGlines[numRMGrows - r -1] == ""): 
+                    return
+                RMGarray.append(RMGlines[numRMGrows - r - 1].split(","))
+          
+        DemagStep = [0]*ZijLines 
+        Susceptibility = [0]*ZijLines
+        for r in range(0, ZijLines):
+            readMoment = modProg.getFloat(modProg.Mid(lines[num_rows - r - 1], 31, 8))
+            if self.optCore.GetValue():             # Core coordinates
+                readcrdec = modProg.getFloat(modProg.Mid(lines[num_rows - r - 1], 46, 5))
+                readcrinc = modProg.getFloat(modProg.Mid(lines[num_rows - r - 1], 52, 5))
+                if (r > 1):                         # (June 2008 L Carporzen) Link the previous directions
+                    readcrdec2 = modProg.getFloat(modProg.Mid(lines[num_rows - r], 46, 5))
+                    readcrinc2 = modProg.getFloat(modProg.Mid(lines[num_rows - r], 52, 5))
+                else:
+                    readcrdec2 = modProg.getFloat(self.parent.frmStats.lblCDec.GetValue())
+                    readcrinc2 = modProg.getFloat(self.parent.frmStats.lblCInc.GetValue())
+                    
+            if self.optGeographic.GetValue():         # Geographic coordinates
+                readcrdec = modProg.getFloat(modProg.Mid(lines[num_rows - r - 1], 7, 5))
+                readcrinc = modProg.getFloat(modProg.Mid(lines[num_rows - r -1], 13, 5))
+                if (r > 1):                         # (June 2008 L Carporzen) Link the previous directions
+                    readcrdec2 = modProg.getFloat(modProg.Mid(lines[num_rows - r], 7, 5))
+                    readcrinc2 = modProg.getFloat(modProg.Mid(lines[num_rows - r], 13, 5))
+                else:
+                    readcrdec2 = modProg.getFloat(self.parent.frmStats.lblGDec.GetValue())
+                    readcrinc2 = modProg.getFloat(self.parent.frmStats.lblGInc.GetValue())
+                
+            if self.optBedding.GetValue():          # Bedding coordinates
+                readcrdec = modProg.getFloat(modProg.Mid(lines[num_rows - r - 1], 19, 5))
+                readcrinc = modProg.getFloat(modProg.Mid(lines[num_rows - r - 1], 25, 5))
+                if (r > 1):                         # (June 2008 L Carporzen) Link the previous directions
+                    readcrdec2 = modProg.getFloat(modProg.Mid(lines[num_rows - r], 19, 5))
+                    readcrinc2 = modProg.getFloat(modProg.Mid(lines[num_rows - r], 25, 5))
+                else:
+                    readcrdec2 = modProg.getFloat(self.parent.frmStats.lblBDec.GetValue())
+                    readcrinc2 = modProg.getFloat(self.parent.frmStats.lblBInc.GetValue())
+
+            if refresh:
+                self.lblOrientation.Show()
+                self.PlotHistory(readcrdec, readcrinc, readcrdec2, readcrinc2) # (June 2008 L Carporzen) Link the previous directions
+            else:
+                self.lblOrientation.Hide()
+                self.optCore.SetValue(True)
+                self.optGeographic.SetValue(False)
+                self.optBedding.SetValue(False)
+                readcrdec = modProg.getFloat(modProg.Mid(lines[num_rows - r - 1], 46, 5))
+                readcrinc = modProg.getFloat(modProg.Mid(lines[num_rows - r - 1], 52, 5))
+                if (r > 1):                         # (June 2008 L Carporzen) Link the previous directions
+                    readcrdec2 = modProg.getFloat(modProg.Mid(lines[num_rows - r], 19, 5))
+                    readcrinc2 = modProg.getFloat(modProg.Mid(lines[num_rows - r], 25, 5))
+                else:
+                    readcrdec2 = modProg.getFloat(self.parent.frmStats.lblBDec.GetValue())
+                    readcrinc2 = modProg.getFloat(self.parent.frmStats.lblBInc.GetValue())                
+                self.PlotHistory(modProg.getFloat(modProg.Mid(lines[num_rows - r - 1], 19, 5)), 
+                                 modProg.getFloat(modProg.Mid(lines[num_rows - r - 1], 25, 5)), 
+                                 readcrdec2, readcrinc2)    # (June 2008 L Carporzen) Link the previous directions
+                
+            ZijX[r] = readMoment * math.cos(readcrinc * math.pi / 180) * math.cos(readcrdec * math.pi / 180)
+            ZijY[r] = readMoment * math.cos(readcrinc * math.pi / 180) * math.sin(readcrdec * math.pi / 180)
+            ZijZ[r] = readMoment * math.sin(readcrinc * math.pi / 180)
+            if (-ZijX[r] > MaxZijX): 
+                MaxZijX = -ZijX[r]
+            if (ZijY[r] > MaxZijY): 
+                MaxZijY = ZijY[r]
+            if (ZijZ[r] > MaxZijX): 
+                MaxZijX = ZijZ[r]
+            if (-ZijX[r] < MinZijX): 
+                MinZijX = -ZijX[r]
+            if (ZijY[r] < MinZijY): 
+                MinZijY = ZijY[r]
+            if (ZijZ[r] < MinZijX): 
+                MinZijX = ZijZ[r]
+                
+            if self.MomentXCanvas.IsShown():
+                DemagStep[r] = abs(modProg.getFloat(modProg.Mid(lines[num_rows - r - 1], 3, 3)))
+                if self.ChkX.IsShown():
+                    for Q in range(p, SusceLines):
+                        if (modProg.Left(lines[num_rows - r - 1], 2) == RMGarray[Q][0]):  # Are the 2 letters of the step labels are equals (AF or TT)
+                            if (RMGarray[Q][0] == "TT"):
+                                Thermal = True
+                            else:
+                                Thermal = False
+                            
+                            if (RMGarray[Q][0] == "AF"):
+                                AF = True
+                            else:
+                                AF = False
+                            
+                            if (DemagStep[r] == abs(modProg.getFloat(modProg.Right(RMGarray[Q][1], 3)))):      # Are the 3 last digits of the step numbers are equals
+                                DemagStep[r] = abs(modProg.getFloat(RMGarray[Q][1]))
+                                Susceptibility[r] = modProg.getFloat(RMGarray[Q][8])
+                                p = Q + 1
+                                break
+                            
+                            elif (DemagStep[r] == abs(modProg.getFloat(modProg.Right(RMGarray[Q][1], 4)))):     # Are the 4 last digits of the step numbers are equals
+                                DemagStep[r] = abs(modProg.getFloat(RMGarray[Q][1]))
+                                Susceptibility[r] = modProg.getFloat(RMGarray[Q][8])
+                                p = Q + 1
+                                break
+                            
+                        elif (modProg.Left(lines[num_rows - r], 3) == RMGarray[Q][0]):          # Are the 3 letters of the step labels are equals
+                            if ((RMGarray[Q][0] == "IRM") or (RMGarray[Q][0] == "ARM") or (RMGarray[Q][0] == "AFz")):
+                                AF = True
+                            else:
+                                AF = False
+                            
+                            if (DemagStep[r] == abs(modProg.getFloat(modProg.Right(RMGarray[Q][1], 3)))):    # Are the 3 last digits of the step numbers are equals
+                                DemagStep[r] = abs(modProg.getFloat(RMGarray[Q][1]))
+                                Susceptibility[r] = modProg.getFloat(RMGarray[Q][8])
+                                p = Q + 1
+                                break
+                            
+                            elif (DemagStep[r] == abs(modProg.getFloat(modProg.Right(RMGarray[Q][1], 4)))):   # Are the 4 last digits of the step numbers are equals
+                                DemagStep[r] = abs(modProg.getFloat(RMGarray[Q][1]))
+                                Susceptibility[r] = modProg.getFloat(RMGarray[Q][8])
+                                p = Q + 1
+                                break
+                            elif (modProg.Left(lines[num_rows - r], 3) == "ARM"):       # Is their only a real number only in the RMG (ARM)
+                                DemagStep[r] = abs(modProg.getFloat(RMGarray[Q][1]))
+                                Susceptibility[r] = modProg.getFloat(RMGarray[Q][8])
+                                p = Q + 1
+                                break
+                            
+                        elif (modProg.Left(lines[num_rows - r], 5) == RMGarray[Q][0]):  # Are the step labels are equals to AFmax
+                            if (RMGarray[Q][0] == "AFmax"):
+                                AF = True
+                            else:
+                                AF = False
+                            
+                            DemagStep[r] = abs(modProg.getFloat(RMGarray[Q][1]))
+                            Susceptibility[r] = modProg.getFloat(RMGarray[Q][8])
+                            p = Q + 1
+                            break
+                    
+                
+                if (Susceptibility[r] == ""): 
+                    Susceptibility[r] = 0
+              
+                if (self.ChkAllSteps.GetValue() or (DemagStep[r] <= abs(modProg.getFloat(modProg.Right(self.lblDemag.GetValue(), 4))))):         # We don't want to plot the previous steps with higher demag numbers
+                    if (readMoment > MaxMoment): 
+                        MaxMoment = readMoment
+                    if (DemagStep[r] > MaxDemag): 
+                        MaxDemag = DemagStep[r]
+                    if (self.ChkX.IsShown() and self.ChkX.GetValue()):
+                        if (Susceptibility[r] > MaxSusceptibility): 
+                            MaxSusceptibility = Susceptibility[r]
+                        if (Susceptibility[r] < MinSusceptibility):
+                            MinSusceptibility = Susceptibility[r]
+                
+        if ((-momentvol * math.cos(crinc * math.pi / 180) * math.cos(crdec * math.pi / 180)) > MaxZijX): 
+            MaxZijX = -momentvol * math.cos(crinc * math.pi / 180) * math.cos(crdec * math.pi / 180)
+        if ((momentvol * math.cos(crinc * math.pi / 180) * math.sin(crdec * math.pi / 180)) > MaxZijY): 
+            MaxZijY = momentvol * math.cos(crinc * math.pi / 180) * math.sin(crdec * math.pi / 180)
+        if ((momentvol * math.sin(crinc * math.pi / 180)) > MaxZijX): 
+            MaxZijX = momentvol * math.sin(crinc * math.pi / 180)
+        if ((-momentvol * math.cos(crinc * math.pi / 180) * math.cos(crdec * math.pi / 180)) < MinZijX): 
+            MinZijX = -momentvol * math.cos(crinc * math.pi / 180) * math.cos(crdec * math.pi / 180)
+        if ((momentvol * math.cos(crinc * math.pi / 180) * math.sin(crdec * math.pi / 180)) < MinZijY): 
+            MinZijY = momentvol * math.cos(crinc * math.pi / 180) * math.sin(crdec * math.pi / 180)
+        if ((momentvol * math.sin(crinc * math.pi / 180)) < MinZijX): 
+            MinZijX = momentvol * math.sin(crinc * math.pi / 180)
+        
+        '''
+            Plot Zij
+        '''   
+        if self.MomentXCanvas.IsShown():
+            if (abs(modProg.getFloat(modProg.Right(self.lblDemag.GetValue(), 4))) > MaxDemag): 
+                MaxDemag = abs(modProg.getFloat(modProg.Right(self.lblDemag.GetValue(), 4)))
+            if self.ChkM.GetValue() or self.ChkX.GetValue():
+                self.MomentX.plot([0, 1], [0, 0], color='black', linewidth=1)      # Horizontal axis
+                self.MomentX.plot([1, 1], [0.02, -0.02], color='black', linewidth=1)      # Horizontal axis
+                self.MomentXFig.text(0, -0.02, '0')
+                
+                self.MomentX.plot([0, 0], [0.02, -0.02], color='black', linewidth=1)      # Horizontal axis
+                
+                self.MomentXFig.text(1 - 0.06, -0.02, str(MaxDemag))
+                
+                if Thermal:
+                    self.MomentXFig.text(0.5, -0.01, chr(176) + "C")
+                elif AF:
+                    self.MomentXFig.text(0.5, -0.01, chr(176) + "Oe")
+                else:
+                    self.MomentXFig.text(0.4, -0.01, "Oe " + chr(176) + "C")
+                
+            if (momentvol > MaxMoment): 
+                MaxMoment = momentvol
+            if ((MaxMoment == 0.0000000001) or (MaxDemag == 0)):
+                self.ChkM.Hide()
+            elif (self.ChkM.IsShown() and self.ChkM.GetValue()):
+                self.MomentX.plot([0, 0], [1, 0], color='black', linewidth=1)      # vertical axis
+                self.MomentX.plot([-0.02, 0.02], [0, 0], color='black', linewidth=1)      # vertical axis
+                self.MomentX.plot([-0.02, 0.02], [1, 1], color='black', linewidth=1)      # vertical axis
+                
+                self.MomentXFig.text(-0.15, 0.5, 'emu', color='red')                
+                self.MomentXFig.text(-0.15, 1.07, '{:.2E}'.format(MaxMoment), color='red')
+                self.MomentXFig.text(-0.05, 0.05, '0', color='red')
+            
+            if self.ChkX.IsShown() or self.ChkX.GetValue():
+                if ((self.parent.modConfig.COMPortSusceptibility > 0) and 
+                    (self.parent.modConfig.EnableSusceptibility) and 
+                    (not modProg.getInt(self.parent.frmSusceptibilityMeter.InputText.GetValue()) == -1)):
+                    if ((modProg.getInt(self.parent.frmSusceptibilityMeter.InputText.GetValue()) * self.parent.modConfig.SusceptibilityMomentFactorCGS) > MaxSusceptibility): 
+                        MaxSusceptibility = modProg.getInt(self.parent.frmSusceptibilityMeter.InputText.GetValue()) * self.parent.modConfig.SusceptibilityMomentFactorCGS
+                    if ((modProg.getInt(self.parent.frmSusceptibilityMeter.InputText.GetValue()) * self.parent.modConfig.SusceptibilityMomentFactorCGS) < MinSusceptibility): 
+                        MinSusceptibility = modProg.getInt(self.parent.frmSusceptibilityMeter.InputText.GetValue()) * self.parent.modConfig.SusceptibilityMomentFactorCGS
+                
+                if ((MaxSusceptibility == 0.00001) and (MinSusceptibility == 0) or (MaxDemag == 0)):
+                    if self.ChkM.GetValue(): 
+                        self.ChkX.Hide()
+                    if (not self.ChkM.IsShown()) or (not self.ChkM.GetValue()):
+                        self.MomentXCanvas.Show()
+                        if self.ChkM.GetValue(): 
+                            self.ChkM.Hide()
+                                                    
+
+        if self.MomentXCanvas.IsShown() and self.ChkX.IsShown() and self.ChkX.GetValue():
+            SusceScale = abs(MaxSusceptibility - MinSusceptibility)
+            SusceOrig = abs(MinSusceptibility / SusceScale)
+            if self.ChkM.IsShown() and self.ChkM.GetValue():
+                self.MomentX.plot([0, 0], [1, 0], color='black', linewidth=1)      # vertical axis
+                self.MomentX.plot([-0.02, 0.02], [0, 0], color='black', linewidth=1)
+                self.MomentX.plot([-0.02, 0.02], [1, 1], color='black', linewidth=1)
+            else:
+                self.MomentX.plot([0, 0], [1, 0], color='blue', linewidth=1)      # vertical axis
+                self.MomentX.plot([-0.02, 0.02], [0, 0], color='blue', linewidth=1)
+                self.MomentX.plot([-0.02, 0.02], [1, 1], color='blue', linewidth=1)
+            
+            self.MomentX.plot([0, 1], [SusceOrig, SusceOrig], color='blue', linewidth=1)      # vertical axis            
+            self.MomentX.plot([1, 1], [SusceOrig + 0.02, SusceOrig - 0.02], color='blue', linewidth=1)      # Horizontal axis
+
+            self.MomentXFig.text(-0.05, SusceOrig + 0.05, '0', color='blue')
+
+            CurrentX = -0.15
+            if ((1 - SusceOrig) > 0.5):
+                CurrentY = 1 - SusceOrig - 0.05 - 0.05
+            else:
+                CurrentY = 1 - SusceOrig + 0.05 - 0.05            
+            self.MomentXFig.text(CurrentX, 1 - CurrentY, 'emu/Oe', color='blue')
+            
+            self.MomentXFig.text(-0.15, 0.99, '{:.2E}'.format(MaxSusceptibility), color='blue')
+            
+            if not (MinSusceptibility == 0):
+                self.MomentXFig.text(-0.15, -0.01, '{:.2E}'.format(MinSusceptibility), color='blue')
+        
+        if not ((MaxZijX == MinZijX) or (MaxZijY == MinZijY)):
+            # We can plot
+            ZijScale = abs(MaxZijX - MinZijX)
+            MaxZijX = MaxZijX + 0.05 * ZijScale
+            MinZijX = MinZijX - 0.05 * ZijScale
+            ZijScale = abs(MaxZijY - MinZijY)
+            MaxZijY = MaxZijY + 0.05 * ZijScale
+            MinZijY = MinZijY - 0.05 * ZijScale
+            if (abs(MaxZijX - MinZijX) > abs(MaxZijY - MinZijY)):
+                ZijScale = abs(MaxZijX - MinZijX)   # Same scale for both axis
+                ZijHoriOrig = abs(MinZijY / ZijScale) + (1 - abs(MaxZijY - MinZijY) / ZijScale) / 2 # Center the plot in the page
+                ZijVertOrig = abs(MinZijX / ZijScale)   # The lowest and highest values are on the borders of the plot
+            else:
+                ZijScale = abs(MaxZijY - MinZijY)   # Same scale for both axis
+                ZijHoriOrig = abs(MinZijY / ZijScale) # The lowest and highest values are on the borders of the plot
+                ZijVertOrig = abs(MinZijX / ZijScale) + (1 - abs(MaxZijX - MinZijX) / ZijScale) / 2 # Center the plot in the page
+
+            # Axis lines            
+            self.Zijderveld.plot([ZijHoriOrig, ZijHoriOrig], [1, 0], color='black', linewidth=1)      # vertical axis            
+            self.Zijderveld.plot([0, 1], [1 - ZijVertOrig, 1 - ZijVertOrig], color='black', linewidth=1)      # horizontal axis
+            # N/S/E/W labels
+            self.zijFigure.text(0, 0.95 - ZijVertOrig, 'W')
+            self.zijFigure.text(1 - 0.025, 0.95 - ZijVertOrig, 'E')
+            self.zijFigure.text(ZijHoriOrig - 0.055, 0.96, 'N  Up')
+            self.zijFigure.text(ZijHoriOrig - 0.055, 0.04, 'S  Down')
+            
+            circle = Circle((ZijHoriOrig - 0.06, 1 - 0.02), 0.02, color='blue', fill=False, linewidth=1)
+            self.Zijderveld.add_patch(circle)             # external circle
+            
+            circle = Circle((ZijHoriOrig + 0.08, 1 - 0.02), 0.02, color='red', fill=False, linewidth=1)
+            self.Zijderveld.add_patch(circle)             # external circle
+                        
+            if (ZijHoriOrig >= 0.5):
+                CurrentX = 0.04
+            else:
+                CurrentX = 0.7            
+            CurrentY = 0
+            self.zijFigure.text(CurrentX, 0.95 - CurrentY, 'View: ' + '{:.2E}'.format(ZijScale) + ' emu')
+            
+            if (ZijHoriOrig >= 0.5):
+                CurrentX = 0.04
+            else:
+                CurrentX = 0.7            
+            CurrentY = 1 - 0.04            
+            self.zijFigure.text(CurrentX, 1 - CurrentY, 'Last: ' + '{:.2E}'.format(momentvol) + ' emu')
+            
+            for r in range(0, ZijLines):        # Circles for each step
+                lines[num_rows - r -1] = ""
+                if self.MomentXCanvas.IsShown():
+                    if (self.ChkAllSteps.GetValue() or (DemagStep[r] <= abs(modProg.getFloat(modProg.Right(self.lblDemag.GetValue(), 4))))):
+                        if (self.ChkM.IsShown() and self.ChkM.GetValue() and (not (math.sqrt(ZijX[r] ** 2 + ZijY[r] ** 2 + ZijZ[r] ** 2) == 0))): 
+                            circle = Circle((DemagStep[r] / MaxDemag, math.sqrt(ZijX[r] ** 2 + ZijY[r] ** 2 + ZijZ[r] ** 2) / MaxMoment), 0.005, color='red', fill=False, linewidth=1)
+                            self.MomentX.add_patch(circle)
+                        if (self.ChkX.IsShown() and self.ChkX.GetValue()):
+                            if not (Susceptibility[r] == 0): 
+                                circle = Circle((DemagStep[r] / MaxDemag, Susceptibility[r] / SusceScale + SusceOrig), 0.005, color='blue', fill=False, linewidth=1)
+                                self.MomentX.add_patch(circle)
+                                                            
+                circle = Circle((ZijY[r] / ZijScale + ZijHoriOrig, 1 + ZijX[r] / ZijScale - ZijVertOrig), 0.005, color='blue', fill=False, linewidth=1)
+                self.Zijderveld.add_patch(circle)             
+                circle = Circle((ZijY[r] / ZijScale + ZijHoriOrig, 1 - ZijZ[r] / ZijScale - ZijVertOrig), 0.005, color='red', fill=False, linewidth=1)
+                self.Zijderveld.add_patch(circle)             # external circle
+            
+            for r in range(0, ZijLines - 1):    # Link each step by a line
+                if self.MomentXCanvas.IsShown():
+                    if (self.ChkAllSteps.GetValue() or 
+                       (DemagStep[r] <= abs(modProg.getFloat(modProg.Right(self.lblDemag.GetValue(), 4)))) and 
+                       (DemagStep[r + 1] <= abs(modProg.getFloat(modProg.Right(self.lblDemag.GetValue(), 4))))):
+                        if (self.ChkM.IsShown() and self.ChkM.GetValue() and not (math.sqrt(ZijX[r] ** 2 + ZijY[r] ** 2 + ZijZ[r] ** 2) == 0) or (math.sqrt(ZijX[r + 1] ** 2 + ZijY[r + 1] ** 2 + ZijZ[r + 1] ** 2) == 0)):
+                            self.MomentX.plot([DemagStep[r] / MaxDemag,
+                                               DemagStep[r + 1] / MaxDemag], 
+                                              [math.sqrt(ZijX[r] ** 2 + ZijY[r] ** 2 + ZijZ[r] ** 2) / MaxMoment,
+                                               math.sqrt(ZijX[r + 1] ** 2 + ZijY[r + 1] ** 2 + ZijZ[r + 1] ** 2) / MaxMoment], 
+                                              color='red', linewidth=1)
+                        if self.ChkX.IsShown() and self.ChkX.GetValue():
+                            if not ((Susceptibility[r] == 0) or (Susceptibility[r + 1] == 0)): 
+                                self.MomentX.plot([DemagStep(r) / MaxDemag,
+                                                   DemagStep(r + 1) / MaxDemag], 
+                                                  [(Susceptibility[r] / SusceScale - SusceOrig),
+                                                   (Susceptibility[r + 1] / SusceScale - SusceOrig)], 
+                                                  color='blue', linewidth=1)
+                
+                self.Zijderveld.plot([ZijY[r] / ZijScale + ZijHoriOrig, ZijY[r + 1] / ZijScale + ZijHoriOrig], [1 + ZijX[r] / ZijScale - ZijVertOrig, 1 + ZijX[r + 1] / ZijScale - ZijVertOrig], color='blue', linewidth=1)
+                self.Zijderveld.plot([ZijY[r] / ZijScale + ZijHoriOrig, ZijY[r + 1] / ZijScale + ZijHoriOrig], [1 - ZijZ[r] / ZijScale - ZijVertOrig, 1 - ZijZ[r + 1] / ZijScale - ZijVertOrig ], color='red', linewidth=1)
+            
+            # Design a cross for the last step
+            self.Zijderveld.plot([momentvol * math.cos(crinc * math.pi / 180) * math.sin(crdec * math.pi / 180) / ZijScale + ZijHoriOrig - 0.015,
+                                  momentvol * math.cos(crinc * math.pi / 180) * math.sin(crdec * math.pi / 180) / ZijScale + ZijHoriOrig + 0.015], [
+                                  1 + momentvol * math.cos(crinc * math.pi / 180) * math.cos(crdec * math.pi / 180) / ZijScale - ZijVertOrig + 0.015, 
+                                  1 + momentvol * math.cos(crinc * math.pi / 180) * math.cos(crdec * math.pi / 180) / ZijScale - ZijVertOrig - 0.015], 
+                                  color='blue', linewidth=1)
+            self.Zijderveld.plot([momentvol * math.cos(crinc * math.pi / 180) * math.sin(crdec * math.pi / 180) / ZijScale + ZijHoriOrig - 0.015,
+                                  momentvol * math.cos(crinc * math.pi / 180) * math.sin(crdec * math.pi / 180) / ZijScale + ZijHoriOrig + 0.015], 
+                                 [1 + momentvol * math.cos(crinc * math.pi / 180) * math.cos(crdec * math.pi / 180) / ZijScale - ZijVertOrig - 0.015,
+                                  1 + momentvol * math.cos(crinc * math.pi / 180) * math.cos(crdec * math.pi / 180) / ZijScale - ZijVertOrig + 0.015], 
+                                 color='blue', linewidth=1)            
+            self.Zijderveld.plot([momentvol * math.cos(crinc * math.pi / 180) * math.sin(crdec * math.pi / 180) / ZijScale + ZijHoriOrig - 0.015,
+                                  momentvol * math.cos(crinc * math.pi / 180) * math.sin(crdec * math.pi / 180) / ZijScale + ZijHoriOrig + 0.015], 
+                                 [1 - momentvol * math.sin(crinc * math.pi / 180) / ZijScale - ZijVertOrig + 0.015,
+                                  1 - momentvol * math.sin(crinc * math.pi / 180) / ZijScale - ZijVertOrig - 0.015], 
+                                 color='red', linewidth=1)
+            self.Zijderveld.plot([momentvol * math.cos(crinc * math.pi / 180) * math.sin(crdec * math.pi / 180) / ZijScale + ZijHoriOrig - 0.015,
+                                  momentvol * math.cos(crinc * math.pi / 180) * math.sin(crdec * math.pi / 180) / ZijScale + ZijHoriOrig + 0.015], 
+                                 [1 - momentvol * math.sin(crinc * math.pi / 180) / ZijScale - ZijVertOrig - 0.015,
+                                  1 - momentvol * math.sin(crinc * math.pi / 180) / ZijScale - ZijVertOrig + 0.015], 
+                                 color='red', linewidth=1)
+
+            ## Design a big circle around the cross for the last step
+            circle = Circle((momentvol * math.cos(crinc * math.pi / 180) * math.sin(crdec * math.pi / 180) / ZijScale + ZijHoriOrig, 
+                             1 + momentvol * math.cos(crinc * math.pi / 180) * math.cos(crdec * math.pi / 180) / ZijScale - ZijVertOrig), 
+                             0.02, color='blue', fill=False, linewidth=1)
+            self.Zijderveld.add_patch(circle)             
+
+            circle = Circle((momentvol * math.cos(crinc * math.pi / 180) * math.sin(crdec * math.pi / 180) / ZijScale + ZijHoriOrig, 
+                             1 - momentvol * math.sin(crinc * math.pi / 180) / ZijScale - ZijVertOrig), 
+                             0.02, color='red', fill=False, linewidth=1)
+            self.Zijderveld.add_patch(circle)             
+            
+            if self.MomentXCanvas.IsShown():
+                if (self.ChkM.IsShown() and self.ChkM.GetValue()):
+                    self.MomentX.plot([abs(modProg.getFloat(modProg.Right(self.lblDemag.GetValue(), 4))) / MaxDemag - 0.015,
+                                       abs(modProg.getFloat(modProg.Right(self.lblDemag.GetValue(), 4))) / MaxDemag + 0.015], 
+                                      [momentvol / MaxMoment + 0.015,
+                                       momentvol / MaxMoment - 0.015], 
+                                      color='red', linewidth=1)
+
+                    self.MomentX.plot([abs(modProg.getFloat(modProg.Right(self.lblDemag.GetValue(), 4))) / MaxDemag - 0.015,
+                                       abs(modProg.getFloat(modProg.Right(self.lblDemag.GetValue(), 4))) / MaxDemag + 0.015], 
+                                      [momentvol / MaxMoment - 0.015,
+                                       momentvol / MaxMoment + 0.015], 
+                                      color='red', linewidth=1)
+                    circle = Circle((abs(modProg.getFloat(modProg.Right(self.lblDemag.GetValue(), 4))) / MaxDemag, 
+                                     momentvol / MaxMoment), 
+                                     0.02, color='red', fill=False, linewidth=1)
+                    self.MomentX.add_patch(circle)
+            
+                if (self.ChkX.IsShown() and self.ChkX.GetValue()):
+                    self.MomentX.plot([abs(modProg.getFloat(modProg.Right(self.lblDemag.GetValue(), 4))) / MaxDemag - 0.015,
+                                       abs(modProg.getFloat(modProg.Right(self.lblDemag.GetValue(), 4))) / MaxDemag + 0.015], 
+                                      [(modProg.getFloat(self.parent.frmSusceptibilityMeter.InputText.GetValue()) * self.parent.modConfig.SusceptibilityMomentFactorCGS / SusceScale + SusceOrig) + 0.015,
+                                       (modProg.getFloat(self.parent.frmSusceptibilityMeter.InputText.GetValue()) * self.parent.modConfig.SusceptibilityMomentFactorCGS / SusceScale + SusceOrig) - 0.015], 
+                                      color='blue', linewidth=1)
+
+                    self.MomentX.plot([abs(modProg.getFloat(modProg.Right(self.lblDemag.GetValue(), 4))) / MaxDemag - 0.015,
+                                       abs(modProg.getFloat(modProg.Right(self.lblDemag.GetValue(), 4))) / MaxDemag + 0.015], 
+                                      [(modProg.getFloat(self.parent.frmSusceptibilityMeter.InputText.GetValue()) * self.parent.modConfig.SusceptibilityMomentFactorCGS / SusceScale + SusceOrig) - 0.015,
+                                       (modProg.getFloat(self.parent.frmSusceptibilityMeter.InputText.GetValue()) * self.parent.modConfig.SusceptibilityMomentFactorCGS / SusceScale + SusceOrig) + 0.015], 
+                                      color='blue', linewidth=1)
+
+                    circle = Circle((abs(modProg.getFloat(modProg.Right(self.lblDemag.GetValue(), 4))) / MaxDemag, 
+                                     (modProg.getFloat(self.parent.frmSusceptibilityMeter.InputText.GetValue()) * self.parent.modConfig.SusceptibilityMomentFactorCGS / SusceScale + SusceOrig)), 
+                                     0.02, color='blue', fill=False, linewidth=1)
+                    self.MomentX.add_patch(circle)
+            
+            
+            if (ZijLines > 0):
+                r = 1
+
+            # Link the last step to the previous ones
+            self.Zijderveld.plot([ZijY[r] / ZijScale + ZijHoriOrig,
+                                  momentvol * math.cos(crinc * math.pi / 180) * math.sin(crdec * math.pi / 180) / ZijScale + ZijHoriOrig], 
+                                 [1 + ZijX[r] / ZijScale - ZijVertOrig, 
+                                  1 + momentvol * math.cos(crinc * math.pi / 180) * math.cos(crdec * math.pi / 180) / ZijScale - ZijVertOrig], 
+                                 color='blue', linewidth=1)
+
+            self.Zijderveld.plot([ZijY[r] / ZijScale + ZijHoriOrig,
+                                  momentvol * math.cos(crinc * math.pi / 180) * math.sin(crdec * math.pi / 180) / ZijScale + ZijHoriOrig], 
+                                 [1 - ZijZ[r] / ZijScale - ZijVertOrig, 
+                                  1 - momentvol * math.sin(crinc * math.pi / 180) / ZijScale - ZijVertOrig], 
+                                 color='black', linewidth=1)
+
+            if self.MomentXCanvas.IsShown():
+                if (self.ChkM.IsShown() and self.ChkM.GetValue() and (self.ChkAllSteps.GetValue() or (DemagStep[r] <= abs(modProg.getFloat(modProg.Right(self.lblDemag.GetValue(), 4))))) and not (math.sqrt(ZijX[r] ** 2 + ZijY[r] ** 2 + ZijZ[r] ** 2) == 0)):
+                    self.MomentX.plot([DemagStep[r] / MaxDemag,
+                                       abs(modProg.getFloat(modProg.Right(self.lblDemag.GetValue(), 4))) / MaxDemag], 
+                                       [math.sqrt(ZijX[r] ** 2 + ZijY[r] ** 2 + ZijZ[r] ** 2) / MaxMoment,
+                                       momentvol / MaxMoment], 
+                                       color='red', linewidth=1)
+            
+                if (self.ChkX.IsShown() and self.ChkX.GetValue()):
+                    if ((self.ChkAllSteps.GetValue() or (DemagStep[r] <= abs(modProg.getFloat(modProg.Right(self.lblDemag.GetValue(), 4))))) and not (Susceptibility[r] == 0)): 
+                        self.MomentX.plot([DemagStep[r] / MaxDemag,
+                                           1], 
+                                          [(Susceptibility[r] / SusceScale + SusceOrig),
+                                           (modProg.getFloat(self.parent.frmSusceptibilityMeter.InputText.GetValue()) * self.parent.modConfig.SusceptibilityMomentFactorCGS / SusceScale + SusceOrig)], 
+                                          color='blue', linewidth=1)
+                        
+                                 
+        return
+
+    '''--------------------------------------------------------------------------------------------
+                        
+                        Event Handler Functions
+                        
+    --------------------------------------------------------------------------------------------'''
+    '''
+    '''
+    def cmdHide_Click(self, event):
+        print('TODO: frmMeasure.cmdHide_Click')
+        return
+
+    '''
+    '''
+    def cmdPrint_Click(self, event):
+        print('TODO: frmMeasure.cmdPrint_Click')
+        return
+    
+    '''
+    '''
+    def buttonHalt_Click(self, event):
+        print('TODO: frmMeasure.buttonHalt_Click')
+        return
+    
+    '''
+    '''
+    def buttonPause_Click(self, event):
+        print('TODO: frmMeasure.buttonPause_Click')
+        return
+
+    '''
+    '''
+    def cmdShowPlots_Click(self, event):
+        print('TODO: frmMeasure.cmdShowPlots_Click')
+        return
+
+    '''
+    '''
+    def cmdStats_Click(self, event):
+        print('TODO: frmMeasure.cmdStats_Click')
+        return
+        
+    '''
+    '''
+    def onShow(self, event):
+        if event.IsShown():
+            self.GUI_DisplayAll()
+            
+        return
+    
+    '''
+    '''
+    def onClosed(self, event):
+        # Immediately stop the timer
+        self.updatePlot.event_source.stop()
+        self.updateZijPlot.event_source.stop()
+        self.canvas.Destroy()
+        self.Destroy()
+        return
+        
+    '''
+    '''
+    def onRGroupChanges(self, event):
+        print('TODO: frmMeasure.onRGroupChanges')
+        return
+    
+    '''
+    '''
+    def cmdHideZij_Click(self, event):
+        print('TODO: frmMeasure.cmdHideZij_Click')
+        self.Zijderveld.plot([0, 1], [0.5, 0.5], color='black')
+        return
+
     '''--------------------------------------------------------------------------------------------
                         
                         Public API Functions
@@ -1165,9 +1760,9 @@ class frmMeasure(wx.Frame):
             self.clearData()
             
             self.SetSample("Holder")
-            self.MomentX.Hide()     # (October 2007 L Carporzen) Susceptibility versus demagnetization
+            self.MomentXCanvas.Hide()     # (October 2007 L Carporzen) Susceptibility versus demagnetization
             
-            self.placeTopRight()
+            self.GUI_placeTopRight()
             
             self.InitEqualArea()    # (August 2007 L Carporzen) Equal area plot
             
@@ -1178,30 +1773,40 @@ class frmMeasure(wx.Frame):
     '''
         Display infomration for the running background process
     '''
-    def updateGUI(self, messageList):            
-        if ('InitEqualArea' == messageList[0]):
+    def updateGUI(self, messageDict):            
+        if (messageDict['Function'] == 'InitEqualArea'):
             self.InitEqualArea()
             
-        elif ('SetFields' == messageList[0]):
-            self.SetFields(messageList[1:])
+        elif (messageDict['Function'] == 'SetFields'):
+            self.SetFields(messageDict)
 
-        elif ('showData' == messageList[0]):
-            self.showData(messageList[1:])
+        elif (messageDict['Function'] == 'showData'):
+            self.showData(messageDict)
 
-        elif ('ShowAngDat' == messageList[0]):
-            self.ShowAngDat(messageList[1:])
+        elif (messageDict['Function'] == 'ShowAngDat'):
+            self.ShowAngDat(messageDict)
             
-        elif ('ShowStats' == messageList[0]):
-            self.ShowStats(messageList[1:])
+        elif (messageDict['Function'] == 'ShowStats'):
+            self.ShowStats(messageDict)
             
-        elif ('PlotEqualArea' == messageList[0]):
-            self.PlotEqualArea(messageList[1:])
+        elif (messageDict['Function'] == 'PlotEqualArea'):
+            self.PlotEqualArea(messageDict)
 
-        elif ('updateStats' == messageList[0]):
-            self.updateStats(messageList[1:])
+        elif (messageDict['Function'] == 'updateStats'):
+            self.updateStats(messageDict)
 
-        elif ('AveragePlotEqualArea' == messageList[0]):
-            self.AveragePlotEqualArea(messageList[1:])
+        elif (messageDict['Function'] == 'AveragePlotEqualArea'):
+            self.AveragePlotEqualArea(messageDict)
+
+        elif (messageDict['Function'] == 'ImportZijRoutine'):
+            messageDict['FilePath'] = self.lblSampName.GetValue()
+            self.ImportZijRoutine(messageDict)
+            
+        elif (messageDict['Function'] == 'ShowStatsForm'):
+            self.ShowStatsForm()
+            
+        elif (messageDict['Function'] == 'loadMeasurementBlock'):
+            self.Holder = DataExchange.loadMeasurementBlock(messageDict)
             
         return 
         
@@ -1218,7 +1823,7 @@ class frmMeasure(wx.Frame):
 if __name__=='__main__':
     try:    
         app = wx.App(False)
-        frame = frmMeasure(parent=None)
+        frame = frmMeasure(parent=None)                
         frame.Show(True)
         app.MainLoop()    
         

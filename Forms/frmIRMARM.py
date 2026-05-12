@@ -5,7 +5,6 @@ Created on Jul 7, 2025
 '''
 import wx
 
-from Forms.frmTestUnit import frmTestUnit
 from Forms.frmDAQ_Comm import frmDAQ_Comm
 
 class frmIRMARM(wx.Frame):
@@ -417,9 +416,7 @@ if __name__=='__main__':
     try:    
         app = wx.App(False)
         
-        testUnit = frmTestUnit()
-        irmARMControl = frmIRMARM(parent=testUnit)
-        testUnit.panelList['frmIRMARM'] = irmARMControl
+        irmARMControl = frmIRMARM(parent=None)
         irmARMControl.Show(True)        
         app.MainLoop()    
         

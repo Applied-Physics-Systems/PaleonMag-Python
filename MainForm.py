@@ -45,7 +45,7 @@ from Modules.modChanger import ModChanger
 
 from Process.PaleoThread import PaleoThread
 
-VersionNumber = 'Version 0.00.29'
+VersionNumber = 'Version 0.00.30'
 
 ID_DC_MOTORS        = 0
 ID_FILE_REGISTRY    = 1
@@ -74,6 +74,7 @@ class MainForm(wx.Frame):
     config = None
     FLAG_MagnetInit = False     # Whether we've finished initializing the magnetometer
     FLAG_MagnetUse = False      # Whether we've finished using the magnetometer
+    HolderMeasured = False
     
     def __init__(self, *args, **kw):
         '''
@@ -97,7 +98,7 @@ class MainForm(wx.Frame):
         self.InitUI()
         self.messageBox.SetValue(self.messageStr)
 
-        self.registryControl = frmSampleIndexRegistry(parent=self)
+        self.frmSampleIndexRegistry = frmSampleIndexRegistry(parent=self)
         self.magControl = frmMagnetometerControl(parent=self)
         self.vacuumControl = frmVacuum(parent=self)
         self.frmMeasure = frmMeasure(parent=self)
@@ -574,9 +575,8 @@ class MainForm(wx.Frame):
 
         elif (menuID == ID_FILE_REGISTRY):
             if not 'frmSampleIndexRegistry' in self.panelList.keys():
-                registryControl = frmSampleIndexRegistry(parent=self)
-                registryControl.Show()
-                self.panelList['frmSampleIndexRegistry'] = registryControl                    
+                self.frmSampleIndexRegistry.Show()
+                self.panelList['frmSampleIndexRegistry'] = self.frmSampleIndexRegistry                    
             
         elif (menuID == ID_DEMAG_AF):
             if not 'frmADWIN_AF' in self.panelList.keys():

@@ -4,7 +4,7 @@ Created on Aug 29, 2025
 @author: hd.nguyen
 '''
 
-from ClassModules.Sample import Samples
+from ClassModules.Sample import Sample, Samples
 from ClassModules.RockmagStep import RockmagSteps
 
 class SampleIndexRegistration():
@@ -36,6 +36,8 @@ class SampleIndexRegistration():
 
         self._curDemag = ''
         self._curDemagLong = ''
+        self._UpFilePath = ''
+        self._CurrentStepFilePathPrefix = ''
         
         self.measurementSteps = RockmagSteps(self, self.parent)                
         self.sampleSet = Samples(self)
@@ -73,6 +75,27 @@ class SampleIndexRegistration():
             
         return self._curDemagLong
 
+    @property
+    def CurrentStepFilePathPrefix(self):
+        return self._CurrentStepFilePathPrefix
+    
+    @CurrentStepFilePathPrefix.getter
+    def CurrentStepFilePathPrefix(self):
+        self._CurrentStepFilePathPrefix = self.filedir + "\\" + self.SampleCode + "\\" + self.curDemag
+        return self._CurrentStepFilePathPrefix 
+
+    @property
+    def UpFilePath(self):
+        return self._UpFilePath
+    
+    @UpFilePath.getter
+    def UpFilePath(self):
+        self._UpFilePath = self.CurrentStepFilePathPrefix + ".UP"
+        return self._UpFilePath 
+
+    '''
+        Functions
+    '''
                         
     '''
     '''
@@ -307,4 +330,20 @@ class SampleIndexRegistrations():
         self.Item = []
         return
 
+#===================================================================================================
+# Main Module
+#---------------------------------------------------------------------------------------------------
+if __name__=='__main__':
+    try:            
+        testUnit = SampleIndexRegistration(parent=None)
+        testUnit.filedir = 'C:\\PaleoMag\\Data\\SAM'
+        testUnit.SampleCode = 'Bill2A'
+        testUnit._curDemag = 'NRM   '
+        
+        sample = Sample(parent=testUnit)
+        sample.Samplename = testUnit.SampleCode + '1.1' 
+        sample.ReadUpMeasurements()
+        
+    except Exception as e:
+        print(e)
         

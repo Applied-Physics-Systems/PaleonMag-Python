@@ -15,6 +15,8 @@ from Modules.modVector3d import modVector3d
 from ClassModules.Angular3D import Angular3D
 from ClassModules.Cartesian3D import Cartesian3D
 
+from Process.DataExchange import DataExchange
+
 Magnet_SampleOrientationUp = -1
 Magnet_SampleOrientationDown = 1
 Measure_ARCDelay = 2.5
@@ -70,14 +72,13 @@ class modMeasure():
         '''
         self.parent = parent
         
-        self.SampleNameCurrent = ''
-        self.SampleStepCurrent = ''
         self.SampleOrientationCurrent = 0
         self.Meascount = 0
         self.DumpRawDataStats = True
-        self.HolderMeasured = False
         
         self.frmMeasure_lblDemag = ''
+        
+        self.Holder = MB.MeasurementBlock()
 
     '''--------------------------------------------------------------------------------------------
                         
@@ -165,36 +166,47 @@ class modMeasure():
     --------------------------------------------------------------------------------------------'''
     '''
     '''
+    def frmMeasure_InitEqualArea(self):
+        messageDict = {'Form': 'frmMeasure',
+                       'Function': 'InitEqualArea'}
+        self.parent.modConfig.queue.put(messageDict)
+        return
+    
+    '''
+    '''
     def frmMeasure_SetFields(self, avgSteps, curDemagLong, doUp, doBoth, filename):
-        messageStr = 'frmMeasure:SetFields:'
-        messageStr += ':avgSteps = ' + str(avgSteps)
-        messageStr += ':curDemagLong = ' + curDemagLong
-        messageStr += ':doUp = ' + str(doUp)
-        messageStr += ':doBoth = ' + str(doBoth)
-        messageStr += ':filename = ' + filename
-        self.parent.modConfig.queue.put(messageStr)
+        messageDict = {'Form': 'frmMeasure',
+                       'Function': 'SetFields',
+                       'avgSteps': avgSteps,
+                       'curDemagLong': curDemagLong,
+                       'doUp': doUp,
+                       'doBoth': doBoth,
+                       'filename':filename}
+        self.parent.modConfig.queue.put(messageDict)
         return
     
     '''
     '''
     def frmMeasure_showData(self, X, Y, Z, num):
-        messageStr = 'frmMeasure:showData:'
-        messageStr += ':datX = ' + str(X)
-        messageStr += ':datY = ' + str(Y)
-        messageStr += ':datZ = ' + str(Z)
-        messageStr += ':num = ' + str(num)
-        messageStr += ':Meascount = ' + str(self.Meascount)
-        self.parent.modConfig.queue.put(messageStr)
+        messageDict = {'Form': 'frmMeasure',
+                       'Function': 'showData',
+                       'X': X,
+                       'Y': Y,
+                       'Z': Z,
+                       'num': num,
+                       'Meascount': self.Meascount}
+        self.parent.modConfig.queue.put(messageDict)
         return
 
     '''
     '''
     def frmMeasure_ShowAngDat(self, dec, inc, num):
-        messageStr = 'frmMeasure:ShowAngDat:'
-        messageStr += ':dec = ' + str(dec)
-        messageStr += ':inc = ' + str(inc)
-        messageStr += ':num = ' + str(num)
-        self.parent.modConfig.queue.put(messageStr)
+        messageDict = {'Form': 'frmMeasure',
+                       'Function': 'ShowAngDat',
+                       'dec': dec,
+                       'inc': inc,
+                       'num': num}
+        self.parent.modConfig.queue.put(messageDict)
         return
     
     '''
@@ -202,66 +214,133 @@ class modMeasure():
     def frmMeasure_ShowStats(self, X, Y, Z,
                                    dec, inc, SigDrift,
                                    SigHold, SigInd, CSD):
-        messageStr = 'frmMeasure:ShowStats:'
-        messageStr += ':X = ' + str(X)
-        messageStr += ':Y = ' + str(Y)
-        messageStr += ':Z = ' + str(Z)
-        messageStr += ':dec = ' + str(dec)
-        messageStr += ':inc = ' + str(inc)
-        messageStr += ':SigDrift = ' + str(SigDrift)
-        messageStr += ':SigHold = ' + str(SigHold)
-        messageStr += ':SigInd = ' + str(SigInd)
-        messageStr += ':CSD = ' + str(CSD)
-        self.parent.modConfig.queue.put(messageStr)
+        messageDict = {'Form': 'frmMeasure',
+                       'Function': 'ShowStats',
+                       'X': X,
+                       'Y': Y,
+                       'Z': Z,
+                       'dec': dec,
+                       'inc': inc,
+                       'SigDrift': SigDrift,
+                       'SigHold': SigHold,
+                       'SigInd': SigInd,
+                       'CSD': CSD}
+        self.parent.modConfig.queue.put(messageDict)
         return
     
     '''
     '''
     def frmMeasure_PlotEqualArea(self, dec, inc):
-        messageStr = 'frmMeasure:PlotEqualArea'
-        messageStr += ':dec = ' + str(dec)
-        messageStr += ':inc = ' + str(inc)
-        self.parent.modConfig.queue.put(messageStr)
+        messageDict = {'Form': 'frmMeasure',
+                       'Function': 'PlotEqualArea',
+                       'dec': dec,
+                       'inc': inc}
+        self.parent.modConfig.queue.put(messageDict)
         return
 
     '''
     '''
     def frmMeasure_updateStats(self, MaxX, MinX, MaxY, MinY, MaxZ, MinZ, Vol, momentvol):
-        messageStr = 'frmMeasure:updateStats'
-        messageStr += ':MaxX = ' + str(MaxX)
-        messageStr += ':MinX = ' + str(MinX)
-        messageStr += ':MaxY = ' + str(MaxY)
-        messageStr += ':MinY = ' + str(MinY)
-        messageStr += ':MaxZ = ' + str(MaxZ)
-        messageStr += ':MinZ = ' + str(MinZ)
-        messageStr += ':Vol = ' + str(Vol)
-        messageStr += ':momentvol = ' + str(momentvol)
-        self.parent.modConfig.queue.put(messageStr)
-        return
-    
-    '''
-    '''
-    def frmMeasure_updateWidgets(self, widgetLabel, dataStr):
-        messageStr = 'frmMeasure:' + widgetLabel + ' = ' + dataStr 
-        self.parent.modConfig.queue.put(messageStr)
-        return
-    
-    '''
-        (August 2007 L Carporzen) Zijderveld diagram    
-    '''
-    def frmMeasure_ImportZijRoutine(self, FilePath, crdec, crinc, momentvol, refresh):
-        print('TODO:modMeasure.frmMeasure_ImportZijRoutine') 
+        messageDict = {'Form': 'frmMeasure',
+                       'Function': 'updateStats',
+                       'MaxX': MaxX,
+                       'MinX': MinX,
+                       'MaxY': MaxY,
+                       'MinY': MinY,
+                       'MaxZ': MaxZ,
+                       'MinZ': MinZ,
+                       'Vol': Vol,
+                       'momentvol': momentvol}
+        self.parent.modConfig.queue.put(messageDict)
         return
    
     '''
     '''
     def frmMeasure_AveragePlotEqualArea(self, dec, inc, CSD):
-        messageStr = 'frmMeasure:AveragePlotEqualArea'
-        messageStr += ':dec = ' + str(dec)
-        messageStr += ':inc = ' + str(inc)
-        messageStr += ':CSD = ' + str(CSD)
-        self.parent.modConfig.queue.put(messageStr)
+        messageDict = {'Form': 'frmMeasure',
+                       'Function': 'AveragePlotEqualArea',
+                       'dec': dec,
+                       'inc': inc,
+                       'CSD': CSD}
+        self.parent.modConfig.queue.put(messageDict)
         return
+    
+    '''
+    '''
+    def frmMeasure_updateWidgets(self, widgetLabel, dataStr):
+        messageDict = {'Form': 'frmMeasure',
+                       'Function': 'updateWidgets',
+                        widgetLabel: dataStr} 
+        self.parent.modConfig.queue.put(messageDict)
+        return
+    
+    '''
+        (August 2007 L Carporzen) Zijderveld diagram    
+    '''
+    def frmMeasure_ImportZijRoutine(self, crdec, crinc, momentvol, refresh):
+        messageDict = {'Form': 'frmMeasure',
+                       'Function': 'ImportZijRoutine',
+                       'crdec': crdec, 
+                       'crinc': crinc, 
+                       'momentvol': momentvol, 
+                       'refresh': refresh}
+        self.parent.modConfig.queue.put(messageDict)
+        return
+       
+    '''
+        This procedure is called if we are doing both up and down
+        measurements.  It displays error fields specific for this
+        kind of measurement
+    '''
+    def frmStats_ShowErrors(self, errangle, herrangle, momentupdown):
+        messageDict = {'Form': 'frmMeasure',
+                       'Function': 'ShowStatsForm'}
+        self.parent.modConfig.queue.put(messageDict)
+        time.sleep(0.1)
+        
+        messageDict = {'Form': 'frmStats',
+                       'Function': 'ShowErrors',
+                       'errangle': errangle,
+                       'herrangle': herrangle,
+                       'momentupdown': momentupdown}
+        self.parent.modConfig.queue.put(messageDict)
+        return
+    
+    '''
+        This procedure displays statistical information for the
+        entire set of data gathered from the magnetometer.  (after
+        all 'n' averaging cycles have been completed)
+    '''   
+    def frmStats_ShowAvgStats(self, holderX, holderY, holderZ,
+                                    sdx, sdy, sdz,
+                                    crdec, crinc, gdec, ginc,
+                                    bdec, binc, momentvol,
+                                    SigNoise, SigHolder, SigInduced = 0.0):
+        messageDict = {'Form': 'frmMeasure',
+                       'Function': 'ShowStatsForm'}
+        self.parent.modConfig.queue.put(messageDict)
+        time.sleep(0.1)
+
+        messageDict = {'Form': 'frmStats',
+                       'Function': 'ShowAvgStats',
+                       'holderX': holderX, 
+                       'holderY': holderY, 
+                       'holderZ': holderZ,
+                       'sdx': sdx, 
+                       'sdy': sdy, 
+                       'sdz': sdz,
+                       'crdec': crdec, 
+                       'crinc': crinc, 
+                       'gdec': gdec, 
+                       'ginc': ginc,
+                       'bdec': bdec, 
+                       'binc': binc, 
+                       'momentvol': momentvol,
+                       'SigNoise': SigNoise, 
+                       'SigHolder': SigHolder, 
+                       'SigInduced': SigInduced}                       
+        self.parent.modConfig.queue.put(messageDict)
+        return   
 
     '''--------------------------------------------------------------------------------------------
                         
@@ -443,14 +522,13 @@ class modMeasure():
 
         measure_ReadSample = MB.MeasurementBlock()
         
-        self.parent.modConfig.queue.put('frmMeasure:InitEqualArea')
+        self.frmMeasure_InitEqualArea()
         
-        Holder = MB.MeasurementBlock()
         self.parent.modConfig.processData.SampleNameCurrent = specimen.Samplename
         measure_ReadSample.isUp = isUp
         if not IsHolder:
             for j in range(0, 4):
-                measure_ReadSample.SetHolder(j, Holder.Sample[j])
+                measure_ReadSample.SetHolder(j, self.Holder.Sample[j])
             
         self.parent.motors.TurningMotorRotate(0)         
         self.parent.motors.UpDownMove(int(self.parent.modConfig.ZeroPos + specimen.SampleHeight / 2), 2)
@@ -918,8 +996,7 @@ class modMeasure():
     '''
     def Measure_Read(self, targetSample, RMStep, RockmagMode=False):
         isUp = False        
-        readDats = MB.MeasurementBlocks(self.parent)
-        Holder = MB.MeasurementBlock()
+        readDats = MB.MeasurementBlocks(self.parent)        
         
         IsHolder = (targetSample.Samplename == "Holder")
         self.parent.modConfig.processData.SampleNameCurrent = targetSample.Samplename
@@ -931,6 +1008,7 @@ class modMeasure():
         
         if IsHolder:
             # Do initializations necessary for holder
+            self.Holder = MB.MeasurementBlock()
             self.parent.SQUID.ChangeRange("A", "1")      # 1x read mode
             numAvgSteps = self.parent.SampQueue.maxAvgSteps            
         else:
@@ -947,7 +1025,7 @@ class modMeasure():
             # Do the initial zero measurement here
             readDats.Add(self.Measure_ReadSample(targetSample, IsHolder, isUp))
             for j in range(0, 4):
-                readDats.Last.SetHolder(j, Holder.Sample[j])
+                readDats.Last.SetHolder(j, self.Holder.Sample[j])
             
             readDats.Last.isUp = isUp
             avg = readDats.VectAvg
@@ -974,7 +1052,7 @@ class modMeasure():
         
         # Now we've done the measurements the avgSteps number of times
         if IsHolder:
-            Holder = readDats.AverageBlock
+            self.Holder = readDats.AverageBlock
         else:
             # Not a holder measurement
             if (isUp and doBoth):
@@ -985,7 +1063,8 @@ class modMeasure():
                 avstats = self.Measure_CalcStats(targetSample, readDats)
                 sdvect = readDats.VectSD
                 self.frmStats_ShowErrors(readDats.FischerSD, 0, 0)
-                self.frmStats.ShowAvgStats(sdvect.X, sdvect.Y, sdvect.Z, 
+                self.frmStats_ShowAvgStats(self.Holder.Average.X, self.Holder.Average.Y, self.Holder.Average.Z,
+                                           sdvect.X, sdvect.Y, sdvect.Z, 
                                            avstats.unfolded.c.dec, avstats.unfolded.c.inc, 
                                            avstats.unfolded.g.dec, avstats.unfolded.g.inc, 
                                            avstats.unfolded.S.dec, avstats.unfolded.S.inc, 
@@ -995,8 +1074,8 @@ class modMeasure():
                 return
             
             if (doBoth and (not isUp)):
-                readDats.Assimilate(targetSample.ReadUpMeasurements)
-                UpToDn = readDats.UpToDown()
+                readDats.Assimilate(targetSample.ReadUpMeasurements())
+                UpToDn = readDats.UpToDown
             
             ErrorAngle = readDats.FischerSD
             '''
@@ -1007,15 +1086,15 @@ class modMeasure():
             self.frmStats_ShowErrors(ErrorAngle, errorHoriz, UpToDn)
             sdvect = readDats.VectSD
             avstats = self.Measure_CalcStats(targetSample, readDats)
-            self.frmStats_ShowAvgStats(sdvect.X, sdvect.Y, sdvect.Z, 
+            self.frmStats_ShowAvgStats(self.Holder.Average.X, self.Holder.Average.Y, self.Holder.Average.Z,
+                                       sdvect.X, sdvect.Y, sdvect.Z, 
                                        avstats.unfolded.c.dec, avstats.unfolded.c.inc, 
                                        avstats.unfolded.g.dec, avstats.unfolded.g.inc, 
                                        avstats.unfolded.S.dec, avstats.unfolded.S.inc, 
                                        avstats.momentvol, avstats.SigNoise, 
                                        avstats.SigHolder, avstats.SigInduced)
             
-            self.frmMeasure_ImportZijRoutine(self.frmMeasure_lblSampName, 
-                                             avstats.unfolded.c.dec, avstats.unfolded.c.inc, 
+            self.frmMeasure_ImportZijRoutine(avstats.unfolded.c.dec, avstats.unfolded.c.inc, 
                                              avstats.momentvol, False)      # (August 2007 L Carporzen) Zijderveld diagram
             self.frmMeasure_AveragePlotEqualArea(avstats.unfolded.S.dec, avstats.unfolded.S.inc, readDats.FischerSD)    # (August 2007 L Carporzen) Equal area plot
             unfolded = avstats.unfolded
@@ -1044,7 +1123,7 @@ class modMeasure():
                 targetSample.WriteUpMeasurements(readDats, curDemag)
                 targetSample.WriteStatsTable(readDats, curDemag)
             
-            targetSample.BackupSpecFile
+            targetSample.BackupSpecFile()
                 
         self.parent.modConfig.processData.SampleNameCurrent = ''
         self.parent.modConfig.processData.SampleStepCurrent = ''
@@ -1071,7 +1150,7 @@ class modMeasure():
             doMeasure = True
         
         if RockmagMode:                
-            targetSample.WriteRockmagInfoLine("Instrument: " + self.paren.modConfig.MailFromName)
+            targetSample.WriteRockmagInfoLine("Instrument: " + self.parent.modConfig.MailFromName)
             targetSample.WriteRockmagInfoLine("Time: " + datetime.now().strftime("%Y-%m-%d %H:%M"))
         
         while (targetSample.parent.measurementSteps.CurrentStepIndex > -1):
@@ -1087,8 +1166,8 @@ class modMeasure():
                 
             self.parent.displayStatusBar("Measuring samples... (" + LabelString + ")")
             
-            self.SampleNameCurrent = targetSample.Samplename
-            self.SampleStepCurrent = targetSample.parent.measurementSteps.CurrentStep.DemagStepLabelLong
+            self.parent.modConfig.processData.SampleNameCurrent = targetSample.Samplename
+            self.parent.modConfig.processData.SampleStepCurrent = targetSample.parent.measurementSteps.CurrentStep.DemagStepLabelLong
             
             if targetSample.parent.doUp:            
                 self.SampleOrientationCurrent = Magnet_SampleOrientationUp                
@@ -1142,10 +1221,52 @@ class modMeasure():
         self.parent.displayStatusBar("Measuring samples...")
         self.parent.motors.TurningMotorAngleOffset(self.parent.modConfig.TrayOffsetAngle)     # + 360 (November 2009 L Carporzen) change to 360 + instead of - because we changed the Sub TrayOffsetAngle
         
-        self.SampleNameCurrent = ''
-        self.SampleStepCurrent = ''
+        self.parent.modConfig.processData.SampleNameCurrent = ''
+        self.parent.modConfig.processData.SampleStepCurrent = ''
         self.SampleOrientationCurrent = 0
         return
+    
+    '''
+    '''
+    def Magnetometer_UnloadSample(self):
+        if (self.parent.modConfig.processData.SampleNameCurrent != "Holder"):
+            self.parent.modConfig.processData.SampleNameCurrent = ''
+            self.parent.modConfig.processData.SampleStepCurrent = ''
+        return
+    
+    '''
+        Request the user to manually load the sample with 'SampName'
+        into the magnetometer and set it to the correct orientation.
+        We then automatically load frmMeasure and call the 'MeasureSample'
+        routines
+    '''
+    def Measure_QueryLoad(self, sampname, SampleOrientation):
+        
+        if (sampname != self.parent.modConfig.processData.SampleNameCurrent):
+            # We changed the sample, time to re-measure
+            self.Magnetometer_UnloadSample()
+            if (sampname != "Holder"):
+                self.parent.vacuum.ValveConnect(True)
+                QueryStr = "Please load the sample " + sampname
+                if (SampleOrientation == Magnet_SampleOrientationUp):
+                    QueryStr += " with the arrow pointing up."
+                else:
+                    QueryStr += " with the arrow pointing down."
+                
+                caption = "Load Sample..."
+            else:
+                caption = "Remove Sample..."
+            self.parent.displayMessageBox(caption=caption, message=QueryStr, pause=True, buttons='OK')
+            
+            self.parent.modConfig.processData.SampleNameCurrent = sampname
+            self.SampleOrientationCurrent = SampleOrientation
+            
+        elif (SampleOrientation != self.SampleOrientationCurrent):
+            self.parent.displayMessageBox(caption="Flip Sample...", message="Please turn the sample over.", pause=True, buttons='OK')
+            self.SampleOrientationCurrent = SampleOrientation  
+        
+        return
+   
         
     '''--------------------------------------------------------------------------------------------
                         
@@ -1177,14 +1298,103 @@ class modMeasure():
         self.Measure_TreatAndRead(self.parent.SampleHolder, False)    # Read Holder
         
         self.parent.motors.UpDownMove(0, 2)
-        self.HolderMeasured = True                       # Set the "holder measured" flag
                 
         self.parent.displayStatusBar('')
         
         self.parent.SampleHolder.SampleHeight = 0
         
+        holderDict = DataExchange.parseMeasurementBlock(self.Holder)
+        holderDict['Form'] = 'frmMeasure'
+        holderDict['Function'] = 'loadMeasurementBlock'
+        self.parent.modConfig.queue.put(holderDict)
         self.parent.modConfig.queue.put('frmMagnetometerControl:cmdManHolder_End')
                 
+        return
+    
+    '''
+    '''
+    def Manual_MeasureSample(self, chkVacuum, specName):
+        self.parent.modConfig.queue.put('frmMagnetometerControl:SetUp_cmdManRun')
+        
+        specimen = self.parent.waitForDataFromGUI()
+        doUpOriginal = specimen.parent.doUp
+        if specimen.parent.doUp: 
+            SampleOrientation = Magnet_SampleOrientationUp
+        else:
+            SampleOrientation = Magnet_SampleOrientationDown 
+        
+        '''
+            ' if we're in rockmag mode and IRM is enabled, discharge the IRM coil
+            ' before loading the sample
+        '''
+        if specimen.parent.RockmagMode and self.parent.modConfig.EnableAxialIRM:
+            self.parent.modConfig.queue.put('frmIRMARM:Coil Type = Axial')
+            self.parent.apsIRM.FireIRM(0)        
+        
+        self.Measure_QueryLoad(specimen.Samplename, SampleOrientation)
+        
+        self.parent.motors.UpDownMove(int(self.parent.modConfig.SCoilPos + self.parent.modConfig.AFPos / 2), 1)
+        self.Measure_TreatAndRead(specimen, False)    # Read data starting from zero pos
+        self.parent.motors.UpDownMove(0, 2)
+        if (specimen.parent.doUp and specimen.parent.doBoth):
+            specimen.parent.doUp = False
+            self.Measure_QueryLoad(specimen.Samplename, Magnet_SampleOrientationDown)
+            self.parent.motors.UpDownMove(int(self.parent.modConfig.ZeroPos + specimen.SampleHeight / 2), 2)
+            self.Measure_TreatAndRead(specimen, False)      # Read data starting from zero pos
+            self.parent.motors.UpDownMove(0, 2)
+            specimen.parent.doUp = doUpOriginal
+            
+        # (September 2007 L Carporzen) New version of the Halt button
+        if self.parent.checkProgramHaltRequest():
+            return
+        
+        if (specimen.parent.measurementSteps.Count > 1):
+            self.parent.SetCodeLevel('CodeOrange')
+            
+        if not chkVacuum:               # (August 2007 L Carporzen) Vacuum could stay after the sample done
+            messageStr = "Sample " + specName + " done. Please remove sample."
+        else:
+            messageStr = "Sample " + specName + " done. The vacuum will stay on."
+        self.parent.displayMessageBox(caption='', message=messageStr, pause=True, buttons='OK')            
+            
+        '''            
+            '(July 2011 - I Hilburn)
+            'Added this in to prompt the user to turn off the air and
+            'to turn off the power to the coil thermal sensors
+        '''
+        if (specimen.parent.RockmagMode and (self.parent.modConfig.EnableT1 or self.parent.modConfig.EnableT2)):
+            # Automatically turn off the air
+            if self.parent.modConfig.DoDegausserCooling:
+                self.parent.vacuum.DegausserCooler(False)
+                # Prompt user to turn off the air and the temperature sensor power
+                MsgBox = "Please \n\n" 
+                MsgBox += " - Verify the air is off\n"
+                MsgBox += " - Switch off the power to the Rockmag coil temperature sensors"
+            else:
+                # Prompt user to turn off the air and the temperature sensor power
+                MsgBox = "Please \n\n"
+                MsgBox += " - Turn off the air\n"
+                MsgBox += " - Switch off the power to the Rockmag coil temperature sensors"
+            self.parent.displayMessageBox(message=MsgBox, pause=True, buttons='OK')
+            
+        elif specimen.parent.RockmagMode:
+            '''
+                Prompt user to turn off the air
+                Automatically turn off the air
+            '''
+            if self.parent.modConfig.DoDegausserCooling:
+                self.parent.vacuum.DegausserCooler(False)
+                MsgBox = "Please verify the air is off."
+            else:
+                MsgBox = "Please turn off the air."
+            self.parent.displayMessageBox(message=MsgBox, pause=True, buttons='OK')
+        
+        self.parent.SetCodeLevel('CodeBlue')
+        self.parent.modConfig.processData.SampleNameCurrent = ''
+        if not chkVacuum:
+            self.parent.vacuum.ValveConnect(False)      # (August 2007 L Carporzen) Vacuum could stay
+            
+        self.parent.modConfig.queue.put('frmMagnetometerControl:cmdManRun_End')                
         return
     
     

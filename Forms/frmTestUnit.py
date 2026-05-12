@@ -16,6 +16,8 @@ from Forms.frmMeasure import frmMeasure
 from Forms.frmStats import frmStats
 from Forms.frmAF_2G import frmAF_2G
 from Forms.frmADWIN_AF import frmADWIN_AF
+from Forms.frmDCMotors import frmDCMotors
+from Forms.frmIRMARM import frmIRMARM
 
 from ClassModules.SampleIndexRegistration import SampleIndexRegistrations
 from ClassModules.SampleCommand import SampleCommands
@@ -29,6 +31,9 @@ from Hardware.DevicesControl import DevicesControl
 
 from Process.ProcessData import ProcessData
 from Process.PaleoThread import PaleoThread
+from Forms.frmSQUID import frmSQUID
+
+LISTBOX_LENGTH = 230
 
 class frmTestUnit(wx.Frame):
     '''
@@ -37,6 +42,8 @@ class frmTestUnit(wx.Frame):
     panelList = {}
     FLAG_MagnetInit = False     # Whether we've finished initializing the magnetometer
     FLAG_MagnetUse = False      # Whether we've finished using the magnetometer
+    HolderMeasured = False
+    currentTest = ''
 
     def __init__(self, parent=None):
         '''
@@ -63,7 +70,7 @@ class frmTestUnit(wx.Frame):
                 
         self.InitUI()        
 
-        self.registryControl = frmSampleIndexRegistry(parent=self)
+        self.frmSampleIndexRegistry = frmSampleIndexRegistry(parent=self)
         self.magControl = frmMagnetometerControl(parent=self)
         
         self.SampleHolder = Sample()
@@ -75,11 +82,14 @@ class frmTestUnit(wx.Frame):
         self.MainChanger = frmChanger(parent=self)        
         self.frmAF_2G = frmAF_2G(parent=self)
         self.frmADWIN_AF = frmADWIN_AF(parent=self)
+        self.frmIRMARM = frmIRMARM(parent=self)
         
         self.modMeasure = modMeasure()
         self.modFlow = modFlow()
         self.paleoThread = PaleoThread(parent=self)
        
+        self.modConfig.processData.vacuumEnable = True
+        
         # Add timer
         self.timer = wx.Timer(self)
         self.timer.Stop()
@@ -88,10 +98,44 @@ class frmTestUnit(wx.Frame):
 
     '''
     '''
+    def positionWidget(self, widget):
+        parentPos = self.GetPosition()
+        parentSize = self.GetSize()
+        childSize = widget.GetSize()
+        xPos = int(parentPos[0] + (parentSize[0]-childSize[0])/2)
+        yPos = int(parentPos[1] + (parentSize[1]-childSize[1])/2)
+        frmPos = (xPos, yPos)
+        widget.SetPosition(frmPos)
+        
+        return xPos, yPos
+    
+    '''
+    '''
     def InitUI(self):
         panel = wx.Panel(self)
+                        
+        windowList = ['Magnetometer & SampleIndexRegistry',
+                      'Motors Control',
+                      'Vacuum Control',
+                      'SQUID Control',
+                      'IRM/ARM Control',
+                      'frmMeasure']
+        height = 18*len(windowList)
+        self.windowListBox = wx.ListBox(panel, 26, wx.DefaultPosition, (LISTBOX_LENGTH, height), windowList, wx.LB_SINGLE)
+        self.positionWidget(self.windowListBox)
+        self.windowListBox.Bind(wx.EVT_LISTBOX, self.OnSelect, id=26)        
         
-        self.messageBox = wx.TextCtrl(panel, -1, size=(1000, 600), style = wx.EXPAND|wx.TE_MULTILINE)
+        self.testOptionListBox = wx.ListBox(panel, -1, pos=wx.DefaultPosition, size=(LISTBOX_LENGTH, height), choices=['Test'], style=wx.LB_SINGLE)
+        self.testOptionListBox.Bind(wx.EVT_LISTBOX, self.OnTestOption)
+        self.testOptionListBox.Hide()
+        
+        self.messageBox = wx.TextCtrl(panel, -1, pos = (10, 10), size = (200, 300), style = wx.EXPAND|wx.TE_MULTILINE)        
+        
+        # Add event handler on OnShow
+        self.Bind(wx.EVT_SHOW, self.onShow)
+        
+        # Add event handler on OnClose
+        self.Bind(wx.EVT_CLOSE, self.onClosed)
         
         self.SetSize((1500, 1000))
         self.SetTitle('Test Unit')
@@ -205,6 +249,94 @@ class frmTestUnit(wx.Frame):
     def OnTimer(self, event):
         if self.paleoThread.backgroundRunningFlag:
             self.paleoThread.checkProcess()
+        return
+
+    '''
+    '''
+    def onShow(self, event):
+        xPos, yPos = self.positionWidget(self.windowListBox)
+        windowListSize = self.windowListBox.GetSize()
+        
+        yPos += windowListSize[1] + 200
+        self.testOptionListBox.SetPosition((xPos, yPos))
+        return
+    
+    '''
+        Close MainForm
+    '''
+    def onClosed(self, event):
+        if not self.paleoThread.backgroundRunningFlag:
+            if (self.paleoThread.processQueue != None):
+                self.paleoThread.processQueue.put('Program_End')        
+            self.paleoThread.runProcess([self.devControl.SYSTEM_DISCONNECT,[None]])
+        
+        self.Destroy()    
+
+    '''
+    '''
+    def OnSelect(self, event):
+        index = event.GetSelection()
+        self.currentTest = self.windowListBox.GetString(index)
+        
+        if (self.currentTest == 'Magnetometer & SampleIndexRegistry'):
+            self.testOptionListBox.Hide()
+            self.frmSampleIndexRegistry.Show()
+            self.magControl.Show()
+            self.panelList['frmMagnetometerControl'] = self.magControl
+            
+        elif (self.currentTest == 'Motors Control'):
+            self.testOptionListBox.Hide()
+            motorControl = frmDCMotors(parent=self)
+            self.panelList['frmDCMotors'] = motorControl        
+            motorControl.Show(True)
+
+        elif (self.currentTest == 'Vacuum Control'):
+            self.testOptionListBox.Hide()            
+            vacuumControl = frmVacuum(parent=self)
+            self.panelList['frmVacuum'] = vacuumControl
+            vacuumControl.Show()
+            
+        elif (self.currentTest == 'SQUID Control'):
+            self.testOptionListBox.Hide()
+            squidControl = frmSQUID(parent=self)
+            self.panelList['frmSQUID'] = squidControl
+            squidControl.Show()
+
+        elif (self.currentTest == 'IRM/ARM Control'):
+            self.testOptionListBox.Hide()
+            self.panelList['frmIRMARM'] = self.frmIRMARM
+            self.frmIRMARM.Show()
+                    
+        elif (self.currentTest == 'frmMeasure'):
+            self.panelList['frmMeasure'] = self.frmMeasure
+            self.frmMeasure.Show()
+            
+            options = ['ImportZijRoutine']
+            self.testOptionListBox.SetItems(options)
+            height = 18*len(options)
+            self.testOptionListBox.SetSize((LISTBOX_LENGTH, height))
+            self.testOptionListBox.Show()
+        
+        return
+
+    '''
+    '''
+    def OnTestOption(self, event):        
+        if (self.currentTest == 'frmMeasure'):
+            index = event.GetSelection()
+            testOption = self.testOptionListBox.GetString(index)
+            
+            if (testOption == 'ImportZijRoutine'):
+                self.frmMeasure.lblDemag.SetValue('NRM 0')
+                self.frmMeasure.lblDataFileName.SetValue('C:\\PaleoMag\\Data\\SAM\\Bill2A\\Bill2A.sam')
+                dataDict = {'FilePath': 'Bill2A1.1',
+                            'crdec': 225.00,
+                            'crinc': -3.2865E-8,
+                            'momentvol': 4.9469E-6,
+                            'refresh': False}
+                self.frmMeasure.ImportZijRoutine(dataDict)
+                 
+        return
 
 #===================================================================================================
 # Main Module
@@ -214,9 +346,8 @@ if __name__=='__main__':
         app = wx.App(False)
         
         frame = frmTestUnit(parent=None)
-        frame.registryControl.Show()
-        frame.magControl.Show()
-        frame.panelList['frmMagnetometerControl'] = frame.magControl
+        frame.Maximize(maximize=True)
+        frame.Show()        
         
         app.MainLoop()    
         

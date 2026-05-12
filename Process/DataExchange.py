@@ -6,7 +6,8 @@ Created on Oct 29, 2025
 from ClassModules.RockmagStep import RockmagStep
 from ClassModules.Sample import Sample
 from ClassModules.SampleIndexRegistration import SampleIndexRegistration
-
+from ClassModules.Cartesian3D import Cartesian3D
+from ClassModules.MeasurementBlock import MeasurementBlock
 class DataExchange:
     '''
     classdocs
@@ -198,6 +199,27 @@ class DataExchange:
         
         return registry
         
+    '''
+    '''
+    @classmethod
+    def loadCartesian3D(cls, dataDict):
+        sample = Cartesian3D()
+        
+        sample.X = dataDict['X']
+        sample.Y = dataDict['Y']
+        sample.Z = dataDict['Z']
+        return sample
+
+    '''
+    '''
+    @classmethod
+    def parseCartesian3D(cls, sample):
+        dataDict = {'DataType': 'Cartesian3D'}
+        dataDict['X'] = sample.X
+        dataDict['Y'] = sample.Y
+        dataDict['Z'] = sample.Z
+        return dataDict
+    
     '''--------------------------------------------------------------------------------------------
                         
                         Public API Functions
@@ -263,3 +285,55 @@ class DataExchange:
             dataDict['Item'].append(sampleDict)
         
         return dataDict
+
+    '''
+        MeasurementBlock
+    '''
+    @classmethod
+    def loadMeasurementBlock(cls, dataDict):
+        measurementBlock = MeasurementBlock()
+        
+        measurementBlock.Baselines = []
+        for item in dataDict['Baselines']:
+            measurementBlock.Baselines.append(cls.loadCartesian3D(item))
+
+        measurementBlock.Sample = []
+        for item in dataDict['Sample']:
+            measurementBlock.Sample.append(cls.loadCartesian3D(item))
+
+        measurementBlock.Holder = []
+        for item in dataDict['Holder']:
+            measurementBlock.Holder.append(cls.loadCartesian3D(item))
+            
+        measurementBlock.Direction = dataDict['Direction'] 
+        measurementBlock.sKey = dataDict['sKey'] 
+
+        return measurementBlock
+
+    '''
+        MeasurementBlock
+    '''
+    @classmethod
+    def parseMeasurementBlock(cls, measurementBlock):
+        dataDict = {'DataType': 'MeasurementBlock'}
+        
+        baseLines = []
+        for i in range(0, 2):
+            baseLines.append(cls.parseCartesian3D(measurementBlock.Baselines[i]))
+        dataDict['Baselines'] = baseLines
+
+        Sample = []
+        for i in range(0, 4):
+            Sample.append(cls.parseCartesian3D(measurementBlock.Sample[i]))
+        dataDict['Sample'] = Sample
+
+        Holder = []
+        for i in range(0, 4):
+            Holder.append(cls.parseCartesian3D(measurementBlock.Holder[i]))
+        dataDict['Holder'] = Holder
+
+        dataDict['Direction'] = measurementBlock.Direction
+        dataDict['sKey'] = measurementBlock.sKey
+         
+        return dataDict
+    

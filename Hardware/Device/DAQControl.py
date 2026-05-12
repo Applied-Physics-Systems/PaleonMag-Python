@@ -91,10 +91,18 @@ class DAQControl():
         
     '''
     '''
+    def digOut_bit(self):
+        return
+        
+    '''
+    '''
     def runTask(self, taskID):
         if (taskID == 0):
             data = self.Get_ADC(0)
-            print(data)            
+            print(data)  
+            
+        elif (taskID == 1):
+            self.digOut_bit()          
         
 #===================================================================================================
 # Main Module

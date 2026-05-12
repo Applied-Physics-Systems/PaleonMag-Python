@@ -11,6 +11,8 @@ from Forms.frmAFTuner import frmAFTuner
 from Forms.frmCalibrateCoils import frmCalibrateCoils
 from Forms.frm908AGaussmeter import frm908AGaussmeter
 
+from Modules.modProg import modProg
+
 class frmADWIN_AF(wx.Frame):
     '''
     classdocs
@@ -258,22 +260,12 @@ class frmADWIN_AF(wx.Frame):
     
     '''
     '''
-    def getFloatValue(self, valueStr):
-        try:
-            value = float(valueStr)
-        except:
-            value = 0.0
-            
-        return value 
-
-    '''
-    '''
     def rampUpSlopeChange(self):
-        TempD = self.getFloatValue(self.rampUpSlopeTBox.GetValue())
+        TempD = modProg.getFloat(self.rampUpSlopeTBox.GetValue())
         if ((TempD > -0.0001) and (TempD < 0.0001)):
             return 
         
-        peakVoltage = self.getFloatValue(self.peakRampTBox.GetValue())
+        peakVoltage = modProg.getFloat(self.peakRampTBox.GetValue())
         TempS = (peakVoltage/TempD) * 1000  
         self.rampUpLabel.SetLabel("{:.2f}".format(TempS))  
         
@@ -281,18 +273,18 @@ class frmADWIN_AF(wx.Frame):
            Add the ramp up and ramp down durations + time at peak
            and the extra 200 ms the code adds to make sure the process
            has indeed finished'''
-        TempD = TempS + self.getFloatValue(self.rampDownLabel.GetLabel()) + self.getFloatValue(self.timePeakTBox.GetValue()) + 200  
+        TempD = TempS + modProg.getFloat(self.rampDownLabel.GetLabel()) + modProg.getFloat(self.timePeakTBox.GetValue()) + 200  
         self.rampTimeLabel.SetLabel("{:.2f}".format(TempD))
         return
 
     '''
     '''
     def rampDownSlopeChange(self):
-        TempD = self.getFloatValue(self.rampDownSlopeTBox.GetValue())
+        TempD = modProg.getFloat(self.rampDownSlopeTBox.GetValue())
         if ((TempD > -0.0001) and (TempD < 0.0001)):
             return 
         
-        peakVoltage = self.getFloatValue(self.peakRampTBox.GetValue())
+        peakVoltage = modProg.getFloat(self.peakRampTBox.GetValue())
         TempS = (peakVoltage/TempD) * 1000  
         self.rampDownLabel.SetLabel("{:.2f}".format(TempS))  
         
@@ -300,7 +292,7 @@ class frmADWIN_AF(wx.Frame):
            Add the ramp up and ramp down durations + time at peak
            and the extra 200 ms the code adds to make sure the process
            has indeed finished'''
-        TempD = TempS + self.getFloatValue(self.rampUpLabel.GetLabel()) + self.getFloatValue(self.timePeakTBox.GetValue()) + 200  
+        TempD = TempS + modProg.getFloat(self.rampUpLabel.GetLabel()) + modProg.getFloat(self.timePeakTBox.GetValue()) + 200  
         self.rampTimeLabel.SetLabel("{:.2f}".format(TempD))
         
         return
@@ -311,7 +303,7 @@ class frmADWIN_AF(wx.Frame):
         '''Compare the RampPeakVolts to the Ramp Voltage corresponding to the
            peak field (if the calibration is done), if not, then relative to the
            Max ramp voltage set in the AF Auto tune form'''
-        RampPeakVolts = self.getFloatValue(self.peakRampTBox.GetValue()) 
+        RampPeakVolts = modProg.getFloat(self.peakRampTBox.GetValue()) 
         
         activeCoil = self.getCoilRBtnSelection()
         if (activeCoil == 'Axial'):
@@ -338,7 +330,7 @@ class frmADWIN_AF(wx.Frame):
     '''
     '''
     def getDownSlope(self):
-        RampPeakVolts = self.getFloatValue(self.peakRampTBox.GetValue()) 
+        RampPeakVolts = modProg.getFloat(self.peakRampTBox.GetValue()) 
 
         activeCoil = self.getCoilRBtnSelection()
         if (activeCoil == 'Axial'):

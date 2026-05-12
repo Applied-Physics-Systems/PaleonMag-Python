@@ -125,7 +125,7 @@ class frmSampleIndexRegistry(wx.Frame):
         self.add_column('Block', width=40, renderer=custom_renderer)
         self.add_column('Path', width=140, renderer=custom_renderer)
 
-        btnLength = 1201
+        btnLength = 120
         btnHeight = 30        
         YOffset = listHeight + 10 
         clearRegistryBtn = wx.Button(panel, label='Clear Registry', pos=(XOri, YOri + YOffset), size=(btnLength, btnHeight))        
@@ -326,7 +326,7 @@ class frmSampleIndexRegistry(wx.Frame):
     '''
     def updateBackupDir(self):
         if self.chkBck.GetValue():
-            self.workingSamIndex.BackupFileDir = self.txtBck.GetValue()
+            self.workingSamIndex.BackupFileDir = self.txtBck.GetValue()            
         else:
             self.workingSamIndex.BackupFileDir = ''
         return
@@ -480,6 +480,7 @@ class frmSampleIndexRegistry(wx.Frame):
     '''
     def refreshFields(self):
         self.txtDir.SetValue(self.workingSamIndex.filedir)
+        self.workingSamIndex.BackupFileDir = self.parent.modConfig.DefaultBackupDrive + self.workingSamIndex.filedir[1:]
         self.txtBck.SetValue(self.workingSamIndex.BackupFileDir)
         self.cmbSampCode.SetValue(self.workingSamIndex.SampleCode)
         self.ReadSamInfo()
@@ -627,7 +628,7 @@ class frmSampleIndexRegistry(wx.Frame):
                 rockmagMsg += " - Switch the power on for the Rockmag coil thermal sensors"
                
             if (len(rockmagMsg) > 0):
-                wx.MessageBox(rockmagMsg, style=wx.OK|wx.CENTER, caption='Warning!')
+                wx.MessageBox(parent=self.parent, message=rockmagMsg, style=wx.OK|wx.CENTER, caption='Warning!')
             
         if self.parent.modFlow.Prog_halted:
             self.parent.modMeasure.HolderMeasured = False
@@ -714,7 +715,10 @@ class frmSampleIndexRegistry(wx.Frame):
         
         if dlg.ShowModal() == wx.ID_OK:
             self.samFilePath = dlg.GetPath()
-            self.txtBck.SetValue(self.samFilePath)
+            directoryPath = os.path.dirname(self.samFilePath)
+            directoryPath = os.path.abspath(os.path.join(directoryPath, os.pardir))
+            self.workingSamIndex.BackupFileDir = self.parent.modConfig.DefaultBackupDrive + directoryPath[1:]
+            self.txtBck.SetValue(self.workingSamIndex.BackupFileDir)
         return
     
     '''

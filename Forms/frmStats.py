@@ -5,6 +5,8 @@ Created on Oct 17, 2025
 '''
 import wx
 
+from Modules.modProg import modProg
+
 class frmStats(wx.Frame):
     '''
     classdocs
@@ -49,7 +51,11 @@ class frmStats(wx.Frame):
         panelHeight = YOri + box3Height + 50  
         self.SetSize((panelLength, panelHeight))
         self.SetTitle('Sample Statistics')
-        self.Centre()
+        self.Centre()                
+        
+        # Add event handler on OnShow
+        self.Bind(wx.EVT_SHOW, self.onShow)
+             
         return
     
     '''
@@ -200,6 +206,111 @@ class frmStats(wx.Frame):
     '''
     def cmdPrint_Click(self, event):
         print('TODO: frmStats.cmdPrint_Click')
+        return
+    
+    '''
+    '''
+    def onShow(self, event):
+        if event.IsShown():
+            if (self.parent != None):
+                parentPos = self.parent.GetPosition()
+                parentSize = self.parent.GetSize()
+                childSize = self.GetSize()
+                xOffset = 40
+                xPos = int(parentPos[0] + xOffset)
+                yPos = int(parentPos[1] + (parentSize[1]-childSize[1])*(2/3))
+                frmPos = (xPos, yPos)
+                self.SetPosition(frmPos)
+                
+            else:
+                self.Centre()
+                
+            self.parent.panelList['frmStats'] = self
+        
+        else:
+            del self.parent.panelList['frmStats']
+            
+        return
+        
+    '''--------------------------------------------------------------------------------------------
+                        
+                        Pubic API Functions
+                        
+    --------------------------------------------------------------------------------------------'''
+    '''
+        This procedure is called if we are doing both up and down
+        measurements.  It displays error fields specific for this
+        kind of measurement
+    '''
+    def ShowErrors(self, dataDict):
+        errangle = dataDict['errangle'] 
+        herrangle = dataDict['herrangle'] 
+        momentupdown = dataDict['momentupdown']
+        
+        #framErrors.Visible = True
+        self.lblErrAngle.SetValue(modProg.FormatNumber(errangle))
+        self.lblHErrAngle.SetValue(modProg.FormatNumber(herrangle))
+        self.lblMUDRatio.SetValue(modProg.FormatNumber(momentupdown))
+        return
+
+    '''
+        This procedure displays statistical information for the
+        entire set of data gathered from the magnetometer.  (after
+        all 'n' averaging cycles have been completed)
+    '''
+    def ShowAvgStats(self, dataDict):
+        holderX = dataDict['holderX'] 
+        holderY = dataDict['holderY']
+        holderZ = dataDict['holderZ']
+        sdx = dataDict['sdx'] 
+        sdy = dataDict['sdy'] 
+        sdz = dataDict['sdz']
+        crdec = dataDict['crdec']
+        crinc = dataDict['crinc'] 
+        gdec = dataDict['gdec'] 
+        ginc = dataDict['ginc']
+        bdec = dataDict['bdec'] 
+        binc = dataDict['binc'] 
+        momentvol = dataDict['momentvol']
+        SigNoise = dataDict['SigNoise'] 
+        SigHolder = dataDict['SigHolder'] 
+        SigInduced = dataDict['SigInduced']
+                
+        self.lblHolderX.SetValue('{:.4f}'.format(holderX))
+        self.lblHolderY.SetValue('{:.4f}'.format(holderY))
+        self.lblHolderZ.SetValue('{:.4f}'.format(holderZ))      # was define by Holder.Average.X before Karin Louzada report the display bug
+        self.lblsdX.SetValue(modProg.FormatNumber(sdx))
+        self.lblsdY.SetValue(modProg.FormatNumber(sdy))
+        self.lblsdZ.SetValue(modProg.FormatNumber(sdz))
+        self.lblMomVol.SetValue('{:.4f}'.format(momentvol))
+        self.lblCDec.SetValue(modProg.FormatNumber(crdec))
+        self.lblCInc.SetValue(modProg.FormatNumber(crinc))
+        self.lblGDec.SetValue(modProg.FormatNumber(gdec))
+        self.lblGInc.SetValue(modProg.FormatNumber(ginc))
+        self.lblBDec.SetValue(modProg.FormatNumber(bdec))
+        self.lblBInc.SetValue(modProg.FormatNumber(binc))
+        self.lblSigNoise.SetValue(modProg.FormatNumber(SigNoise))
+        self.lblSigHold.SetValue(modProg.FormatNumber(SigHolder))
+        self.lblSigInd.SetValue(modProg.FormatNumber(SigInduced))
+        
+        return
+    
+    '''
+        Display infomration for the running background process
+    '''
+    def updateGUI(self, messageDict):
+        if (messageDict['Function'] == 'ShowErrors'):
+            self.ShowErrors(messageDict)
+            
+        elif (messageDict['Function'] == 'ShowAvgStats'):
+            self.ShowAvgStats(messageDict)
+                    
+        return
+    
+    '''
+        Handle cleanup if neccessary
+    '''
+    def runEndTask(self):
         return
         
 #===================================================================================================
